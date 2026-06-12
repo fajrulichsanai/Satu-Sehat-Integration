@@ -85,8 +85,8 @@ Breakdown task dalam format tabel per module:
 | 1.12 | Create enums (UserRole, SyncStatus, EncounterStatus, etc.) | 2 jam | P0 | 1.11 | ✅ | ✅ Done |
 | 1.13 | Create base entity (BaseEntity with audit fields) | 1 jam | P0 | 1.11 | ✅ | ✅ Done |
 | 1.14 | Verify entity relations with TypeORM | 2 jam | P0 | 1.11 | ❌ | ⬜ To Do |
-| 1.15 | Create initial seed data (owner code, sample clinic) | 2 jam | P1 | 1.10 | ✅ | ⬜ To Do |
-| 1.16 | Setup database migration strategy | 2 jam | P1 | 1.3 | ✅ | ⬜ To Do |
+| 1.15 | Create initial seed data (owner code, sample clinic) | 2 jam | P1 | 1.10 | ✅ | ✅ Done |
+| 1.16 | Setup database migration strategy | 2 jam | P1 | 1.3 | ✅ | ✅ Done |
 
 **Subtotal Phase 1.2:** 18 jam (~2 hari)
 
@@ -96,12 +96,12 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 1.17 | Create response wrapper (success/error format) | 2 jam | P0 | 1.6 | ✅ | ⬜ To Do |
-| 1.18 | Create custom exception classes (ValidationException, BusinessException, etc.) | 3 jam | P0 | 1.6 | ✅ | ⬜ To Do |
-| 1.19 | Create pagination DTO and helper | 2 jam | P1 | - | ✅ | ⬜ To Do |
-| 1.20 | Create date utility functions (timezone handling) | 2 jam | P1 | - | ✅ | ⬜ To Do |
-| 1.21 | Create NIK validator (16 digits, numeric) | 1 jam | P1 | - | ✅ | ⬜ To Do |
-| 1.22 | Create password hash utility (bcrypt) | 1 jam | P0 | - | ✅ | ⬜ To Do |
+| 1.17 | Create response wrapper (success/error format) | 2 jam | P0 | 1.6 | ✅ | ✅ Done |
+| 1.18 | Create custom exception classes (ValidationException, BusinessException, etc.) | 3 jam | P0 | 1.6 | ✅ | ✅ Done |
+| 1.19 | Create pagination DTO and helper | 2 jam | P1 | - | ✅ | ✅ Done |
+| 1.20 | Create date utility functions (timezone handling) | 2 jam | P1 | - | ✅ | ✅ Done |
+| 1.21 | Create NIK validator (16 digits, numeric) | 1 jam | P1 | - | ✅ | ✅ Done |
+| 1.22 | Create password hash utility (bcrypt) | 1 jam | P0 | - | ✅ | ✅ Done |
 
 **Subtotal Phase 1.3:** 11 jam (~1.5 hari)
 
@@ -122,11 +122,11 @@ Breakdown task dalam format tabel per module:
 | 2.5 | Implement POST /auth/login endpoint | 3 jam | P0 | 2.3 | ❌ | ✅ Done |
 | 2.6 | Implement JWT token generation | 2 jam | P0 | 2.5 | ❌ | ✅ Done |
 | 2.7 | Create JWT strategy & guard | 3 jam | P0 | 2.6 | ❌ | ✅ Done |
-| 2.8 | Implement POST /auth/refresh endpoint | 2 jam | P1 | 2.6 | ✅ | ⬜ To Do |
+| 2.8 | Implement POST /auth/refresh endpoint | 2 jam | P1 | 2.6 | ✅ | ✅ Done |
 | 2.9 | Implement GET /auth/me endpoint | 1 jam | P0 | 2.7 | ❌ | ✅ Done |
-| 2.10 | Implement GET /auth/activation-status (polling) | 1 jam | P0 | 2.7 | ✅ | ⬜ To Do |
+| 2.10 | Implement GET /auth/activation-status (polling) | 1 jam | P0 | 2.7 | ✅ | ✅ Done |
 | 2.11 | Implement POST /auth/verify-email | 2 jam | P1 | 2.3 | ✅ | ⬜ To Do |
-| 2.12 | Implement POST /auth/logout | 1 jam | P1 | 2.7 | ✅ | ⬜ To Do |
+| 2.12 | Implement POST /auth/logout | 1 jam | P1 | 2.7 | ✅ | ✅ Done |
 | 2.13 | Create email verification service (mock for now) | 2 jam | P2 | 2.3 | ✅ | ⬜ To Do |
 | 2.14 | Unit test: Auth service | 4 jam | P1 | 2.12 | ✅ | ⬜ To Do |
 
@@ -222,18 +222,18 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 3.1 | Create Patients module structure | 1 jam | P0 | 1.11 | ✅ | ⬜ To Do |
-| 3.2 | Create Patient DTOs (CreatePatientDto, UpdatePatientDto, etc.) | 3 jam | P0 | 3.1 | ✅ | ⬜ To Do |
-| 3.3 | Implement GET /patients (list with pagination) | 3 jam | P0 | 3.2 | ❌ | ⬜ To Do |
-| 3.4 | Implement search by NIK, name, noRM | 2 jam | P0 | 3.3 | ❌ | ⬜ To Do |
-| 3.5 | Implement POST /patients (register new patient) | 5 jam | P0 | 3.2 | ❌ | ⬜ To Do |
-| 3.6 | Implement No. RM generation (transaction-safe) | 3 jam | P0 | 3.5 | ❌ | ⬜ To Do |
-| 3.7 | Implement newborn registration (without NIK) | 2 jam | P0 | 3.5 | ✅ | ⬜ To Do |
-| 3.8 | Implement GET /patients/:id (detail) | 2 jam | P0 | 3.3 | ✅ | ⬜ To Do |
-| 3.9 | Implement PUT /patients/:id (update demographics) | 3 jam | P0 | 3.8 | ❌ | ⬜ To Do |
-| 3.10 | Implement GET /patients/:id/encounters (history) | 2 jam | P1 | 3.8 | ✅ | ⬜ To Do |
+| 3.1 | Create Patients module structure | 1 jam | P0 | 1.11 | ✅ | ✅ Done |
+| 3.2 | Create Patient DTOs (CreatePatientDto, UpdatePatientDto, etc.) | 3 jam | P0 | 3.1 | ✅ | ✅ Done |
+| 3.3 | Implement GET /patients (list with pagination) | 3 jam | P0 | 3.2 | ❌ | ✅ Done |
+| 3.4 | Implement search by NIK, name, noRM | 2 jam | P0 | 3.3 | ❌ | ✅ Done |
+| 3.5 | Implement POST /patients (register new patient) | 5 jam | P0 | 3.2 | ❌ | ✅ Done |
+| 3.6 | Implement No. RM generation (transaction-safe) | 3 jam | P0 | 3.5 | ❌ | ✅ Done |
+| 3.7 | Implement newborn registration (without NIK) | 2 jam | P0 | 3.5 | ✅ | ✅ Done |
+| 3.8 | Implement GET /patients/:id (detail) | 2 jam | P0 | 3.3 | ✅ | ✅ Done |
+| 3.9 | Implement PUT /patients/:id (update demographics) | 3 jam | P0 | 3.8 | ❌ | ✅ Done |
+| 3.10 | Implement GET /patients/:id/encounters (history) | 2 jam | P1 | 3.8 | ✅ | ✅ Done |
 | 3.11 | Implement GET /patients/search-satusehat (NIK lookup) | 3 jam | P1 | 3.2 | ✅ | ⬜ To Do |
-| 3.12 | Add duplicate NIK check | 1 jam | P0 | 3.5 | ❌ | ⬜ To Do |
+| 3.12 | Add duplicate NIK check | 1 jam | P0 | 3.5 | ❌ | ✅ Done |
 | 3.13 | Unit test: Patients service | 4 jam | P1 | 3.11 | ✅ | ⬜ To Do |
 
 **Subtotal Module 3.1:** 34 jam (~4 hari)
@@ -244,15 +244,15 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 3.14 | Create Queues module structure | 1 jam | P0 | 1.11 | ✅ | ⬜ To Do |
-| 3.15 | Create Queue DTOs | 3 jam | P0 | 3.14 | ✅ | ⬜ To Do |
-| 3.16 | Implement GET /queues (admin view with filters) | 3 jam | P0 | 3.15 | ❌ | ⬜ To Do |
-| 3.17 | Implement POST /queues (walk-in) | 4 jam | P0 | 3.15 | ❌ | ⬜ To Do |
-| 3.18 | Implement queue number generation (reset daily) | 2 jam | P0 | 3.17 | ❌ | ⬜ To Do |
-| 3.19 | Implement PATCH /queues/:id/status (update status) | 3 jam | P0 | 3.17 | ❌ | ⬜ To Do |
-| 3.20 | Implement status transition validation | 2 jam | P0 | 3.19 | ❌ | ⬜ To Do |
-| 3.21 | Implement GET /queues/slots (available time slots) | 3 jam | P0 | 3.15 | ✅ | ⬜ To Do |
-| 3.22 | Implement GET /queues/monitor (waiting room display) | 2 jam | P1 | 3.16 | ✅ | ⬜ To Do |
+| 3.14 | Create Queues module structure | 1 jam | P0 | 1.11 | ✅ | ✅ Done |
+| 3.15 | Create Queue DTOs | 3 jam | P0 | 3.14 | ✅ | ✅ Done |
+| 3.16 | Implement GET /queues (admin view with filters) | 3 jam | P0 | 3.15 | ❌ | ✅ Done |
+| 3.17 | Implement POST /queues (walk-in) | 4 jam | P0 | 3.15 | ❌ | ✅ Done |
+| 3.18 | Implement queue number generation (reset daily) | 2 jam | P0 | 3.17 | ❌ | ✅ Done |
+| 3.19 | Implement PATCH /queues/:id/status (update status) | 3 jam | P0 | 3.17 | ❌ | ✅ Done |
+| 3.20 | Implement status transition validation | 2 jam | P0 | 3.19 | ❌ | ✅ Done |
+| 3.21 | Implement GET /queues/slots (available time slots) | 3 jam | P0 | 3.15 | ✅ | ✅ Done |
+| 3.22 | Implement GET /queues/monitor (waiting room display) | 2 jam | P1 | 3.16 | ✅ | ✅ Done |
 | 3.23 | Unit test: Queues service | 4 jam | P1 | 3.22 | ✅ | ⬜ To Do |
 
 **Subtotal Module 3.2:** 27 jam (~3.5 hari)
@@ -263,13 +263,13 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 3.24 | Create Public module structure | 1 jam | P0 | 1.11 | ✅ | ⬜ To Do |
-| 3.25 | Implement GET /public/clinic-info | 2 jam | P1 | 3.24 | ✅ | ⬜ To Do |
-| 3.26 | Implement GET /public/available-slots | 2 jam | P0 | 3.21 | ❌ | ⬜ To Do |
-| 3.27 | Implement POST /public/book (online booking) | 4 jam | P0 | 3.17 | ❌ | ⬜ To Do |
-| 3.28 | Implement token generation (8-char alphanumeric) | 1 jam | P0 | 3.27 | ❌ | ⬜ To Do |
-| 3.29 | Implement GET /public/queue-status (check by token) | 2 jam | P0 | 3.27 | ✅ | ⬜ To Do |
-| 3.30 | Add rate limiting for public endpoints | 2 jam | P1 | 3.29 | ✅ | ⬜ To Do |
+| 3.24 | Create Public module structure | 1 jam | P0 | 1.11 | ✅ | ✅ Done |
+| 3.25 | Implement GET /public/clinic-info | 2 jam | P1 | 3.24 | ✅ | ✅ Done |
+| 3.26 | Implement GET /public/available-slots | 2 jam | P0 | 3.21 | ❌ | ✅ Done |
+| 3.27 | Implement POST /public/book (online booking) | 4 jam | P0 | 3.17 | ❌ | ✅ Done |
+| 3.28 | Implement token generation (8-char alphanumeric) | 1 jam | P0 | 3.27 | ❌ | ✅ Done |
+| 3.29 | Implement GET /public/queue-status (check by token) | 2 jam | P0 | 3.27 | ✅ | ✅ Done |
+| 3.30 | Add rate limiting for public endpoints | 2 jam | P1 | 3.29 | ✅ | ✅ Done |
 | 3.31 | Unit test: Public endpoints | 3 jam | P1 | 3.30 | ✅ | ⬜ To Do |
 
 **Subtotal Module 3.3:** 17 jam (~2 hari)
@@ -284,14 +284,14 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 4.1 | Create Encounters module structure | 1 jam | P0 | 1.11 | ✅ | ⬜ To Do |
-| 4.2 | Create Encounter DTOs | 3 jam | P0 | 4.1 | ✅ | ⬜ To Do |
-| 4.3 | Implement GET /encounters (list with filters) | 3 jam | P0 | 4.2 | ❌ | ⬜ To Do |
-| 4.4 | Implement POST /encounters (create from queue) | 4 jam | P0 | 4.2 | ❌ | ⬜ To Do |
-| 4.5 | Implement GET /encounters/:id (detail) | 2 jam | P0 | 4.3 | ✅ | ⬜ To Do |
-| 4.6 | Implement PATCH /encounters/:id/status | 4 ham | P0 | 4.4 | ❌ | ⬜ To Do |
-| 4.7 | Implement validation: finished requires clinical data | 3 jam | P0 | 4.6 | ❌ | ⬜ To Do |
-| 4.8 | Implement role-based filtering (dokter sees only own) | 2 jam | P0 | 4.3 | ❌ | ⬜ To Do |
+| 4.1 | Create Encounters module structure | 1 jam | P0 | 1.11 | ✅ | ✅ Done |
+| 4.2 | Create Encounter DTOs | 3 jam | P0 | 4.1 | ✅ | ✅ Done |
+| 4.3 | Implement GET /encounters (list with filters) | 3 jam | P0 | 4.2 | ❌ | ✅ Done |
+| 4.4 | Implement POST /encounters (create from queue) | 4 jam | P0 | 4.2 | ❌ | ✅ Done |
+| 4.5 | Implement GET /encounters/:id (detail) | 2 jam | P0 | 4.3 | ✅ | ✅ Done |
+| 4.6 | Implement PATCH /encounters/:id/status | 4 ham | P0 | 4.4 | ❌ | ✅ Done |
+| 4.7 | Implement validation: finished requires clinical data | 3 jam | P0 | 4.6 | ❌ | ✅ Done |
+| 4.8 | Implement role-based filtering (dokter sees only own) | 2 jam | P0 | 4.3 | ❌ | ✅ Done |
 | 4.9 | Unit test: Encounters service | 4 jam | P1 | 4.8 | ✅ | ⬜ To Do |
 
 **Subtotal Module 4.1:** 26 jam (~3 hari)
@@ -302,12 +302,12 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 4.10 | Create Anamnesis module structure | 1 jam | P0 | 1.11 | ✅ | ⬜ To Do |
-| 4.11 | Create Anamnesis DTOs | 2 jam | P0 | 4.10 | ✅ | ⬜ To Do |
-| 4.12 | Implement GET /encounters/:id/anamnesis | 2 jam | P0 | 4.11 | ❌ | ⬜ To Do |
-| 4.13 | Implement PUT /encounters/:id/anamnesis (upsert) | 3 jam | P0 | 4.12 | ❌ | ⬜ To Do |
-| 4.14 | Create Allergies sub-resource (nested in anamnesis) | 2 jam | P0 | 4.13 | ✅ | ⬜ To Do |
-| 4.15 | Create Medication History sub-resource | 2 jam | P0 | 4.13 | ✅ | ⬜ To Do |
+| 4.10 | Create Anamnesis module structure | 1 jam | P0 | 1.11 | ✅ | ✅ Done |
+| 4.11 | Create Anamnesis DTOs | 2 jam | P0 | 4.10 | ✅ | ✅ Done |
+| 4.12 | Implement GET /encounters/:id/anamnesis | 2 jam | P0 | 4.11 | ❌ | ✅ Done |
+| 4.13 | Implement PUT /encounters/:id/anamnesis (upsert) | 3 jam | P0 | 4.12 | ❌ | ✅ Done |
+| 4.14 | Create Allergies sub-resource (nested in anamnesis) | 2 jam | P0 | 4.13 | ✅ | ✅ Done |
+| 4.15 | Create Medication History sub-resource | 2 jam | P0 | 4.13 | ✅ | ✅ Done |
 | 4.16 | Unit test: Anamnesis service | 2 jam | P1 | 4.15 | ✅ | ⬜ To Do |
 
 **Subtotal Module 4.2:** 14 jam (~2 hari)
@@ -318,11 +318,11 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 4.17 | Create VitalSigns module structure | 1 jam | P0 | 1.11 | ✅ | ⬜ To Do |
-| 4.18 | Create VitalSigns DTOs with LOINC codes | 2 jam | P0 | 4.17 | ✅ | ⬜ To Do |
-| 4.19 | Implement GET /encounters/:id/vital-signs | 2 jam | P0 | 4.18 | ❌ | ⬜ To Do |
-| 4.20 | Implement PUT /encounters/:id/vital-signs | 3 jam | P0 | 4.19 | ❌ | ⬜ To Do |
-| 4.21 | Implement validation ranges & out-of-range detection | 2 jam | P0 | 4.20 | ❌ | ⬜ To Do |
+| 4.17 | Create VitalSigns module structure | 1 jam | P0 | 1.11 | ✅ | ✅ Done |
+| 4.18 | Create VitalSigns DTOs with LOINC codes | 2 jam | P0 | 4.17 | ✅ | ✅ Done |
+| 4.19 | Implement GET /encounters/:id/vital-signs | 2 jam | P0 | 4.18 | ❌ | ✅ Done |
+| 4.20 | Implement PUT /encounters/:id/vital-signs | 3 jam | P0 | 4.19 | ❌ | ✅ Done |
+| 4.21 | Implement validation ranges & out-of-range detection | 2 jam | P0 | 4.20 | ❌ | ✅ Done |
 | 4.22 | Unit test: VitalSigns service | 2 jam | P1 | 4.21 | ✅ | ⬜ To Do |
 
 **Subtotal Module 4.3:** 12 jam (~1.5 hari)
@@ -333,12 +333,12 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 4.23 | Create Diagnoses module structure | 1 jam | P0 | 1.11 | ✅ | ⬜ To Do |
-| 4.24 | Create Diagnosis DTOs | 2 jam | P0 | 4.23 | ✅ | ⬜ To Do |
-| 4.25 | Implement GET /encounters/:id/diagnoses | 2 jam | P0 | 4.24 | ❌ | ⬜ To Do |
-| 4.26 | Implement POST /encounters/:id/diagnoses | 3 jam | P0 | 4.25 | ❌ | ⬜ To Do |
-| 4.27 | Implement isPrimary logic (only 1 per encounter) | 2 jam | P0 | 4.26 | ❌ | ⬜ To Do |
-| 4.28 | Implement DELETE /encounters/:id/diagnoses/:diagnosisId | 1 jam | P1 | 4.26 | ✅ | ⬜ To Do |
+| 4.23 | Create Diagnoses module structure | 1 jam | P0 | 1.11 | ✅ | ✅ Done |
+| 4.24 | Create Diagnosis DTOs | 2 jam | P0 | 4.23 | ✅ | ✅ Done |
+| 4.25 | Implement GET /encounters/:id/diagnoses | 2 jam | P0 | 4.24 | ❌ | ✅ Done |
+| 4.26 | Implement POST /encounters/:id/diagnoses | 3 jam | P0 | 4.25 | ❌ | ✅ Done |
+| 4.27 | Implement isPrimary logic (only 1 per encounter) | 2 jam | P0 | 4.26 | ❌ | ✅ Done |
+| 4.28 | Implement DELETE /encounters/:id/diagnoses/:diagnosisId | 1 jam | P1 | 4.26 | ✅ | ✅ Done |
 | 4.29 | Implement GET /icd10/search (search ICD-10 codes) | 3 jam | P0 | 4.24 | ✅ | ⬜ To Do |
 | 4.30 | Load ICD-10 JSON data into memory/cache | 2 jam | P0 | 4.29 | ❌ | ⬜ To Do |
 | 4.31 | Unit test: Diagnoses service | 3 jam | P1 | 4.30 | ✅ | ⬜ To Do |
@@ -351,12 +351,12 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 4.32 | Create Procedures module structure | 1 jam | P0 | 1.11 | ✅ | ⬜ To Do |
-| 4.33 | Create Procedure DTOs | 2 jam | P0 | 4.32 | ✅ | ⬜ To Do |
-| 4.34 | Implement GET /encounters/:id/procedures | 2 jam | P0 | 4.33 | ❌ | ⬜ To Do |
-| 4.35 | Implement POST /encounters/:id/procedures | 3 jam | P0 | 4.34 | ❌ | ⬜ To Do |
-| 4.36 | Implement tooth number validation (FDI notation) | 1 jam | P0 | 4.35 | ❌ | ⬜ To Do |
-| 4.37 | Implement DELETE /encounters/:id/procedures/:id | 1 jam | P1 | 4.35 | ✅ | ⬜ To Do |
+| 4.32 | Create Procedures module structure | 1 jam | P0 | 1.11 | ✅ | ✅ Done |
+| 4.33 | Create Procedure DTOs | 2 jam | P0 | 4.32 | ✅ | ✅ Done |
+| 4.34 | Implement GET /encounters/:id/procedures | 2 jam | P0 | 4.33 | ❌ | ✅ Done |
+| 4.35 | Implement POST /encounters/:id/procedures | 3 jam | P0 | 4.34 | ❌ | ✅ Done |
+| 4.36 | Implement tooth number validation (FDI notation) | 1 jam | P0 | 4.35 | ❌ | ✅ Done |
+| 4.37 | Implement DELETE /encounters/:id/procedures/:id | 1 jam | P1 | 4.35 | ✅ | ✅ Done |
 | 4.38 | Implement GET /icd9/search (search ICD-9 codes) | 3 jam | P0 | 4.33 | ✅ | ⬜ To Do |
 | 4.39 | Load ICD-9 JSON data into memory/cache | 2 jam | P0 | 4.38 | ❌ | ⬜ To Do |
 | 4.40 | Unit test: Procedures service | 3 jam | P1 | 4.39 | ✅ | ⬜ To Do |
@@ -403,13 +403,13 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 5.1 | Create Medications module structure | 1 jam | P0 | 1.11 | ✅ | ⬜ To Do |
-| 5.2 | Create Medication DTOs | 2 jam | P0 | 5.1 | ✅ | ⬜ To Do |
-| 5.3 | Implement GET /medications (with filters) | 3 jam | P0 | 5.2 | ❌ | ⬜ To Do |
-| 5.4 | Implement POST /medications | 3 jam | P0 | 5.2 | ❌ | ⬜ To Do |
-| 5.5 | Implement PUT /medications/:id | 2 jam | P1 | 5.4 | ✅ | ⬜ To Do |
-| 5.6 | Implement PATCH /medications/:id/stock (adjust stock) | 3 jam | P0 | 5.4 | ❌ | ⬜ To Do |
-| 5.7 | Implement low stock & near expiry filters | 2 jam | P1 | 5.3 | ✅ | ⬜ To Do |
+| 5.1 | Create Medications module structure | 1 jam | P0 | 1.11 | ✅ | ✅ Done |
+| 5.2 | Create Medication DTOs | 2 jam | P0 | 5.1 | ✅ | ✅ Done |
+| 5.3 | Implement GET /medications (with filters) | 3 jam | P0 | 5.2 | ❌ | ✅ Done |
+| 5.4 | Implement POST /medications | 3 jam | P0 | 5.2 | ❌ | ✅ Done |
+| 5.5 | Implement PUT /medications/:id | 2 jam | P1 | 5.4 | ✅ | ✅ Done |
+| 5.6 | Implement PATCH /medications/:id/stock (adjust stock) | 3 jam | P0 | 5.4 | ❌ | ✅ Done |
+| 5.7 | Implement low stock & near expiry filters | 2 jam | P1 | 5.3 | ✅ | ✅ Done |
 | 5.8 | Unit test: Medications service | 3 jam | P1 | 5.7 | ✅ | ⬜ To Do |
 
 **Subtotal Module 5.1:** 19 jam (~2.5 hari)
@@ -420,12 +420,12 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 5.9 | Create Prescriptions module structure | 1 jam | P0 | 1.11 | ✅ | ⬜ To Do |
-| 5.10 | Create Prescription DTOs | 2 jam | P0 | 5.9 | ✅ | ⬜ To Do |
-| 5.11 | Implement GET /encounters/:id/prescriptions | 2 jam | P0 | 5.10 | ❌ | ⬜ To Do |
-| 5.12 | Implement POST /encounters/:id/prescriptions | 3 jam | P0 | 5.11 | ❌ | ⬜ To Do |
-| 5.13 | Implement duplicate medication check | 1 jam | P0 | 5.12 | ❌ | ⬜ To Do |
-| 5.14 | Implement DELETE /encounters/:id/prescriptions/:id | 1 jam | P1 | 5.12 | ✅ | ⬜ To Do |
+| 5.9 | Create Prescriptions module structure | 1 jam | P0 | 1.11 | ✅ | ✅ Done |
+| 5.10 | Create Prescription DTOs | 2 jam | P0 | 5.9 | ✅ | ✅ Done |
+| 5.11 | Implement GET /encounters/:id/prescriptions | 2 jam | P0 | 5.10 | ❌ | ✅ Done |
+| 5.12 | Implement POST /encounters/:id/prescriptions | 3 jam | P0 | 5.11 | ❌ | ✅ Done |
+| 5.13 | Implement duplicate medication check | 1 jam | P0 | 5.12 | ❌ | ✅ Done |
+| 5.14 | Implement DELETE /encounters/:id/prescriptions/:id | 1 jam | P1 | 5.12 | ✅ | ✅ Done |
 | 5.15 | Unit test: Prescriptions service | 2 jam | P1 | 5.14 | ✅ | ⬜ To Do |
 
 **Subtotal Module 5.2:** 12 jam (~1.5 hari)
@@ -436,13 +436,13 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 5.16 | Create Dispenses module structure | 1 jam | P0 | 1.11 | ✅ | ⬜ To Do |
-| 5.17 | Create Dispense DTOs | 2 jam | P0 | 5.16 | ✅ | ⬜ To Do |
-| 5.18 | Implement POST /encounters/:id/dispense | 4 jam | P0 | 5.17 | ❌ | ⬜ To Do |
-| 5.19 | Implement stock deduction logic (transaction) | 3 jam | P0 | 5.18 | ❌ | ⬜ To Do |
-| 5.20 | Implement stock validation (prevent negative) | 2 jam | P0 | 5.19 | ❌ | ⬜ To Do |
-| 5.21 | Update prescription status to "dispensed" | 1 jam | P0 | 5.18 | ❌ | ⬜ To Do |
-| 5.22 | Create medication stock log entry | 2 jam | P0 | 5.19 | ❌ | ⬜ To Do |
+| 5.16 | Create Dispenses module structure | 1 jam | P0 | 1.11 | ✅ | ✅ Done |
+| 5.17 | Create Dispense DTOs | 2 jam | P0 | 5.16 | ✅ | ✅ Done |
+| 5.18 | Implement POST /encounters/:id/dispense | 4 jam | P0 | 5.17 | ❌ | ✅ Done |
+| 5.19 | Implement stock deduction logic (transaction) | 3 jam | P0 | 5.18 | ❌ | ✅ Done |
+| 5.20 | Implement stock validation (prevent negative) | 2 jam | P0 | 5.19 | ❌ | ✅ Done |
+| 5.21 | Update prescription status to "dispensed" | 1 jam | P0 | 5.18 | ❌ | ✅ Done |
+| 5.22 | Create medication stock log entry | 2 jam | P0 | 5.19 | ❌ | ✅ Done |
 | 5.23 | Unit test: Dispenses service | 3 jam | P1 | 5.22 | ✅ | ⬜ To Do |
 
 **Subtotal Module 5.3:** 18 jam (~2 hari)
@@ -457,11 +457,11 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 6.1 | Create Tarifs module structure | 1 jam | P0 | 1.11 | ✅ | ⬜ To Do |
-| 6.2 | Create Tarif DTOs | 2 jam | P0 | 6.1 | ✅ | ⬜ To Do |
-| 6.3 | Implement GET /settings/tarifs | 2 jam | P0 | 6.2 | ❌ | ⬜ To Do |
-| 6.4 | Implement POST /settings/tarifs | 2 jam | P0 | 6.3 | ❌ | ⬜ To Do |
-| 6.5 | Implement PUT /settings/tarifs/:id | 2 jam | P1 | 6.4 | ✅ | ⬜ To Do |
+| 6.1 | Create Tarifs module structure | 1 jam | P0 | 1.11 | ✅ | ✅ Done |
+| 6.2 | Create Tarif DTOs | 2 jam | P0 | 6.1 | ✅ | ✅ Done |
+| 6.3 | Implement GET /settings/tarifs | 2 jam | P0 | 6.2 | ❌ | ✅ Done |
+| 6.4 | Implement POST /settings/tarifs | 2 jam | P0 | 6.3 | ❌ | ✅ Done |
+| 6.5 | Implement PUT /settings/tarifs/:id | 2 jam | P1 | 6.4 | ✅ | ✅ Done |
 | 6.6 | Unit test: Tarifs service | 2 jam | P1 | 6.5 | ✅ | ⬜ To Do |
 
 **Subtotal Module 6.1:** 11 jam (~1.5 hari)
@@ -472,14 +472,14 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 6.7 | Create Billings module structure | 1 jam | P0 | 1.11 | ✅ | ⬜ To Do |
-| 6.8 | Create Billing DTOs (nested with items) | 3 jam | P0 | 6.7 | ✅ | ⬜ To Do |
-| 6.9 | Implement GET /billings (list with filters) | 3 jam | P0 | 6.8 | ❌ | ⬜ To Do |
-| 6.10 | Implement POST /billings | 5 jam | P0 | 6.8 | ❌ | ⬜ To Do |
-| 6.11 | Implement invoice number generation (INV-YYYY-XXXXX) | 2 jam | P0 | 6.10 | ❌ | ⬜ To Do |
-| 6.12 | Implement discount validation (max diskon) | 2 jam | P0 | 6.10 | ❌ | ⬜ To Do |
-| 6.13 | Implement subtotal & grand total calculation | 2 jam | P0 | 6.10 | ❌ | ⬜ To Do |
-| 6.14 | Implement GET /billings/:id (detail with items) | 2 jam | P0 | 6.9 | ✅ | ⬜ To Do |
+| 6.7 | Create Billings module structure | 1 jam | P0 | 1.11 | ✅ | ✅ Done |
+| 6.8 | Create Billing DTOs (nested with items) | 3 jam | P0 | 6.7 | ✅ | ✅ Done |
+| 6.9 | Implement GET /billings (list with filters) | 3 jam | P0 | 6.8 | ❌ | ✅ Done |
+| 6.10 | Implement POST /billings | 5 jam | P0 | 6.8 | ❌ | ✅ Done |
+| 6.11 | Implement invoice number generation (INV-YYYY-XXXXX) | 2 jam | P0 | 6.10 | ❌ | ✅ Done |
+| 6.12 | Implement discount validation (max diskon) | 2 jam | P0 | 6.10 | ❌ | ✅ Done |
+| 6.13 | Implement subtotal & grand total calculation | 2 jam | P0 | 6.10 | ❌ | ✅ Done |
+| 6.14 | Implement GET /billings/:id (detail with items) | 2 jam | P0 | 6.9 | ✅ | ✅ Done |
 | 6.15 | Unit test: Billings service | 4 ham | P1 | 6.14 | ✅ | ⬜ To Do |
 
 **Subtotal Module 6.2:** 24 jam (~3 hari)
@@ -490,11 +490,11 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 6.16 | Create Payments module structure | 1 jam | P0 | 1.11 | ✅ | ⬜ To Do |
-| 6.17 | Create Payment DTOs | 2 jam | P0 | 6.16 | ✅ | ⬜ To Do |
-| 6.18 | Implement POST /billings/:id/payments | 4 jam | P0 | 6.17 | ❌ | ⬜ To Do |
-| 6.19 | Implement receipt number generation (RCP-YYYY-XXXXX) | 1 jam | P0 | 6.18 | ❌ | ⬜ To Do |
-| 6.20 | Update billing status (unpaid/partial/paid) | 2 jam | P0 | 6.18 | ❌ | ⬜ To Do |
+| 6.16 | Create Payments module structure | 1 jam | P0 | 1.11 | ✅ | ✅ Done |
+| 6.17 | Create Payment DTOs | 2 jam | P0 | 6.16 | ✅ | ✅ Done |
+| 6.18 | Implement POST /billings/:id/payments | 4 jam | P0 | 6.17 | ❌ | ✅ Done |
+| 6.19 | Implement receipt number generation (RCP-YYYY-XXXXX) | 1 jam | P0 | 6.18 | ❌ | ✅ Done |
+| 6.20 | Update billing status (unpaid/partial/paid) | 2 jam | P0 | 6.18 | ❌ | ✅ Done |
 | 6.21 | Unit test: Payments service | 2 jam | P1 | 6.20 | ✅ | ⬜ To Do |
 
 **Subtotal Module 6.3:** 12 jam (~1.5 hari)
@@ -505,10 +505,10 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 6.22 | Create RefundRequests module structure | 1 jam | P2 | 1.11 | ✅ | ⬜ To Do |
-| 6.23 | Create RefundRequest DTOs | 2 jam | P2 | 6.22 | ✅ | ⬜ To Do |
-| 6.24 | Implement POST /billings/:id/refund-request | 3 jam | P2 | 6.23 | ✅ | ⬜ To Do |
-| 6.25 | Implement POST /billings/:id/refund-request/:id/approve | 3 jam | P2 | 6.24 | ✅ | ⬜ To Do |
+| 6.22 | Create RefundRequests module structure | 1 jam | P2 | 1.11 | ✅ | ✅ Done |
+| 6.23 | Create RefundRequest DTOs | 2 jam | P2 | 6.22 | ✅ | ✅ Done |
+| 6.24 | Implement POST /billings/:id/refund-request | 3 jam | P2 | 6.23 | ✅ | ✅ Done |
+| 6.25 | Implement POST /billings/:id/refund-request/:id/approve | 3 jam | P2 | 6.24 | ✅ | ✅ Done |
 | 6.26 | Unit test: RefundRequests service | 2 jam | P2 | 6.25 | ✅ | ⬜ To Do |
 
 **Subtotal Module 6.4:** 11 jam (~1.5 hari)
@@ -535,11 +535,11 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 7.1 | Create Reports module structure | 1 jam | P1 | 1.11 | ✅ | ⬜ To Do |
-| 7.2 | Create Report DTOs | 2 jam | P1 | 7.1 | ✅ | ⬜ To Do |
-| 7.3 | Implement GET /reports/visits | 4 jam | P1 | 7.2 | ❌ | ⬜ To Do |
-| 7.4 | Implement summary aggregation (total, by day, by doctor) | 3 jam | P1 | 7.3 | ❌ | ⬜ To Do |
-| 7.5 | Implement role-based filtering (dokter sees own only) | 2 jam | P1 | 7.3 | ❌ | ⬜ To Do |
+| 7.1 | Create Reports module structure | 1 jam | P1 | 1.11 | ✅ | ✅ Done |
+| 7.2 | Create Report DTOs | 2 jam | P1 | 7.1 | ✅ | ✅ Done |
+| 7.3 | Implement GET /reports/visits | 4 jam | P1 | 7.2 | ❌ | ✅ Done |
+| 7.4 | Implement summary aggregation (total, by day, by doctor) | 3 jam | P1 | 7.3 | ❌ | ✅ Done |
+| 7.5 | Implement role-based filtering (dokter sees own only) | 2 jam | P1 | 7.3 | ❌ | ✅ Done |
 | 7.6 | Unit test: Visit reports | 2 jam | P2 | 7.5 | ✅ | ⬜ To Do |
 
 **Subtotal Module 7.1:** 14 jam (~2 hari)
@@ -550,10 +550,10 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 7.7 | Implement GET /reports/financial | 4 jam | P1 | 7.2 | ✅ | ⬜ To Do |
-| 7.8 | Implement summary (revenue, paid, outstanding, collection rate) | 3 jam | P1 | 7.7 | ❌ | ⬜ To Do |
-| 7.9 | Implement breakdown (by day, payment method, doctor) | 3 jam | P1 | 7.7 | ❌ | ⬜ To Do |
-| 7.10 | Add Owner-only guard | 1 jam | P1 | 7.7 | ❌ | ⬜ To Do |
+| 7.7 | Implement GET /reports/financial | 4 jam | P1 | 7.2 | ✅ | ✅ Done |
+| 7.8 | Implement summary (revenue, paid, outstanding, collection rate) | 3 jam | P1 | 7.7 | ❌ | ✅ Done |
+| 7.9 | Implement breakdown (by day, payment method, doctor) | 3 jam | P1 | 7.7 | ❌ | ✅ Done |
+| 7.10 | Add Owner-only guard | 1 jam | P1 | 7.7 | ❌ | ✅ Done |
 | 7.11 | Unit test: Financial reports | 2 jam | P2 | 7.10 | ✅ | ⬜ To Do |
 
 **Subtotal Module 7.2:** 13 jam (~1.5 hari)
@@ -564,10 +564,10 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 7.12 | Implement GET /reports/satusehat-sync | 3 jam | P1 | 7.2 | ✅ | ⬜ To Do |
-| 7.13 | Implement summary (total, synced, failed, pending) | 2 jam | P1 | 7.12 | ❌ | ⬜ To Do |
-| 7.14 | Implement failed items list | 2 jam | P1 | 7.12 | ❌ | ⬜ To Do |
-| 7.15 | Implement POST /reports/satusehat-sync/retry | 2 jam | P1 | 7.14 | ✅ | ⬜ To Do |
+| 7.12 | Implement GET /reports/satusehat-sync | 3 jam | P1 | 7.2 | ✅ | ✅ Done |
+| 7.13 | Implement summary (total, synced, failed, pending) | 2 jam | P1 | 7.12 | ❌ | ✅ Done |
+| 7.14 | Implement failed items list | 2 jam | P1 | 7.12 | ❌ | ✅ Done |
+| 7.15 | Implement POST /reports/satusehat-sync/retry | 2 jam | P1 | 7.14 | ✅ | ✅ Done |
 | 7.16 | Unit test: SATUSEHAT reports | 2 jam | P2 | 7.15 | ✅ | ⬜ To Do |
 
 **Subtotal Module 7.3:** 11 jam (~1.5 hari)
@@ -582,11 +582,11 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 8.1 | Create SatusehatClient service (HTTP client) | 3 jam | P0 | - | ✅ | ⬜ To Do |
-| 8.2 | Implement OAuth2 token management | 4 jam | P0 | 8.1 | ❌ | ⬜ To Do |
-| 8.3 | Implement token refresh logic (expires < 30min) | 2 jam | P0 | 8.2 | ❌ | ⬜ To Do |
-| 8.4 | Create FHIR R4 mapping utilities | 4 jam | P0 | 8.1 | ✅ | ⬜ To Do |
-| 8.5 | Implement error handling for SATUSEHAT API | 2 jam | P0 | 8.1 | ✅ | ⬜ To Do |
+| 8.1 | Create SatusehatClient service (HTTP client) | 3 jam | P0 | - | ✅ | ✅ Done |
+| 8.2 | Implement OAuth2 token management | 4 jam | P0 | 8.1 | ❌ | ✅ Done |
+| 8.3 | Implement token refresh logic (expires < 30min) | 2 jam | P0 | 8.2 | ❌ | ✅ Done |
+| 8.4 | Create FHIR R4 mapping utilities | 4 jam | P0 | 8.1 | ✅ | ✅ Done |
+| 8.5 | Implement error handling for SATUSEHAT API | 2 jam | P0 | 8.1 | ✅ | ✅ Done |
 | 8.6 | Unit test: SatusehatClient | 3 jam | P1 | 8.5 | ✅ | ⬜ To Do |
 
 **Subtotal Module 8.1:** 18 jam (~2 hari)
@@ -597,13 +597,13 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 8.7 | Create Patient sync service (map to FHIR Patient) | 4 jam | P0 | 8.4 | ✅ | ⬜ To Do |
-| 8.8 | Create Encounter sync service (map to FHIR Encounter) | 4 jam | P0 | 8.4 | ✅ | ⬜ To Do |
-| 8.9 | Create Condition sync service (map to FHIR Condition) | 3 jam | P1 | 8.4 | ✅ | ⬜ To Do |
-| 8.10 | Create Procedure sync service (map to FHIR Procedure) | 3 jam | P1 | 8.4 | ✅ | ⬜ To Do |
-| 8.11 | Create Observation sync service (vital signs, OHI-S) | 4 jam | P1 | 8.4 | ✅ | ⬜ To Do |
-| 8.12 | Create MedicationRequest sync service | 3 jam | P1 | 8.4 | ✅ | ⬜ To Do |
-| 8.13 | Create AllergyIntolerance sync service | 2 jam | P2 | 8.4 | ✅ | ⬜ To Do |
+| 8.7 | Create Patient sync service (map to FHIR Patient) | 4 jam | P0 | 8.4 | ✅ | ✅ Done |
+| 8.8 | Create Encounter sync service (map to FHIR Encounter) | 4 jam | P0 | 8.4 | ✅ | ✅ Done |
+| 8.9 | Create Condition sync service (map to FHIR Condition) | 3 jam | P1 | 8.4 | ✅ | ✅ Done |
+| 8.10 | Create Procedure sync service (map to FHIR Procedure) | 3 jam | P1 | 8.4 | ✅ | ✅ Done |
+| 8.11 | Create Observation sync service (vital signs, OHI-S) | 4 jam | P1 | 8.4 | ✅ | ✅ Done |
+| 8.12 | Create MedicationRequest sync service | 3 jam | P1 | 8.4 | ✅ | ✅ Done |
+| 8.13 | Create AllergyIntolerance sync service | 2 jam | P2 | 8.4 | ✅ | ✅ Done |
 | 8.14 | Unit test: All sync services | 6 jam | P1 | 8.13 | ✅ | ⬜ To Do |
 
 **Subtotal Module 8.2:** 29 jam (~4 hari)
@@ -614,10 +614,10 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 8.15 | Create sync orchestrator (trigger sync on encounter finish) | 3 jam | P0 | 8.8 | ❌ | ⬜ To Do |
+| 8.15 | Create sync orchestrator (trigger sync on encounter finish) | 3 jam | P0 | 8.8 | ❌ | ✅ Done |
 | 8.16 | Implement sync queue (retry failed syncs) | 4 jam | P1 | 8.15 | ✅ | ⬜ To Do |
-| 8.17 | Create satusehat_sync_logs table entries | 2 jam | P0 | 8.15 | ❌ | ⬜ To Do |
-| 8.18 | Implement manual sync endpoint POST /satusehat/sync/:type/:id | 2 jam | P1 | 8.15 | ✅ | ⬜ To Do |
+| 8.17 | Create satusehat_sync_logs table entries | 2 jam | P0 | 8.15 | ❌ | ✅ Done |
+| 8.18 | Implement manual sync endpoint POST /satusehat/sync/:type/:id | 2 jam | P1 | 8.15 | ✅ | ✅ Done |
 | 8.19 | Implement retry logic (exponential backoff) | 3 jam | P1 | 8.16 | ✅ | ⬜ To Do |
 | 8.20 | Unit test: Sync orchestration | 3 jam | P1 | 8.19 | ✅ | ⬜ To Do |
 
@@ -633,11 +633,11 @@ Breakdown task dalam format tabel per module:
 
 | No | Task | Estimasi | Priority | Dependencies | Parallel? | Status |
 |----|------|----------|----------|--------------|-----------|--------|
-| 9.1 | Create SoapTemplates module structure | 1 jam | P2 | 1.11 | ✅ | ⬜ To Do |
-| 9.2 | Create SoapTemplate DTOs | 2 jam | P2 | 9.1 | ✅ | ⬜ To Do |
-| 9.3 | Implement GET /settings/soap-templates | 2 jam | P2 | 9.2 | ✅ | ⬜ To Do |
-| 9.4 | Implement POST /settings/soap-templates | 2 jam | P2 | 9.3 | ✅ | ⬜ To Do |
-| 9.5 | Implement shared vs personal logic | 2 jam | P2 | 9.4 | ✅ | ⬜ To Do |
+| 9.1 | Create SoapTemplates module structure | 1 jam | P2 | 1.11 | ✅ | ✅ Done |
+| 9.2 | Create SoapTemplate DTOs | 2 jam | P2 | 9.1 | ✅ | ✅ Done |
+| 9.3 | Implement GET /settings/soap-templates | 2 jam | P2 | 9.2 | ✅ | ✅ Done |
+| 9.4 | Implement POST /settings/soap-templates | 2 jam | P2 | 9.3 | ✅ | ✅ Done |
+| 9.5 | Implement shared vs personal logic | 2 jam | P2 | 9.4 | ✅ | ✅ Done |
 | 9.6 | Unit test: SoapTemplates service | 2 jam | P2 | 9.5 | ✅ | ⬜ To Do |
 
 **Subtotal Module 9.1:** 11 jam (~1.5 hari)

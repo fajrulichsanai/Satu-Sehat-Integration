@@ -1,4 +1,5 @@
-import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
+import { Entity, Column, ManyToOne, OneToMany, JoinColumn, Index } from 'typeorm';
+import { BillingItem } from './billing-item.entity';
 import { BaseEntity } from '../common/base.entity';
 import { Clinic } from './clinic.entity';
 import { Encounter } from './encounter.entity';
@@ -55,6 +56,9 @@ export class Billing extends BaseEntity {
   notes: string;
 
   // Relations
+  @OneToMany(() => BillingItem, (item) => item.billing)
+  items: BillingItem[];
+
   @ManyToOne(() => Clinic, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'clinic_id' })
   clinic: Clinic;
