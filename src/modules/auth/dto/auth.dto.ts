@@ -106,3 +106,20 @@ export class UserResponseDto {
   @ApiProperty({ example: true })
   isActive: boolean;
 }
+
+export class RefreshTokenDto {
+  @ApiProperty({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' })
+  @IsNotEmpty()
+  refreshToken: string;
+}
+
+export class ActivationStatusResponseDto {
+  @ApiProperty({ example: true })
+  isActive: boolean;
+
+  @ApiProperty({ example: 'owner' })
+  role: string;
+
+  @ApiProperty({ example: 1, nullable: true })
+  clinicId: number | null;
+}

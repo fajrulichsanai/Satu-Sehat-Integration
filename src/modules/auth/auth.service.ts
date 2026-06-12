@@ -211,6 +211,57 @@ export class AuthService {
   }
 
   /**
+   * Get activation status (for frontend polling after register)
+   */
+  async getActivationStatus(userId: number) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException({
+        success: false,
+        error: { code: 'USER_NOT_FOUND', message: 'User tidak ditemukan' },
+      });
+    }
+    return {
+      success: true,
+      data: {
+        isActive: user.isActive,
+        role: user.role,
+        clinicId: user.clinicId ?? null,
+      },
+    };
+  }
+
+  /**
+   * Refresh access token using refresh token (JWT re-sign)
+   * Simple implementation: validate existing token and re-issue
+   */
+  async refreshToken(userId: number) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException({
+        success: false,
+        error: { code: 'INVALID_REFRESH', message: 'Token tidak valid' },
+      });
+    }
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      clinicId: user.clinicId,
+      practitionerId: user.practitionerId,
+    };
+    const accessToken = this.jwtService.sign(payload);
+    return { success: true, data: { accessToken } };
+  }
+
+  /**
+   * Logout (stateless — client should discard token)
+   */
+  async logout() {
+    return { success: true, data: { message: 'Logged out successfully' } };
+  }
+
+  /**
    * Validate user by ID (used by JWT strategy)
    */
   async validateUser(userId: number): Promise<User | null> {

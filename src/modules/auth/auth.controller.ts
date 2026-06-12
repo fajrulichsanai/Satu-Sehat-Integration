@@ -1,7 +1,13 @@
 import { Controller, Post, Get, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { RegisterDto, LoginDto, LoginResponseDto, UserResponseDto } from './dto/auth.dto';
+import {
+  RegisterDto,
+  LoginDto,
+  LoginResponseDto,
+  UserResponseDto,
+  ActivationStatusResponseDto,
+} from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
@@ -38,5 +44,32 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getMe(@CurrentUser() user: any) {
     return this.authService.getMe(user.userId);
+  }
+
+  @Get('activation-status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Check account activation status (for polling after register)' })
+  @ApiResponse({ status: 200, type: ActivationStatusResponseDto })
+  async getActivationStatus(@CurrentUser() user: any) {
+    return this.authService.getActivationStatus(user.userId);
+  }
+
+  @Post('refresh')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Refresh access token' })
+  @ApiResponse({ status: 200, description: 'New access token issued' })
+  async refresh(@CurrentUser() user: any) {
+    return this.authService.refreshToken(user.userId);
+  }
+
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Logout (client should discard token)' })
+  @ApiResponse({ status: 200, description: 'Logged out' })
+  async logout() {
+    return this.authService.logout();
   }
 }
