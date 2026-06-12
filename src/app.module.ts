@@ -1,9 +1,16 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { PatientsModule } from './patients/patients.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
+import { ClinicsModule } from './modules/clinics/clinics.module';
+import { PractitionersModule } from './modules/practitioners/practitioners.module';
+import { LocationsModule } from './modules/locations/locations.module';
+import { ExamplesModule } from './modules/examples/examples.module';
+import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 
 @Module({
   imports: [
@@ -21,13 +28,25 @@ import { PatientsModule } from './patients/patients.module';
         password: configService.get('DB_PASSWORD', 'root'),
         database: configService.get('DB_DATABASE', 'dental_clinic'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: configService.get('DB_SYNCHRONIZE') === 'true',
+        synchronize: false, // Set to false to avoid duplicate key errors
       }),
       inject: [ConfigService],
     }),
-    PatientsModule,
+    AuthModule,
+    UsersModule,
+    ClinicsModule,
+    PractitionersModule,
+    LocationsModule,
+    ExamplesModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // Global JWT guard (can be overridden with @Public() decorator)
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+  ],
 })
 export class AppModule {}
