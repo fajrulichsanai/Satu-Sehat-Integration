@@ -11,13 +11,14 @@ import { BillingsService } from './billings.service';
 import { PaymentsService } from './payments.service';
 import { RefundsService } from './refunds.service';
 import { TarifsService } from './tarifs.service';
+import { InvoiceService } from './invoice.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Billing, BillingItem, Tarif, Payment, RefundRequest, Encounter]),
   ],
   controllers: [BillingController],
-  providers: [BillingsService, PaymentsService, RefundsService, TarifsService],
+  providers: [BillingsService, PaymentsService, RefundsService, TarifsService, InvoiceService],
   exports: [BillingsService],
 })
 export class BillingModule {}

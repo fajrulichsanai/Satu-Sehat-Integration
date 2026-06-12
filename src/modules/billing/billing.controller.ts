@@ -7,8 +7,10 @@ import {
   Post,
   Put,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { BillingsService } from './billings.service';
 import { PaymentsService } from './payments.service';
@@ -25,6 +27,7 @@ import { CreateTarifDto, TarifQueryDto, UpdateTarifDto } from './dto/tarif.dto';
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { InvoiceService } from './invoice.service';
 
 @ApiTags('billing')
 @ApiBearerAuth('JWT-auth')
@@ -36,6 +39,7 @@ export class BillingController {
     private readonly paymentsService: PaymentsService,
     private readonly refundsService: RefundsService,
     private readonly tarifsService: TarifsService,
+    private readonly invoiceService: InvoiceService,
   ) {}
 
   // ── Tarifs ────────────────────────────────────────────────────────────────
@@ -124,6 +128,19 @@ export class BillingController {
   ) {
     const data = await this.refundsService.createRequest(id, clinicId, dto, user.userId);
     return { success: true, data };
+  }
+
+  @Get('billings/:id/invoice')
+  @ApiOperation({ summary: 'Download invoice as PDF' })
+  async downloadInvoice(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @Res() res: Response,
+  ) {
+    const pdfBuffer = await this.invoiceService.generateInvoicePdf(id, clinicId);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="invoice-${id}.pdf"`);
+    res.end(pdfBuffer);
   }
 
   @Post('billings/:id/refund-request/:refundId/approve')

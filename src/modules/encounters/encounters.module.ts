@@ -12,6 +12,8 @@ import { Prescription } from '../../entities/prescription.entity';
 import { Dispense } from '../../entities/dispense.entity';
 import { Medication } from '../../entities/medication.entity';
 import { MedicationStockLog } from '../../entities/medication-stock-log.entity';
+import { OdontogramData } from '../../entities/odontogram-data.entity';
+import { OhisData } from '../../entities/ohis-data.entity';
 import { EncountersController } from './encounters.controller';
 import { EncountersService } from './encounters.service';
 import { AnamnesisController } from './anamnesis.controller';
@@ -26,6 +28,10 @@ import { PrescriptionsController } from './prescriptions.controller';
 import { PrescriptionsService } from './prescriptions.service';
 import { DispenseController } from './dispense.controller';
 import { DispenseService } from './dispense.service';
+import { OdontogramController } from './odontogram.controller';
+import { OdontogramService } from './odontogram.service';
+import { OhisController } from './ohis.controller';
+import { OhisService } from './ohis.service';
 
 @Module({
   imports: [
@@ -42,6 +48,8 @@ import { DispenseService } from './dispense.service';
       Dispense,
       Medication,
       MedicationStockLog,
+      OdontogramData,
+      OhisData,
     ]),
   ],
   controllers: [
@@ -52,6 +60,8 @@ import { DispenseService } from './dispense.service';
     ProceduresController,
     PrescriptionsController,
     DispenseController,
+    OdontogramController,
+    OhisController,
   ],
   providers: [
     EncountersService,
@@ -61,6 +71,8 @@ import { DispenseService } from './dispense.service';
     ProceduresService,
     PrescriptionsService,
     DispenseService,
+    OdontogramService,
+    OhisService,
   ],
   exports: [EncountersService],
 })

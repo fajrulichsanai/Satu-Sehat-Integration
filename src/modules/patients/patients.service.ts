@@ -10,6 +10,7 @@ import { Patient } from '../../entities/patient.entity';
 import { Encounter } from '../../entities/encounter.entity';
 import { CreatePatientDto, PatientQueryDto, UpdatePatientDto } from './dto/patient.dto';
 import { paginate, PaginatedResult } from '../../common/dto/pagination.dto';
+import { SatusehatClientService } from '../satusehat/satusehat-client.service';
 
 @Injectable()
 export class PatientsService {
@@ -19,6 +20,7 @@ export class PatientsService {
     @InjectRepository(Encounter)
     private readonly encounterRepository: Repository<Encounter>,
     private readonly dataSource: DataSource,
+    private readonly satusehatClient: SatusehatClientService,
   ) {}
 
   async findAll(clinicId: number, query: PatientQueryDto): Promise<PaginatedResult<Patient>> {
@@ -133,6 +135,11 @@ export class PatientsService {
     if (existing) {
       throw new ConflictException(`Pasien dengan NIK ${nik} sudah terdaftar di klinik ini`);
     }
+  }
+
+  async searchSatusehat(nik: string, clinicId: number) {
+    if (!nik) throw new BadRequestException('NIK diperlukan untuk pencarian SATUSEHAT');
+    return this.satusehatClient.searchPatientByNik(clinicId, nik);
   }
 
   private async generateNoRm(clinicId: number): Promise<string> {

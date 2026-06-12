@@ -14,6 +14,8 @@ import { PatientsService } from './patients.service';
 import { CreatePatientDto, PatientQueryDto, UpdatePatientDto } from './dto/patient.dto';
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
+import { IsString } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 @ApiTags('patients')
 @ApiBearerAuth('JWT-auth')
@@ -65,5 +67,15 @@ export class PatientsController {
   ) {
     const encounters = await this.patientsService.findEncounters(id, clinicId);
     return { success: true, data: encounters };
+  }
+
+  @Get('search-satusehat')
+  @ApiOperation({ summary: 'Search patient by NIK via SATUSEHAT API' })
+  async searchSatusehat(
+    @Query('nik') nik: string,
+    @ClinicId() clinicId: number,
+  ) {
+    const data = await this.patientsService.searchSatusehat(nik, clinicId);
+    return { success: true, data };
   }
 }

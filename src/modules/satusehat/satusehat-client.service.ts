@@ -4,9 +4,11 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
 import { Clinic } from '../../entities/clinic.entity';
 import { SatusehatEnvironment } from '../../enums/satusehat-environment.enum';
+import { decrypt } from '../../common/utils/crypto.util';
 
 const SATUSEHAT_BASE: Record<SatusehatEnvironment, string> = {
   [SatusehatEnvironment.SANDBOX]: 'https://api-satusehat-stg.dto.kemkes.go.id',
@@ -22,10 +24,15 @@ const AUTH_URL: Record<SatusehatEnvironment, string> = {
 export class SatusehatClientService {
   private readonly logger = new Logger(SatusehatClientService.name);
 
+  private readonly encryptionKey: string;
+
   constructor(
     @InjectRepository(Clinic)
     private readonly clinicRepository: Repository<Clinic>,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.encryptionKey = this.configService.get<string>('ENCRYPTION_KEY', 'default-key-32-chars-padded!!!!!');
+  }
 
   async getAccessToken(clinicId: number): Promise<string> {
     const clinic = await this.clinicRepository.findOne({ where: { id: clinicId } });
@@ -95,10 +102,17 @@ export class SatusehatClientService {
 
   private async refreshToken(clinic: Clinic): Promise<string> {
     const authUrl = AUTH_URL[clinic.satusehatEnvironment];
+    let clientSecret = clinic.satusehatClientSecret;
+    try {
+      clientSecret = decrypt(clinic.satusehatClientSecret, this.encryptionKey);
+    } catch {
+      // Not encrypted (legacy), use as-is
+    }
+
     const params = new URLSearchParams({
       grant_type: 'client_credentials',
       client_id: clinic.satusehatClientId,
-      client_secret: clinic.satusehatClientSecret,
+      client_secret: clientSecret,
     });
 
     try {

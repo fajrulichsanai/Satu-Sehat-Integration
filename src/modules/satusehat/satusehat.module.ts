@@ -12,6 +12,7 @@ import { SatusehatSyncLog } from '../../entities/satusehat-sync-log.entity';
 import { SatusehatController } from './satusehat.controller';
 import { SatusehatClientService } from './satusehat-client.service';
 import { SyncOrchestratorService } from './sync/sync-orchestrator.service';
+import { SyncQueueService } from './sync/sync-queue.service';
 
 @Module({
   imports: [
@@ -21,7 +22,7 @@ import { SyncOrchestratorService } from './sync/sync-orchestrator.service';
     ]),
   ],
   controllers: [SatusehatController],
-  providers: [SatusehatClientService, SyncOrchestratorService],
-  exports: [SatusehatClientService, SyncOrchestratorService],
+  providers: [SatusehatClientService, SyncOrchestratorService, SyncQueueService],
+  exports: [SatusehatClientService, SyncOrchestratorService, SyncQueueService],
 })
 export class SatusehatModule {}

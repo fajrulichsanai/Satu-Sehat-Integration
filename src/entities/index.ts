@@ -30,6 +30,10 @@ export * from './billing-item.entity';
 export * from './payment.entity';
 export * from './refund-request.entity';
 
+// Clinical (odontogram, ohis)
+export * from './odontogram-data.entity';
+export * from './ohis-data.entity';
+
 // Settings & Integration
 export * from './soap-template.entity';
 export * from './satusehat-sync-log.entity';

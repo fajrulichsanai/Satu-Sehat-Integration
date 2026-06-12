@@ -1,4 +1,5 @@
-import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -268,5 +269,33 @@ export class AuthService {
     return this.userRepository.findOne({
       where: { id: userId },
     });
+  }
+
+  /**
+   * Send email verification token (mock: logs token to console)
+   */
+  async sendVerificationEmail(userId: number): Promise<void> {
+    const token = crypto.randomBytes(32).toString('hex');
+    await this.userRepository.update(userId, { verificationToken: token } as any);
+    Logger.log(`[MOCK EMAIL] Verification token for user ${userId}: ${token}`, 'AuthService');
+  }
+
+  /**
+   * Verify email with token
+   */
+  async verifyEmail(token: string) {
+    if (!token) throw new BadRequestException('Token verifikasi tidak boleh kosong');
+
+    const user = await this.userRepository.findOne({
+      where: { verificationToken: token } as any,
+    });
+    if (!user) throw new NotFoundException('Token verifikasi tidak valid atau sudah digunakan');
+
+    await this.userRepository.update(user.id, {
+      emailVerifiedAt: new Date(),
+      verificationToken: null,
+    } as any);
+
+    return { success: true, data: { message: 'Email berhasil diverifikasi' } };
   }
 }

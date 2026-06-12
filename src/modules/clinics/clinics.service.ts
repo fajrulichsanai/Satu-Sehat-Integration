@@ -1,15 +1,22 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
 import { Clinic } from '../../entities/clinic.entity';
 import { UpdateClinicDto, SatusehatConfigDto } from './dto/clinic.dto';
+import { encrypt, decrypt } from '../../common/utils/crypto.util';
 
 @Injectable()
 export class ClinicsService {
+  private readonly encryptionKey: string;
+
   constructor(
     @InjectRepository(Clinic)
     private clinicRepository: Repository<Clinic>,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.encryptionKey = this.configService.get<string>('ENCRYPTION_KEY', 'default-key-32-chars-padded!!!!!');
+  }
 
   /**
    * Get clinic settings
@@ -110,7 +117,7 @@ export class ClinicsService {
     // Update SATUSEHAT config
     clinic.satusehatOrgId = dto.satusehatOrgId;
     clinic.satusehatClientId = dto.satusehatClientId;
-    clinic.satusehatClientSecret = dto.satusehatClientSecret;
+    clinic.satusehatClientSecret = encrypt(dto.satusehatClientSecret, this.encryptionKey);
     clinic.satusehatEnvironment = dto.satusehatEnvironment;
     clinic.updatedBy = updatedBy;
 
