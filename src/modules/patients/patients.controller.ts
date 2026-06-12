@@ -1,0 +1,69 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { PatientsService } from './patients.service';
+import { CreatePatientDto, PatientQueryDto, UpdatePatientDto } from './dto/patient.dto';
+import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
+import { ClinicId } from '../auth/decorators/clinic-id.decorator';
+
+@ApiTags('patients')
+@ApiBearerAuth('JWT-auth')
+@UseGuards(ClinicContextGuard)
+@Controller('patients')
+export class PatientsController {
+  constructor(private readonly patientsService: PatientsService) {}
+
+  @Get()
+  @ApiOperation({ summary: 'List patients with pagination and search' })
+  async findAll(@ClinicId() clinicId: number, @Query() query: PatientQueryDto) {
+    const result = await this.patientsService.findAll(clinicId, query);
+    return { success: true, ...result };
+  }
+
+  @Post()
+  @ApiOperation({ summary: 'Register new patient' })
+  async create(@ClinicId() clinicId: number, @Body() dto: CreatePatientDto) {
+    const patient = await this.patientsService.create(clinicId, dto);
+    return { success: true, message: 'Pasien berhasil didaftarkan', data: patient };
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get patient detail' })
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+  ) {
+    const patient = await this.patientsService.findOne(id, clinicId);
+    return { success: true, data: patient };
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Update patient demographics' })
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: UpdatePatientDto,
+  ) {
+    const patient = await this.patientsService.update(id, clinicId, dto);
+    return { success: true, message: 'Data pasien berhasil diperbarui', data: patient };
+  }
+
+  @Get(':id/encounters')
+  @ApiOperation({ summary: 'Get patient encounter history' })
+  async findEncounters(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+  ) {
+    const encounters = await this.patientsService.findEncounters(id, clinicId);
+    return { success: true, data: encounters };
+  }
+}
