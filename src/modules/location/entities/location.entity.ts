@@ -1,6 +1,6 @@
 import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
-import { BaseEntity } from '../common/base.entity';
-import { Clinic } from './clinic.entity';
+import { BaseEntity } from '../../../common/base.entity';
+import { Clinic } from '../../clinics/entities/clinic.entity';
 
 @Entity('locations')
 export class Location extends BaseEntity {

@@ -5,8 +5,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { Medication } from '../../entities/medication.entity';
-import { MedicationStockLog, StockLogType } from '../../entities/medication-stock-log.entity';
+import { Medication } from './entities/medication.entity';
+import { MedicationStockLog, StockLogType } from '../medication-stock-log/entities/medication-stock-log.entity';
 import {
   AdjustStockDto,
   CreateMedicationDto,

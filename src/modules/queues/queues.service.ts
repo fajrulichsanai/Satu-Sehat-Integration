@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, DataSource, Repository } from 'typeorm';
-import { Queue } from '../../entities/queue.entity';
+import { Queue } from './entities/queue.entity';
 import { QueueStatus } from '../../enums';
 import { CreateQueueDto, QueueQueryDto, SlotsQueryDto, UpdateQueueStatusDto } from './dto/queue.dto';
 import { startOfDay, endOfDay } from '../../common/utils/date.util';

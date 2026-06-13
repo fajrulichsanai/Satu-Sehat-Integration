@@ -1,10 +1,10 @@
-import { Patient } from '../../../entities/patient.entity';
-import { Encounter } from '../../../entities/encounter.entity';
-import { Diagnosis } from '../../../entities/diagnosis.entity';
-import { Procedure } from '../../../entities/procedure.entity';
-import { VitalSign } from '../../../entities/vital-sign.entity';
-import { Prescription } from '../../../entities/prescription.entity';
-import { Allergy } from '../../../entities/allergy.entity';
+import { Patient } from '../../patients/entities/patient.entity';
+import { Encounter } from '../../encounters/entities/encounter.entity';
+import { Diagnosis } from '../../diagnoses/entities/diagnosis.entity';
+import { Procedure } from '../../procedures/entities/procedure.entity';
+import { VitalSign } from '../../vital-sign/entities/vital-sign.entity';
+import { Prescription } from '../../prescription/entities/prescription.entity';
+import { Allergy } from '../../allergy/entities/allergy.entity';
 
 export class FhirMapper {
   static toFhirPatient(patient: Patient, orgId: string): object {

@@ -1,11 +1,11 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
-import { BaseEntity } from '../common/base.entity';
-import { SyncStatus, EncounterStatus, ServiceType } from '../enums';
-import { Clinic } from './clinic.entity';
-import { Patient } from './patient.entity';
-import { Practitioner } from './practitioner.entity';
-import { Location } from './location.entity';
-import { Queue } from './queue.entity';
+import { BaseEntity } from '../../../common/base.entity';
+import { SyncStatus, EncounterStatus, ServiceType } from '../../../enums';
+import { Clinic } from '../../clinics/entities/clinic.entity';
+import { Patient } from '../../patients/entities/patient.entity';
+import { Practitioner } from '../../practitioners/entities/practitioner.entity';
+import { Location } from '../../location/entities/location.entity';
+import { Queue } from '../../queues/entities/queue.entity';
 
 @Entity('encounters')
 @Index(['practitionerId', 'arrivedTime'])

@@ -2,8 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { QueuesService } from '../queues.service';
-import { Queue } from '../../../entities/queue.entity';
-import { Practitioner } from '../../../entities/practitioner.entity';
+import { Queue } from '../entities/queue.entity';
+import { Practitioner } from '../../practitioners/entities/practitioner.entity';
 import { DataSource } from 'typeorm';
 
 const mockQueueRepo = {

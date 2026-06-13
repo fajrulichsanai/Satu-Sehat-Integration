@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Billing } from '../../entities/billing.entity';
-import { BillingItem } from '../../entities/billing-item.entity';
-import { Tarif } from '../../entities/tarif.entity';
-import { Payment } from '../../entities/payment.entity';
-import { RefundRequest } from '../../entities/refund-request.entity';
-import { Encounter } from '../../entities/encounter.entity';
+import { Billing } from './entities/billing.entity';
+import { BillingItem } from '../billing-item/entities/billing-item.entity';
+import { Tarif } from '../tarif/entities/tarif.entity';
+import { Payment } from '../payments/entities/payment.entity';
+import { RefundRequest } from '../refund-request/entities/refund-request.entity';
+import { Encounter } from '../encounters/entities/encounter.entity';
 import { BillingController } from './billing.controller';
 import { BillingsService } from './billings.service';
 import { PaymentsService } from '../payments/payments.service';

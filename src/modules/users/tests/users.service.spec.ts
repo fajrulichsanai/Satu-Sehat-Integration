@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { UsersService } from '../users.service';
-import { User } from '../../../entities/user.entity';
+import { User } from '../entities/user.entity';
 
 const mockRepo = {
   find: jest.fn(),

@@ -7,7 +7,7 @@ import {
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { DurationUnit } from '../../../entities/prescription.entity';
+import { DurationUnit } from '../../prescription/entities/prescription.entity';
 
 export class CreatePrescriptionDto {
   @ApiProperty()

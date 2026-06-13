@@ -7,8 +7,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Prescription, PrescriptionStatus } from '../../entities/prescription.entity';
-import { Encounter } from '../../entities/encounter.entity';
+import { Prescription, PrescriptionStatus } from '../prescription/entities/prescription.entity';
+import { Encounter } from './entities/encounter.entity';
 import { EncounterStatus } from '../../enums';
 import { CreatePrescriptionDto } from './dto/prescription.dto';
 

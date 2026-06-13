@@ -4,8 +4,8 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { User } from '../../entities/user.entity';
-import { Clinic } from '../../entities/clinic.entity';
+import { User } from '../users/entities/user.entity';
+import { Clinic } from '../clinics/entities/clinic.entity';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
 import { UserRole } from '../../enums';
 

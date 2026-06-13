@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Practitioner } from '../../entities/practitioner.entity';
+import { Practitioner } from './entities/practitioner.entity';
 import {
   CreatePractitionerDto,
   UpdatePractitionerDto,

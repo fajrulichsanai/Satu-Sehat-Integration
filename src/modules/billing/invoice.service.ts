@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Billing } from '../../entities/billing.entity';
+import { Billing } from './entities/billing.entity';
 import * as PdfPrinter from 'pdfmake';
 
 @Injectable()

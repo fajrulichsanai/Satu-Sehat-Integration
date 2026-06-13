@@ -1,8 +1,8 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
-import { BaseEntity } from '../common/base.entity';
-import { SyncStatus } from '../enums';
-import { Encounter } from './encounter.entity';
-import { Medication } from './medication.entity';
+import { BaseEntity } from '../../../common/base.entity';
+import { SyncStatus } from '../../../enums';
+import { Encounter } from '../../encounters/entities/encounter.entity';
+import { Medication } from '../../medications/entities/medication.entity';
 
 export enum PrescriptionStatus {
   ACTIVE = 'active',

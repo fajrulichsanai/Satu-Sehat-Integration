@@ -8,8 +8,8 @@ import {
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { AllergyLevel } from '../../../entities/allergy.entity';
-import { BloodType, PregnancyStatus, Rhesus } from '../../../entities/anamnesis.entity';
+import { AllergyLevel } from '../../allergy/entities/allergy.entity';
+import { BloodType, PregnancyStatus, Rhesus } from '../../anamnesis/entities/anamnesis.entity';
 
 export class AllergyItemDto {
   @ApiProperty()

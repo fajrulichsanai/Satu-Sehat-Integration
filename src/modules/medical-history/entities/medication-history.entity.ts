@@ -1,6 +1,6 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
-import { BaseEntity } from '../common/base.entity';
-import { Encounter } from './encounter.entity';
+import { BaseEntity } from '../../../common/base.entity';
+import { Encounter } from '../../encounters/entities/encounter.entity';
 
 @Entity('medication_history')
 @Index(['encounterId'])

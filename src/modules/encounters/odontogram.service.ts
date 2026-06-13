@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { OdontogramData } from '../../entities/odontogram-data.entity';
-import { Encounter } from '../../entities/encounter.entity';
+import { OdontogramData } from '../odontogram-data/entities/odontogram-data.entity';
+import { Encounter } from './entities/encounter.entity';
 import { UpsertOdontogramDto } from './dto/odontogram.dto';
 
 const STATUS_DECAYED = new Set(['karies', 'caries']);

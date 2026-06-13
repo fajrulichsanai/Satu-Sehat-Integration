@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Tarif } from '../../entities/tarif.entity';
+import { Tarif } from './entities/tarif.entity';
 import { CreateTarifDto, TarifQueryDto, UpdateTarifDto } from './dto/tarif.dto';
 
 @Injectable()

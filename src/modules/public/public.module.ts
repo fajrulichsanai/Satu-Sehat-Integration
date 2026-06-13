@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Clinic } from '../../entities/clinic.entity';
-import { Patient } from '../../entities/patient.entity';
-import { Queue } from '../../entities/queue.entity';
+import { Clinic } from '../clinics/entities/clinic.entity';
+import { Patient } from '../patients/entities/patient.entity';
+import { Queue } from '../queues/entities/queue.entity';
 import { PublicController } from './public.controller';
 import { PublicService } from './public.service';
 import { QueuesModule } from '../queues/queues.module';

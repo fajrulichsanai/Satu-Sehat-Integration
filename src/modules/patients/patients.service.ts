@@ -6,8 +6,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { Patient } from '../../entities/patient.entity';
-import { Encounter } from '../../entities/encounter.entity';
+import { Patient } from './entities/patient.entity';
+import { Encounter } from '../encounters/entities/encounter.entity';
 import { CreatePatientDto, PatientQueryDto, UpdatePatientDto } from './dto/patient.dto';
 import { paginate, PaginatedResult } from '../../common/dto/pagination.dto';
 import { SatusehatClientService } from '../satusehat/satusehat-client.service';

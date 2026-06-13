@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { VitalSign } from '../../entities/vital-sign.entity';
-import { Encounter } from '../../entities/encounter.entity';
+import { VitalSign } from '../vital-sign/entities/vital-sign.entity';
+import { Encounter } from './entities/encounter.entity';
 import { UpsertVitalSignsDto } from './dto/vital-signs.dto';
 
 interface VitalSignDef {

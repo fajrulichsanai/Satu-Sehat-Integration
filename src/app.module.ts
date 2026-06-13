@@ -10,7 +10,6 @@ import { UsersModule } from './modules/users/users.module';
 import { ClinicsModule } from './modules/clinics/clinics.module';
 import { PractitionersModule } from './modules/practitioners/practitioners.module';
 import { LocationsModule } from './modules/locations/locations.module';
-import { ExamplesModule } from './modules/examples/examples.module';
 import { PatientsModule } from './modules/patients/patients.module';
 import { QueuesModule } from './modules/queues/queues.module';
 import { PublicModule } from './modules/public/public.module';
@@ -56,7 +55,6 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     ClinicsModule,
     PractitionersModule,
     LocationsModule,
-    ExamplesModule,
     PatientsModule,
     QueuesModule,
     PublicModule,

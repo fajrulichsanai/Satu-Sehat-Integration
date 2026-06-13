@@ -1,6 +1,6 @@
 import { Entity, Column, OneToOne, JoinColumn, OneToMany } from 'typeorm';
 import { BaseEntity } from '../../../common/base.entity';
-import { Encounter } from './../../encounters/entities/encounter.entity';
+import { Encounter } from '../../encounters/entities/encounter.entity';
 
 export enum BloodType {
   A = 'A',

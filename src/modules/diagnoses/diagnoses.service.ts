@@ -6,10 +6,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Diagnosis } from '../../entities/diagnosis.entity';
-import { Encounter } from '../../entities/encounter.entity';
+import { Diagnosis } from './entities/diagnosis.entity';
+import { Encounter } from '../encounters/entities/encounter.entity';
 import { EncounterStatus } from '../../enums';
-import { ClinicalStatus, DiagnosisCategory } from '../../entities/diagnosis.entity';
+import { ClinicalStatus, DiagnosisCategory } from './entities/diagnosis.entity';
 import { CreateDiagnosisDto } from './dto/diagnosis.dto';
 
 @Injectable()

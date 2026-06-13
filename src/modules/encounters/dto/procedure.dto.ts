@@ -8,7 +8,7 @@ import {
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ProcedureStatus } from '../../../entities/procedure.entity';
+import { ProcedureStatus } from '../../procedures/entities/procedure.entity';
 
 export class CreateProcedureDto {
   @ApiProperty({ example: '96.54' })

@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PractitionersController } from './practitioners.controller';
 import { PractitionersService } from './practitioners.service';
-import { Practitioner } from '../../entities/practitioner.entity';
+import { Practitioner } from './entities/practitioner.entity';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Practitioner])],

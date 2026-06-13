@@ -6,7 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Billing, BillingStatus } from '../billing/entities/billing.entity';
-import { Payment } from '../payments/entities/payment.entity';
+import { Payment } from './entities/payment.entity';
 import { CreatePaymentDto } from '../billing/dto/billing.dto';
 
 @Injectable()

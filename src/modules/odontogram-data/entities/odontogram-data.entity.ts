@@ -1,6 +1,6 @@
 import { Entity, Column, OneToOne, JoinColumn } from 'typeorm';
-import { BaseEntity } from '../common/base.entity';
-import { Encounter } from './encounter.entity';
+import { BaseEntity } from '../../../common/base.entity';
+import { Encounter } from '../../encounters/entities/encounter.entity';
 
 @Entity('odontogram_data')
 export class OdontogramData extends BaseEntity {

@@ -11,7 +11,7 @@ import {
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { StockLogType } from '../../../entities/medication-stock-log.entity';
+import { StockLogType } from '../../medication-stock-log/entities/medication-stock-log.entity';
 
 export class CreateMedicationDto {
   @ApiProperty()

@@ -6,7 +6,7 @@ import {
   IsString,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ClinicalStatus, DiagnosisCategory } from '../../../entities/diagnosis.entity';
+import { ClinicalStatus, DiagnosisCategory } from '../entities/diagnosis.entity';
 
 export class CreateDiagnosisDto {
   @ApiProperty({ example: 'K02.1' })

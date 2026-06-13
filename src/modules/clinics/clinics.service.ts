@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
-import { Clinic } from '../../entities/clinic.entity';
+import { Clinic } from './entities/clinic.entity';
 import { UpdateClinicDto, SatusehatConfigDto } from './dto/clinic.dto';
 import { encrypt, decrypt } from '../../common/utils/crypto.util';
 

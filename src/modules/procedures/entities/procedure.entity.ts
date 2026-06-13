@@ -1,8 +1,8 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
-import { BaseEntity } from '../common/base.entity';
-import { SyncStatus } from '../enums';
-import { Encounter } from './encounter.entity';
-import { Diagnosis } from './diagnosis.entity';
+import { BaseEntity } from '../../../common/base.entity';
+import { SyncStatus } from '../../../enums';
+import { Encounter } from '../../encounters/entities/encounter.entity';
+import { Diagnosis } from '../../diagnoses/entities/diagnosis.entity';
 
 export enum ProcedureStatus {
   PREPARATION = 'preparation',

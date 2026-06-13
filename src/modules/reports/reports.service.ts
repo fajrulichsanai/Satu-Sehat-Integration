@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Encounter } from '../../entities/encounter.entity';
-import { Billing } from '../../entities/billing.entity';
-import { Payment } from '../../entities/payment.entity';
-import { SatusehatSyncLog, SyncLogStatus } from '../../entities/satusehat-sync-log.entity';
+import { Encounter } from '../encounters/entities/encounter.entity';
+import { Billing } from '../billing/entities/billing.entity';
+import { Payment } from '../payments/entities/payment.entity';
+import { SatusehatSyncLog, SyncLogStatus } from '../satusehat/sync/entities/satusehat-sync-log.entity';
 import { UserRole } from '../../enums/user-role.enum';
 import {
   FinancialReportQueryDto,

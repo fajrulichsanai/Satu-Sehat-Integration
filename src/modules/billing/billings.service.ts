@@ -7,10 +7,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { Billing, BillingStatus } from '../../entities/billing.entity';
-import { BillingItem, DiscountType } from '../../entities/billing-item.entity';
-import { Tarif } from '../../entities/tarif.entity';
-import { Encounter } from '../../entities/encounter.entity';
+import { Billing, BillingStatus } from './entities/billing.entity';
+import { BillingItem, DiscountType } from '../billing-item/entities/billing-item.entity';
+import { Tarif } from '../tarif/entities/tarif.entity';
+import { Encounter } from '../encounters/entities/encounter.entity';
 import { BillingItemDto, BillingQueryDto, CreateBillingDto } from './dto/billing.dto';
 
 @Injectable()

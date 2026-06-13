@@ -1,6 +1,6 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
-import { BaseEntity } from '../common/base.entity';
-import { Medication } from './medication.entity';
+import { BaseEntity } from '../../../common/base.entity';
+import { Medication } from '../../medications/entities/medication.entity';
 
 export enum StockLogType {
   IN = 'in',

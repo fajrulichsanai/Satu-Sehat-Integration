@@ -1,7 +1,7 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { BaseEntity } from '../../../common/base.entity';
 import { UserRole } from '../../../enums';
-import { Clinic } from './../../clinics/entities/clinic.entity';
+import { Clinic } from '../../clinics/entities/clinic.entity';
 
 @Entity('users')
 @Index(['role', 'isActive'])

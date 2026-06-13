@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { SoapTemplate } from '../../entities/soap-template.entity';
+import { SoapTemplate } from './entities/soap-template.entity';
 import { UserRole } from '../../enums/user-role.enum';
 import {
   CreateSoapTemplateDto,

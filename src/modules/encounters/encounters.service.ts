@@ -7,11 +7,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Encounter } from '../../entities/encounter.entity';
-import { Queue } from '../../entities/queue.entity';
-import { Anamnesis } from '../../entities/anamnesis.entity';
-import { VitalSign } from '../../entities/vital-sign.entity';
-import { Diagnosis } from '../../entities/diagnosis.entity';
+import { Encounter } from './entities/encounter.entity';
+import { Queue } from '../queues/entities/queue.entity';
+import { Anamnesis } from '../anamnesis/entities/anamnesis.entity';
+import { VitalSign } from '../vital-sign/entities/vital-sign.entity';
+import { Diagnosis } from '../diagnoses/entities/diagnosis.entity';
 import { EncounterStatus, ServiceType } from '../../enums';
 import { QueueStatus } from '../../enums/queue-status.enum';
 import { UserRole } from '../../enums/user-role.enum';

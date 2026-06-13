@@ -1,9 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Clinic } from '../../entities/clinic.entity';
-import { Patient } from '../../entities/patient.entity';
-import { Queue } from '../../entities/queue.entity';
+import { Clinic } from '../clinics/entities/clinic.entity';
+import { Patient } from '../patients/entities/patient.entity';
+import { Queue } from '../queues/entities/queue.entity';
 import { Gender, QueueStatus } from '../../enums';
 import { AvailableSlotsQueryDto, BookingDto, QueueStatusQueryDto } from './dto/public.dto';
 import { QueuesService } from '../queues/queues.service';

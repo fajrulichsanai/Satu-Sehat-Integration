@@ -6,8 +6,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { RefundRequest, RefundStatus } from '../../entities/refund-request.entity';
-import { Billing, BillingStatus } from '../../entities/billing.entity';
+import { RefundRequest, RefundStatus } from '../refund-request/entities/refund-request.entity';
+import { Billing, BillingStatus } from './entities/billing.entity';
 import { ApproveRefundDto, CreateRefundRequestDto } from './dto/billing.dto';
 
 @Injectable()

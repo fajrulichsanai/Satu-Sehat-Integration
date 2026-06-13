@@ -6,7 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
-import { Clinic } from '../../entities/clinic.entity';
+import { Clinic } from '../clinics/entities/clinic.entity';
 import { SatusehatEnvironment } from '../../enums/satusehat-environment.enum';
 import { decrypt } from '../../common/utils/crypto.util';
 

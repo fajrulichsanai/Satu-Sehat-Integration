@@ -1,6 +1,6 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
-import { BaseEntity } from '../common/base.entity';
-import { Billing } from './billing.entity';
+import { BaseEntity } from '../../../common/base.entity';
+import { Billing } from '../../billing/entities/billing.entity';
 
 export enum RefundStatus {
   PENDING_APPROVAL = 'pending_approval',
