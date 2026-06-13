@@ -1,6 +1,6 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
-import { BaseEntity } from '../common/base.entity';
-import { Clinic } from './clinic.entity';
+import { BaseEntity } from '../../../../common/base.entity';
+import { Clinic } from '../../../clinics/entities/clinic.entity';
 
 export enum SyncOperation {
   CREATE = 'create',
@@ -20,42 +20,42 @@ export enum SyncLogStatus {
 @Index(['status'])
 export class SatusehatSyncLog extends BaseEntity {
   @Column({ name: 'clinic_id' })
-  clinicId: number;
+  clinicId: number | undefined;
 
   @Column({ name: 'resource_type', length: 50 })
-  resourceType: string;
+  resourceType: string | undefined;
 
   @Column({ name: 'local_id' })
-  localId: number;
+  localId: number | undefined;
 
   @Column({ name: 'satusehat_id', length: 100, nullable: true })
-  satusehatId: string;
+  satusehatId: string | undefined;
 
   @Column({ type: 'enum', enum: SyncOperation })
-  operation: SyncOperation;
+  operation: SyncOperation | undefined;
 
   @Column({ type: 'enum', enum: SyncLogStatus })
-  status: SyncLogStatus;
+  status: SyncLogStatus | undefined;
 
   @Column({ name: 'http_status', nullable: true })
-  httpStatus: number;
+  httpStatus: number | undefined;
 
   @Column({ name: 'request_payload', type: 'json', nullable: true })
-  requestPayload: object;
+  requestPayload: object | undefined;
 
   @Column({ name: 'response_payload', type: 'json', nullable: true })
-  responsePayload: object;
+  responsePayload: object | undefined;
 
   @Column({ name: 'error_message', type: 'text', nullable: true })
-  errorMessage: string;
+  errorMessage: string | undefined;
 
   @Column({ name: 'retry_count', default: 0 })
-  retryCount: number;
+  retryCount: number | undefined;
 
   @Column({ name: 'last_retry_at', nullable: true })
-  lastRetryAt: Date;
+  lastRetryAt: Date | undefined;
 
   @ManyToOne(() => Clinic, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'clinic_id' })
-  clinic: Clinic;
+  clinic: Clinic | undefined;
 }

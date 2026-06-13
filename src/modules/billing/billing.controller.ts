@@ -13,7 +13,7 @@ import {
 import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { BillingsService } from './billings.service';
-import { PaymentsService } from './payments.service';
+import { PaymentsService } from '../payments/payments.service';
 import { RefundsService } from './refunds.service';
 import { TarifsService } from './tarifs.service';
 import {

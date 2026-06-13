@@ -8,7 +8,7 @@ import { RefundRequest } from '../../entities/refund-request.entity';
 import { Encounter } from '../../entities/encounter.entity';
 import { BillingController } from './billing.controller';
 import { BillingsService } from './billings.service';
-import { PaymentsService } from './payments.service';
+import { PaymentsService } from '../payments/payments.service';
 import { RefundsService } from './refunds.service';
 import { TarifsService } from './tarifs.service';
 import { InvoiceService } from './invoice.service';

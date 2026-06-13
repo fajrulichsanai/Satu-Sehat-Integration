@@ -11,9 +11,9 @@ import {
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { DiscountType } from '../../../entities/billing-item.entity';
+import { DiscountType } from '../../billing-item/entities/billing-item.entity';
 import { BillingStatus } from '../entities/billing.entity';
-import { PaymentMethod } from '../../../entities/payment.entity';
+import { PaymentMethod } from '../../payments/entities/payment.entity';
 
 export class BillingItemDto {
   @ApiPropertyOptional()

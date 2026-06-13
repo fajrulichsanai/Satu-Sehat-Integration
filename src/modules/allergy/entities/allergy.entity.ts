@@ -1,6 +1,6 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
-import { BaseEntity } from '../common/base.entity';
-import { Encounter } from './encounter.entity';
+import { BaseEntity } from '../../../common/base.entity';
+import { Encounter } from '../../encounters/entities/encounter.entity';
 
 export enum AllergyLevel {
   LOW = 'low',
@@ -12,18 +12,18 @@ export enum AllergyLevel {
 @Index(['encounterId'])
 export class Allergy extends BaseEntity {
   @Column({ name: 'encounter_id' })
-  encounterId: number;
+  encounterId: number | undefined;
 
   @Column({ length: 100 })
-  substansi: string;
+  substansi: string | undefined;
 
   @Column({ type: 'text' })
-  reaksi: string;
+  reaksi: string | undefined;
 
   @Column({ type: 'enum', enum: AllergyLevel })
-  tingkat: AllergyLevel;
+  tingkat: AllergyLevel | undefined;
 
   @ManyToOne(() => Encounter, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'encounter_id' })
-  encounter: Encounter;
+  encounter: Encounter | undefined;
 }

@@ -5,9 +5,9 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { Billing, BillingStatus } from '../../entities/billing.entity';
-import { Payment } from '../../entities/payment.entity';
-import { CreatePaymentDto } from './dto/billing.dto';
+import { Billing, BillingStatus } from '../billing/entities/billing.entity';
+import { Payment } from '../payments/entities/payment.entity';
+import { CreatePaymentDto } from '../billing/dto/billing.dto';
 
 @Injectable()
 export class PaymentsService {
@@ -29,7 +29,7 @@ export class PaymentsService {
         throw new BadRequestException(`Billing sudah berstatus '${billing.status}'`);
       }
 
-      if (dto.amount > billing.outstandingAmount) {
+      if ((dto.amount || 0) > billing.outstandingAmount) {
         throw new BadRequestException(
           `Jumlah pembayaran (${dto.amount}) melebihi sisa tagihan (${billing.outstandingAmount})`,
         );
@@ -47,8 +47,8 @@ export class PaymentsService {
         createdBy: userId,
       });
 
-      billing.paidAmount = Number(billing.paidAmount) + dto.amount;
-      billing.outstandingAmount = Number(billing.outstandingAmount) - dto.amount;
+      billing.paidAmount = Number(billing.paidAmount) + (dto.amount || 0);
+      billing.outstandingAmount = Number(billing.outstandingAmount) - (dto.amount || 0);
       billing.updatedBy = userId;
 
       if (billing.outstandingAmount <= 0) {

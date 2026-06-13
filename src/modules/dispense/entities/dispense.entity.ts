@@ -1,7 +1,7 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
-import { BaseEntity } from '../common/base.entity';
-import { Encounter } from './encounter.entity';
-import { Prescription } from './prescription.entity';
+import { BaseEntity } from '../../../common/base.entity';
+import { Encounter } from '../../encounters/entities/encounter.entity';
+import { Prescription } from '../../prescriptions/entities/prescription.entity';
 import { Medication } from './medication.entity';
 
 @Entity('dispenses')
