@@ -20,42 +20,42 @@ export enum SyncLogStatus {
 @Index(['status'])
 export class SatusehatSyncLog extends BaseEntity {
   @Column({ name: 'clinic_id' })
-  clinicId: number | undefined;
+  clinicId: number;
 
   @Column({ name: 'resource_type', length: 50 })
-  resourceType: string | undefined;
+  resourceType: string;
 
   @Column({ name: 'local_id' })
-  localId: number | undefined;
+  localId: number;
 
   @Column({ name: 'satusehat_id', length: 100, nullable: true })
-  satusehatId: string | undefined;
+  satusehatId: string;
 
   @Column({ type: 'enum', enum: SyncOperation })
-  operation: SyncOperation | undefined;
+  operation: SyncOperation;
 
   @Column({ type: 'enum', enum: SyncLogStatus })
-  status: SyncLogStatus | undefined;
+  status: SyncLogStatus;
 
   @Column({ name: 'http_status', nullable: true })
-  httpStatus: number | undefined;
+  httpStatus: number;
 
   @Column({ name: 'request_payload', type: 'json', nullable: true })
-  requestPayload: object | undefined;
+  requestPayload: object;
 
   @Column({ name: 'response_payload', type: 'json', nullable: true })
-  responsePayload: object | undefined;
+  responsePayload: object;
 
   @Column({ name: 'error_message', type: 'text', nullable: true })
-  errorMessage: string | undefined;
+  errorMessage: string;
 
   @Column({ name: 'retry_count', default: 0 })
-  retryCount: number | undefined;
+  retryCount: number;
 
   @Column({ name: 'last_retry_at', nullable: true })
-  lastRetryAt: Date | undefined;
+  lastRetryAt: Date;
 
   @ManyToOne(() => Clinic, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'clinic_id' })
-  clinic: Clinic | undefined;
+  clinic: Clinic;
 }

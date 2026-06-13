@@ -12,18 +12,18 @@ export enum AllergyLevel {
 @Index(['encounterId'])
 export class Allergy extends BaseEntity {
   @Column({ name: 'encounter_id' })
-  encounterId: number | undefined;
+  encounterId: number;
 
   @Column({ length: 100 })
-  substansi: string | undefined;
+  substansi: string;
 
   @Column({ type: 'text' })
-  reaksi: string | undefined;
+  reaksi: string;
 
   @Column({ type: 'enum', enum: AllergyLevel })
-  tingkat: AllergyLevel | undefined;
+  tingkat: AllergyLevel;
 
   @ManyToOne(() => Encounter, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'encounter_id' })
-  encounter: Encounter | undefined;
+  encounter: Encounter;
 }

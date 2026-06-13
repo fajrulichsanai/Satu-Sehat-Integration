@@ -5,40 +5,40 @@ import { SatusehatEnvironment } from '../../../enums';
 @Entity('clinics')
 export class Clinic extends BaseEntity {
   @Column({ length: 100 })
-  name: string | undefined;
+  name: string;
 
   @Column('text')
-  address: string | undefined;
+  address: string;
 
   @Column({ length: 100 })
-  city: string | undefined;
+  city: string;
 
   @Column({ length: 100 })
-  province: string | undefined;
+  province: string;
 
   @Column({ name: 'postal_code', length: 10, nullable: true })
-  postalCode: string | undefined;
+  postalCode: string;
 
   @Column({ length: 20 })
-  phone: string | undefined;
+  phone: string;
 
   @Column({ length: 100, nullable: true })
-  email: string | undefined;
+  email: string;
 
   @Column({ name: 'sip_number', length: 50, nullable: true })
-  sipNumber: string | undefined;
+  sipNumber: string;
 
   @Column({ name: 'operational_hours', type: 'json', nullable: true })
-  operationalHours: Record<string, any> | undefined;
+  operationalHours: Record<string, any>;
 
   @Column({ name: 'satusehat_org_id', length: 100, nullable: true })
-  satusehatOrgId: string | undefined;
+  satusehatOrgId: string;
 
   @Column({ name: 'satusehat_client_id', length: 255, nullable: true })
-  satusehatClientId: string | undefined;
+  satusehatClientId: string;
 
   @Column({ name: 'satusehat_client_secret', length: 255, nullable: true })
-  satusehatClientSecret: string | undefined;
+  satusehatClientSecret: string;
 
   @Column({
     name: 'satusehat_environment',
@@ -46,14 +46,14 @@ export class Clinic extends BaseEntity {
     enum: SatusehatEnvironment,
     default: SatusehatEnvironment.SANDBOX,
   })
-  satusehatEnvironment: SatusehatEnvironment | undefined;
+  satusehatEnvironment: SatusehatEnvironment;
 
   @Column({ name: 'satusehat_token', type: 'text', nullable: true })
   satusehatToken: string | undefined ;
 
   @Column({ name: 'satusehat_token_expires_at', nullable: true })
-  satusehatTokenExpiresAt: Date | undefined;
+  satusehatTokenExpiresAt: Date;
 
   @Column({ name: 'setup_complete', default: false })
-  setupComplete: boolean | undefined;
+  setupComplete: boolean;
 }

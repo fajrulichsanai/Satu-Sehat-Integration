@@ -13,28 +13,28 @@ export enum PaymentMethod {
 @Index(['receiptNumber'], { unique: true })
 export class Payment extends BaseEntity {
   @Column({ name: 'billing_id' })
-  billingId: number | undefined;
+  billingId: number;
 
   @Column({ name: 'receipt_number', length: 50, unique: true })
-  receiptNumber: string | undefined;
+  receiptNumber: string;
 
   @Column({
     type: 'enum',
     enum: PaymentMethod,
   })
-  method: PaymentMethod | undefined;
+  method: PaymentMethod;
 
   @Column('decimal', { precision: 10, scale: 2 })
-  amount: number | undefined;
+  amount: number;
 
   @Column('text', { nullable: true })
-  note: string | undefined;
+  note: string;
 
   @Column({ name: 'paid_at' })
-  paidAt: Date | undefined;
+  paidAt: Date;
 
   // Relations
   @ManyToOne(() => Billing, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'billing_id' })
-  billing: Billing | undefined;
+  billing: Billing;
 }

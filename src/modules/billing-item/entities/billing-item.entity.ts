@@ -11,22 +11,22 @@ export enum DiscountType {
 @Entity('billing_items')
 export class BillingItem extends BaseEntity {
   @Column({ name: 'billing_id' })
-  billingId: number | undefined;
+  billingId: number;
 
   @Column({ name: 'tarif_id', nullable: true })
-  tarifId: number | undefined;
+  tarifId: number;
 
   @Column({ length: 100 })
-  name: string | undefined;
+  name: string;
 
   @Column({ default: 1 })
-  quantity: number | undefined;
+  quantity: number;
 
   @Column('decimal', { name: 'unit_price', precision: 10, scale: 2 })
-  unitPrice: number | undefined;
+  unitPrice: number;
 
   @Column('decimal', { precision: 10, scale: 2, default: 0 })
-  discount: number | undefined;
+  discount: number;
 
   @Column({
     name: 'discount_type',
@@ -34,17 +34,17 @@ export class BillingItem extends BaseEntity {
     enum: DiscountType,
     default: DiscountType.NOMINAL,
   })
-  discountType: DiscountType | undefined;
+  discountType: DiscountType;
 
   @Column('decimal', { precision: 10, scale: 2 })
-  subtotal: number | undefined;
+  subtotal: number;
 
   // Relations
   @ManyToOne(() => Billing, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'billing_id' })
-  billing: Billing | undefined;
+  billing: Billing;
 
   @ManyToOne(() => Tarif, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'tarif_id' })
-  tarif: Tarif | undefined;
+  tarif: Tarif;
 }

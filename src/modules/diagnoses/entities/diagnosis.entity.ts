@@ -21,13 +21,13 @@ export enum DiagnosisCategory {
 @Index(['encounterId'])
 export class Diagnosis extends BaseEntity {
   @Column({ name: 'encounter_id' })
-  encounterId: number | undefined;
+  encounterId: number;
 
   @Column({ name: 'icd10_code', length: 10 })
-  icd10Code: string | undefined;
+  icd10Code: string;
 
   @Column({ name: 'icd10_display', length: 255 })
-  icd10Display: string | undefined;
+  icd10Display: string;
 
   @Column({
     name: 'clinical_status',
@@ -35,32 +35,32 @@ export class Diagnosis extends BaseEntity {
     enum: ClinicalStatus,
     default: ClinicalStatus.ACTIVE,
   })
-  clinicalStatus: ClinicalStatus | undefined;
+  clinicalStatus: ClinicalStatus;
 
   @Column({
     type: 'enum',
     enum: DiagnosisCategory,
     default: DiagnosisCategory.ENCOUNTER_DIAGNOSIS,
   })
-  category: DiagnosisCategory | undefined;
+  category: DiagnosisCategory;
 
   @Column({ name: 'body_site_code', length: 20, nullable: true })
-  bodySiteCode: string | undefined;
+  bodySiteCode: string;
 
   @Column({ name: 'body_site_display', length: 255, nullable: true })
-  bodySiteDisplay: string | undefined;
+  bodySiteDisplay: string;
 
   @Column({ name: 'onset_date', type: 'date', nullable: true })
-  onsetDate: Date | undefined;
+  onsetDate: Date;
 
   @Column('text', { nullable: true })
-  note: string | undefined;
+  note: string;
 
   @Column({ name: 'is_primary', default: false })
-  isPrimary: boolean | undefined;
+  isPrimary: boolean;
 
   @Column({ name: 'satusehat_condition_id', length: 100, nullable: true })
-  satusehatConditionId: string | undefined;
+  satusehatConditionId: string;
 
   @Column({
     name: 'sync_status',
@@ -68,7 +68,7 @@ export class Diagnosis extends BaseEntity {
     enum: SyncStatus,
     default: SyncStatus.PENDING,
   })
-  syncStatus: SyncStatus | undefined;
+  syncStatus: SyncStatus;
 
   // Relations
   @ManyToOne(() => Encounter, { onDelete: 'CASCADE' })

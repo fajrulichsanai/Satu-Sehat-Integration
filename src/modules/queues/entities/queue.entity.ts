@@ -11,64 +11,64 @@ import { Practitioner } from '../../practitioners/entities/practitioner.entity';
 @Index(['practitionerId', 'tanggal'])
 export class Queue extends BaseEntity {
   @Column({ name: 'clinic_id' })
-  clinicId: number | undefined;
+  clinicId: number;
 
   @Column({ name: 'patient_id', nullable: true })
-  patientId: number | undefined;
+  patientId: number;
 
   @Column({ name: 'practitioner_id' })
-  practitionerId: number | undefined;
+  practitionerId: number;
 
   @Column({ name: 'nomor_antrian' })
-  nomorAntrian: number | undefined;
+  nomorAntrian: number;
 
   @Column({ type: 'date' })
-  tanggal: Date | undefined;
+  tanggal: Date;
 
   @Column({ name: 'jam_slot', type: 'time' })
-  jamSlot: string | undefined;
+  jamSlot: string;
 
   @Column({ name: 'patient_name', length: 100 })
-  patientName: string | undefined;
+  patientName: string;
 
   @Column({ length: 20 })
-  phone: string | undefined;
+  phone: string;
 
   @Column({ name: 'chief_complaint', type: 'text', nullable: true })
-  chiefComplaint: string | undefined;
+  chiefComplaint: string;
 
   @Column({ name: 'is_first_visit', default: false })
-  isFirstVisit: boolean | undefined;
+  isFirstVisit: boolean;
 
   @Column({ name: 'is_online_booking', default: false })
-  isOnlineBooking: boolean | undefined;
+  isOnlineBooking: boolean;
 
   @Column({ length: 8, unique: true })
-  token: string | undefined;
+  token: string;
 
   @Column({
     type: 'enum',
     enum: QueueStatus,
     default: QueueStatus.WAITING,
   })
-  status: QueueStatus | undefined;
+  status: QueueStatus;
 
   @Column({ name: 'cancelled_reason', type: 'text', nullable: true })
-  cancelledReason: string | undefined;
+  cancelledReason: string;
 
   @Column({ name: 'called_at', nullable: true })
-  calledAt: Date | undefined;
+  calledAt: Date;
 
   // Relations
   @ManyToOne(() => Clinic, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'clinic_id' })
-  clinic: Clinic | undefined;
+  clinic: Clinic;
 
   @ManyToOne(() => Patient, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'patient_id' })
-  patient: Patient | undefined;
+  patient: Patient;
 
   @ManyToOne(() => Practitioner, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'practitioner_id' })
-  practitioner: Practitioner | undefined;
+  practitioner: Practitioner;
 }

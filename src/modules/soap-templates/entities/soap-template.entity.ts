@@ -7,27 +7,27 @@ import { Clinic } from '../../clinics/entities/clinic.entity';
 @Index(['createdBy'])
 export class SoapTemplate extends BaseEntity {
   @Column({ name: 'clinic_id' })
-  clinicId: number | undefined;
+  clinicId: number;
 
   @Column({ length: 100 })
-  name: string | undefined;
+  name: string;
 
   @Column({ type: 'text', nullable: true })
-  subjective: string | undefined;
+  subjective: string;
 
   @Column({ type: 'text', nullable: true })
-  objective: string | undefined;
+  objective: string;
 
   @Column({ type: 'text', nullable: true })
-  assessment: string | undefined;
+  assessment: string;
 
   @Column({ type: 'text', nullable: true })
-  plan: string | undefined;
+  plan: string;
 
   @Column({ name: 'is_shared', default: false })
-  isShared: boolean | undefined;
+  isShared: boolean;
 
   @ManyToOne(() => Clinic, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'clinic_id' })
-  clinic: Clinic | undefined;
+  clinic: Clinic;
 }

@@ -7,38 +7,38 @@ import { Clinic } from '../../clinics/entities/clinic.entity';
 @Index(['nik', 'clinicId'], { unique: true })
 export class Practitioner extends BaseEntity {
   @Column({ name: 'clinic_id' })
-  clinicId: number | undefined;
+  clinicId: number;
 
   @Column({ name: 'user_id', nullable: true })
-  userId: number | undefined;
+  userId: number;
 
   @Column({ length: 16, nullable: true })
-  nik: string | undefined;
+  nik: string;
 
   @Column({ length: 100 })
-  name: string | undefined;
+  name: string;
 
   @Column({ name: 'birth_date', type: 'date', nullable: true })
-  birthDate: Date | undefined;
+  birthDate: Date;
 
   @Column({
     type: 'enum',
     enum: Gender,
     nullable: true,
   })
-  gender: Gender | undefined;
+  gender: Gender;
 
   @Column({ length: 100, nullable: true })
-  specialization: string | undefined;
+  specialization: string;
 
   @Column({ name: 'satusehat_practitioner_id', length: 100, nullable: true })
-  satusehatPractitionerId: string | undefined;
+  satusehatPractitionerId: string;
 
   @Column({ name: 'is_active', default: true })
-  isActive: boolean | undefined;
+  isActive: boolean;
 
   // Relations
   @ManyToOne(() => Clinic, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'clinic_id' })
-  clinic: Clinic | undefined;
+  clinic: Clinic;
 }

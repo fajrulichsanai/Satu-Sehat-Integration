@@ -22,24 +22,24 @@ export enum PregnancyStatus {
 @Entity('anamnesis')
 export class Anamnesis extends BaseEntity {
   @Column({ name: 'encounter_id', unique: true })
-  encounterId: number | undefined;
+  encounterId: number;
 
   @Column({ name: 'keluhan_utama', type: 'text' })
-  keluhanUtama: string | undefined;
+  keluhanUtama: string;
 
   @Column({ name: 'riwayat_penyakit', type: 'text', nullable: true })
-  riwayatPenyakit: string | undefined;
+  riwayatPenyakit: string;
 
   @Column({ name: 'golongan_darah', type: 'enum', enum: BloodType, nullable: true })
-  golonganDarah: BloodType | undefined;
+  golonganDarah: BloodType;
 
   @Column({ type: 'enum', enum: Rhesus, nullable: true })
-  rhesus: Rhesus | undefined;
+  rhesus: Rhesus;
 
   @Column({ name: 'status_kehamilan', type: 'enum', enum: PregnancyStatus, nullable: true })
-  statusKehamilan: PregnancyStatus | undefined;
+  statusKehamilan: PregnancyStatus;
 
   @OneToOne(() => Encounter, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'encounter_id' })
-  encounter: Encounter | undefined;
+  encounter: Encounter;
 }

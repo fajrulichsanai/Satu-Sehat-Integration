@@ -8,50 +8,50 @@ import { Clinic } from '../../clinics/entities/clinic.entity';
 @Index(['nik', 'clinicId'], { unique: true })
 export class Patient extends BaseEntity {
   @Column({ name: 'clinic_id' })
-  clinicId: number | undefined;
+  clinicId: number;
 
   @Column({ name: 'no_rm', length: 20 })
-  noRm: string | undefined;
+  noRm: string;
 
   @Column({ length: 16, nullable: true })
-  nik: string | undefined;
+  nik: string;
 
   @Column({ name: 'nik_ibu', length: 16, nullable: true })
-  nikIbu: string | undefined;
+  nikIbu: string;
 
   @Column({ length: 100 })
-  name: string | undefined;
+  name: string;
 
   @Column({ name: 'birth_date', type: 'date', nullable: true })
-  birthDate: Date | undefined;
+  birthDate: Date;
 
   @Column({ name: 'birth_order', nullable: true })
-  birthOrder: number | undefined;
+  birthOrder: number;
 
   @Column({
     type: 'enum',
     enum: Gender,
     nullable: true,
   })
-  gender: Gender | undefined;
+  gender: Gender;
 
   @Column({ length: 20, nullable: true })
-  phone: string | undefined;
+  phone: string;
 
   @Column({ length: 100, nullable: true })
-  email: string | undefined;
+  email: string;
 
   @Column('text', { nullable: true })
-  address: string | undefined;
+  address: string;
 
   @Column({ length: 100, nullable: true })
-  city: string | undefined;
+  city: string;
 
   @Column({ length: 100, nullable: true })
-  province: string | undefined;
+  province: string;
 
   @Column({ name: 'postal_code', length: 10, nullable: true })
-  postalCode: string | undefined;
+  postalCode: string;
 
   @Column({
     name: 'marital_status',
@@ -59,13 +59,13 @@ export class Patient extends BaseEntity {
     enum: MaritalStatus,
     nullable: true,
   })
-  maritalStatus: MaritalStatus | undefined;
+  maritalStatus: MaritalStatus;
 
   @Column({ name: 'ihs_number', length: 50, nullable: true })
-  ihsNumber: string | undefined;
+  ihsNumber: string;
 
   @Column({ name: 'satusehat_patient_id', length: 100, nullable: true })
-  satusehatPatientId: string | undefined;
+  satusehatPatientId: string;
 
   @Column({
     name: 'sync_status',
@@ -73,16 +73,16 @@ export class Patient extends BaseEntity {
     enum: SyncStatus,
     default: SyncStatus.PENDING,
   })
-  syncStatus: SyncStatus | undefined;
+  syncStatus: SyncStatus;
 
   @Column('text', { name: 'sync_error', nullable: true })
-  syncError: string | undefined;
+  syncError: string;
 
   @Column({ name: 'last_sync_at', nullable: true })
-  lastSyncAt: Date | undefined;
+  lastSyncAt: Date;
 
   // Relations
   @ManyToOne(() => Clinic, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'clinic_id' })
-  clinic: Clinic | undefined;
+  clinic: Clinic;
 }
