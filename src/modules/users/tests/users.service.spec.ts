@@ -41,14 +41,14 @@ describe('UsersService', () => {
   describe('activate', () => {
     it('should throw NotFoundException if user not in clinic', async () => {
       mockRepo.findOne.mockResolvedValue(null);
-      await expect(service.activate(999, 1)).rejects.toThrow(NotFoundException);
+      await expect(service.activate(999, 1, 1)).rejects.toThrow(NotFoundException);
     });
 
     it('should activate pending user', async () => {
       const user = { id: 2, clinicId: 1, isActive: false, role: 'admin' };
       mockRepo.findOne.mockResolvedValue(user);
       mockRepo.save.mockResolvedValue({ ...user, isActive: true });
-      const result = await service.activate(2, 1);
+      const result = await service.activate(2, 1, 1);
       expect(mockRepo.save).toHaveBeenCalled();
     });
   });

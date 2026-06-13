@@ -102,7 +102,7 @@ export class BillingsService {
         subtotal: number;
       }> = [];
 
-      for (const item of dto.items) {
+      for (const item of dto.items!) {
         const qty = item.quantity || 1;
         const discountType = item.discountType || DiscountType.NOMINAL;
         const discountValue = item.discount || 0;
@@ -125,17 +125,17 @@ export class BillingsService {
 
         const discountNominal =
           discountType === DiscountType.PERCENT
-            ? (item.unitPrice * discountValue) / 100
+            ? (item.unitPrice! * discountValue) / 100
             : discountValue;
 
-        const itemSubtotal = (item.unitPrice - discountNominal) * qty;
+        const itemSubtotal = (item.unitPrice! - discountNominal) * qty;
         subtotal += itemSubtotal;
 
         processedItems.push({
-          tarifId: item.tarifId,
-          name: item.name,
+          tarifId: item.tarifId ?? undefined,
+          name: item.name!,
           quantity: qty,
-          unitPrice: item.unitPrice,
+          unitPrice: item.unitPrice!,
           discount: discountValue,
           discountType,
           subtotal: itemSubtotal,

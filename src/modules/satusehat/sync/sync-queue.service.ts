@@ -36,7 +36,7 @@ export class SyncQueueService {
       });
 
       for (const item of items) {
-        if (item.retryCount >= MAX_RETRY_ATTEMPTS) {
+        if ((item.retryCount ?? 0) >= MAX_RETRY_ATTEMPTS) {
           await this.syncLogRepo.update(item.id, { status: SyncLogStatus.FAILED });
           failed++;
           continue;
@@ -44,23 +44,23 @@ export class SyncQueueService {
 
         // Exponential backoff: skip if not yet due
         if (item.lastRetryAt) {
-          const delayMs = BASE_DELAY_MS * Math.pow(2, item.retryCount);
+          const delayMs = BASE_DELAY_MS * Math.pow(2, item.retryCount ?? 0);
           const nextRetryAt = new Date(item.lastRetryAt.getTime() + delayMs);
           if (new Date() < nextRetryAt) continue;
         }
 
         try {
           const result = await this.orchestrator.syncResource(
-            item.resourceType,
-            item.localId,
-            item.clinicId,
+            item.resourceType!,
+            item.localId!,
+            item.clinicId!,
           );
 
           if (result.success) {
             succeeded++;
           } else {
             await this.syncLogRepo.update(item.id, {
-              retryCount: item.retryCount + 1,
+              retryCount: (item.retryCount ?? 0) + 1,
               lastRetryAt: new Date(),
               errorMessage: result.error,
             });
@@ -70,7 +70,7 @@ export class SyncQueueService {
         } catch (err) {
           this.logger.error(`Retry failed for ${item.resourceType}#${item.localId}: ${err.message}`);
           await this.syncLogRepo.update(item.id, {
-            retryCount: item.retryCount + 1,
+            retryCount: (item.retryCount ?? 0) + 1,
             lastRetryAt: new Date(),
             errorMessage: err.message,
           });

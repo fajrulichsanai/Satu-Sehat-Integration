@@ -58,7 +58,7 @@ export class AuthService {
     }
 
     // Hash password
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const passwordHash = await bcrypt.hash(dto.password!, 10);
 
     // Create clinic for owner
     let clinic: Clinic | null = null;
@@ -122,7 +122,7 @@ export class AuthService {
     }
 
     // Verify password
-    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
+    const isPasswordValid = await bcrypt.compare(dto.password!, user.passwordHash!);
     if (!isPasswordValid) {
       throw new UnauthorizedException({
         success: false,

@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tarif } from './entities/tarif.entity';
-import { CreateTarifDto, TarifQueryDto, UpdateTarifDto } from './dto/tarif.dto';
+import { CreateTarifDto, TarifQueryDto, UpdateTarifDto } from '../billing/dto/tarif.dto';
 
 @Injectable()
 export class TarifsService {
@@ -40,15 +40,15 @@ export class TarifsService {
   async create(clinicId: number, dto: CreateTarifDto, userId: number): Promise<Tarif> {
     const tarif = this.tarifRepository.create({
       clinicId,
-      name: dto.name,
-      kategori: dto.kategori,
-      kodeIcd9: dto.kodeIcd9,
+      name: dto.name!,
+      kategori: dto.kategori!,
+      kodeIcd9: dto.kodeIcd9 ?? undefined,
       hargaPokok: dto.hargaPokok ?? 0,
-      hargaJual: dto.hargaJual,
+      hargaJual: dto.hargaJual!,
       diskonMaksimal: dto.diskonMaksimal ?? 0,
       createdBy: userId,
-    });
-    return this.tarifRepository.save(tarif);
+    } as any);
+    return this.tarifRepository.save(tarif) as unknown as Promise<Tarif>;
   }
 
   async update(id: number, clinicId: number, dto: UpdateTarifDto, userId: number): Promise<Tarif> {

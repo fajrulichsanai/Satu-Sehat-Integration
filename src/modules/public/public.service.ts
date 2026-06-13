@@ -58,7 +58,7 @@ export class PublicService {
 
     const queue = await this.queuesService.create(dto.clinicId, {
       patientId: patient.id,
-      patientName: patient.name,
+      patientName: patient.name!,
       phone: dto.patientPhone,
       practitionerId: dto.practitionerId || 0,
       appointmentDate: dto.appointmentDate,
@@ -71,7 +71,7 @@ export class PublicService {
     return {
       bookingToken: queue.token,
       queueNumber: queue.nomorAntrian,
-      patientName: patient.name,
+      patientName: patient.name!,
       appointmentDate: dto.appointmentDate,
       jamSlot: dto.jamSlot,
     };

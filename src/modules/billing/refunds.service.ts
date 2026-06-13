@@ -27,7 +27,7 @@ export class RefundsService {
       throw new BadRequestException('Refund hanya bisa diminta untuk billing yang sudah dibayar');
     }
 
-    if (dto.amount > Number(billing.paidAmount)) {
+    if (dto.amount! > Number(billing.paidAmount)) {
       throw new BadRequestException('Jumlah refund melebihi total yang sudah dibayar');
     }
 
@@ -40,11 +40,11 @@ export class RefundsService {
 
     const refund = this.refundRepository.create({
       billingId,
-      amount: dto.amount,
-      reason: dto.reason,
+      amount: dto.amount!,
+      reason: dto.reason!,
       status: RefundStatus.PENDING_APPROVAL,
       createdBy: userId,
-    });
+    } as any);
     return this.refundRepository.save(refund);
   }
 

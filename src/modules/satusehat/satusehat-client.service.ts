@@ -61,7 +61,7 @@ export class SatusehatClientService {
     if (!clinic) throw new ServiceUnavailableException('Klinik tidak ditemukan');
 
     const token = await this.getAccessToken(clinicId);
-    const baseUrl = SATUSEHAT_BASE[clinic.satusehatEnvironment];
+    const baseUrl = SATUSEHAT_BASE[clinic.satusehatEnvironment!];
 
     try {
       const response = await fetch(`${baseUrl}/fhir-r4/v1/${path}`, {
@@ -86,7 +86,7 @@ export class SatusehatClientService {
     if (!clinic) throw new ServiceUnavailableException('Klinik tidak ditemukan');
 
     const token = await this.getAccessToken(clinicId);
-    const baseUrl = SATUSEHAT_BASE[clinic.satusehatEnvironment];
+    const baseUrl = SATUSEHAT_BASE[clinic.satusehatEnvironment!];
 
     try {
       const response = await fetch(
@@ -101,18 +101,18 @@ export class SatusehatClientService {
   }
 
   private async refreshToken(clinic: Clinic): Promise<string> {
-    const authUrl = AUTH_URL[clinic.satusehatEnvironment];
+    const authUrl = AUTH_URL[clinic.satusehatEnvironment!];
     let clientSecret = clinic.satusehatClientSecret;
     try {
-      clientSecret = decrypt(clinic.satusehatClientSecret, this.encryptionKey);
+      clientSecret = decrypt(clinic.satusehatClientSecret!, this.encryptionKey);
     } catch {
       // Not encrypted (legacy), use as-is
     }
 
     const params = new URLSearchParams({
       grant_type: 'client_credentials',
-      client_id: clinic.satusehatClientId,
-      client_secret: clientSecret,
+      client_id: clinic.satusehatClientId!,
+      client_secret: clientSecret!,
     });
 
     try {

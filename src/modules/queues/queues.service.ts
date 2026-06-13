@@ -98,7 +98,7 @@ export class QueuesService {
   async updateStatus(id: number, clinicId: number, dto: UpdateQueueStatusDto): Promise<Queue> {
     const queue = await this.findOne(id, clinicId);
 
-    const allowed = STATUS_TRANSITIONS[queue.status] ?? [];
+    const allowed = STATUS_TRANSITIONS[queue.status!] ?? [];
     if (!allowed.includes(dto.status)) {
       throw new BadRequestException(
         `Tidak bisa mengubah status dari ${queue.status} ke ${dto.status}. ` +
