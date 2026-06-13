@@ -46,7 +46,10 @@ export class BillingController {
 
   @Get('settings/tarifs')
   @ApiOperation({ summary: 'List tarifs (settings)' })
-  async findTarifs(@ClinicId() clinicId: number, @Query() query: TarifQueryDto) {
+  async findTarifs(
+    @ClinicId() clinicId: number,
+    @Query() query: TarifQueryDto,
+  ) {
     return this.tarifsService.findAll(clinicId, query);
   }
 
@@ -69,7 +72,12 @@ export class BillingController {
     @Body() dto: UpdateTarifDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.tarifsService.update(id, clinicId, dto, user.userId);
+    const data = await this.tarifsService.update(
+      id,
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data };
   }
 
@@ -77,7 +85,10 @@ export class BillingController {
 
   @Get('billings')
   @ApiOperation({ summary: 'List billings' })
-  async findBillings(@ClinicId() clinicId: number, @Query() query: BillingQueryDto) {
+  async findBillings(
+    @ClinicId() clinicId: number,
+    @Query() query: BillingQueryDto,
+  ) {
     return this.billingsService.findAll(clinicId, query);
   }
 
@@ -112,7 +123,12 @@ export class BillingController {
     @Body() dto: CreatePaymentDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.paymentsService.createPayment(id, clinicId, dto, user.userId);
+    const data = await this.paymentsService.createPayment(
+      id,
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data };
   }
 
@@ -126,7 +142,12 @@ export class BillingController {
     @Body() dto: CreateRefundRequestDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.refundsService.createRequest(id, clinicId, dto, user.userId);
+    const data = await this.refundsService.createRequest(
+      id,
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data };
   }
 
@@ -137,9 +158,15 @@ export class BillingController {
     @ClinicId() clinicId: number,
     @Res() res: Response,
   ) {
-    const pdfBuffer = await this.invoiceService.generateInvoicePdf(id, clinicId);
+    const pdfBuffer = await this.invoiceService.generateInvoicePdf(
+      id,
+      clinicId,
+    );
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="invoice-${id}.pdf"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="invoice-${id}.pdf"`,
+    );
     res.end(pdfBuffer);
   }
 
@@ -152,7 +179,13 @@ export class BillingController {
     @Body() dto: ApproveRefundDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.refundsService.processApproval(id, refundId, clinicId, dto, user.userId);
+    const data = await this.refundsService.processApproval(
+      id,
+      refundId,
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data };
   }
 }

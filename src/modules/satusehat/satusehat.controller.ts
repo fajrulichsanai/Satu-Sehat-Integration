@@ -28,7 +28,11 @@ export class SatusehatController {
     @Param('localId', ParseIntPipe) localId: number,
     @ClinicId() clinicId: number,
   ) {
-    const result = await this.syncOrchestrator.syncResource(resourceType, localId, clinicId);
+    const result = await this.syncOrchestrator.syncResource(
+      resourceType,
+      localId,
+      clinicId,
+    );
     return { success: result.success, data: result };
   }
 }

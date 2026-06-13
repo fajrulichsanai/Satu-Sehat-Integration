@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OhisData } from '../ohis-data/entities/ohis-data.entity';
@@ -31,7 +35,12 @@ export class OhisService {
     };
   }
 
-  async upsert(encounterId: number, clinicId: number, dto: UpsertOhisDto, userId: number) {
+  async upsert(
+    encounterId: number,
+    clinicId: number,
+    dto: UpsertOhisDto,
+    userId: number,
+  ) {
     await this.verifyEncounter(encounterId, clinicId);
 
     const summary = this.calculateOhis(dto.scores);
@@ -59,9 +68,12 @@ export class OhisService {
     return { summary, savedAt: new Date() };
   }
 
-  private calculateOhis(scores: Record<string, { debris: number; calculus: number }>) {
+  private calculateOhis(
+    scores: Record<string, { debris: number; calculus: number }>,
+  ) {
     const teethKeys = Object.keys(scores);
-    if (teethKeys.length === 0) throw new BadRequestException('Scores tidak boleh kosong');
+    if (teethKeys.length === 0)
+      throw new BadRequestException('Scores tidak boleh kosong');
 
     let totalDebris = 0;
     let totalCalculus = 0;
@@ -90,8 +102,16 @@ export class OhisService {
     return { diS, ciS, ohiS, interpretation };
   }
 
-  private async verifyEncounter(encounterId: number, clinicId: number): Promise<void> {
-    const enc = await this.encounterRepo.findOne({ where: { id: encounterId, clinicId } });
-    if (!enc) throw new NotFoundException(`Encounter dengan ID ${encounterId} tidak ditemukan`);
+  private async verifyEncounter(
+    encounterId: number,
+    clinicId: number,
+  ): Promise<void> {
+    const enc = await this.encounterRepo.findOne({
+      where: { id: encounterId, clinicId },
+    });
+    if (!enc)
+      throw new NotFoundException(
+        `Encounter dengan ID ${encounterId} tidak ditemukan`,
+      );
   }
 }

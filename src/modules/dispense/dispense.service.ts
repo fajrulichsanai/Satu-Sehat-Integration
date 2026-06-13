@@ -7,9 +7,15 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Dispense } from './entities/dispense.entity';
-import { Prescription, PrescriptionStatus } from '../prescription/entities/prescription.entity';
+import {
+  Prescription,
+  PrescriptionStatus,
+} from '../prescription/entities/prescription.entity';
 import { Medication } from '../medications/entities/medication.entity';
-import { MedicationStockLog, StockLogType } from '../medication-stock-log/entities/medication-stock-log.entity';
+import {
+  MedicationStockLog,
+  StockLogType,
+} from '../medication-stock-log/entities/medication-stock-log.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import { DispenseMedicationsDto } from './dto/dispense.dto';
 
@@ -25,9 +31,19 @@ export class DispenseService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async dispense(encounterId: number, clinicId: number, dto: DispenseMedicationsDto, userId: number) {
-    const encounter = await this.encounterRepository.findOne({ where: { id: encounterId, clinicId } });
-    if (!encounter) throw new NotFoundException(`Encounter dengan ID ${encounterId} tidak ditemukan`);
+  async dispense(
+    encounterId: number,
+    clinicId: number,
+    dto: DispenseMedicationsDto,
+    userId: number,
+  ) {
+    const encounter = await this.encounterRepository.findOne({
+      where: { id: encounterId, clinicId },
+    });
+    if (!encounter)
+      throw new NotFoundException(
+        `Encounter dengan ID ${encounterId} tidak ditemukan`,
+      );
 
     return this.dataSource.transaction(async (manager) => {
       const results: any[] = [];
@@ -38,10 +54,14 @@ export class DispenseService {
           where: { id: item.prescriptionId, encounterId },
         });
         if (!prescription) {
-          throw new NotFoundException(`Resep ID ${item.prescriptionId} tidak ditemukan`);
+          throw new NotFoundException(
+            `Resep ID ${item.prescriptionId} tidak ditemukan`,
+          );
         }
         if (prescription.status === PrescriptionStatus.DISPENSED) {
-          throw new ConflictException(`Resep ID ${item.prescriptionId} sudah pernah di-dispense`);
+          throw new ConflictException(
+            `Resep ID ${item.prescriptionId} sudah pernah di-dispense`,
+          );
         }
 
         const medication = await manager.findOne(Medication, {
@@ -49,7 +69,9 @@ export class DispenseService {
           lock: { mode: 'pessimistic_write' },
         });
         if (!medication) {
-          throw new NotFoundException(`Obat ID ${item.medicationId} tidak ditemukan`);
+          throw new NotFoundException(
+            `Obat ID ${item.medicationId} tidak ditemukan`,
+          );
         }
         if (medication.quantity < item.quantityDispensed) {
           throw new UnprocessableEntityException(
@@ -88,7 +110,15 @@ export class DispenseService {
         });
 
         // Update stock log with reference id
-        await manager.update(MedicationStockLog, { medicationId: medication.id, referenceType: 'dispense', referenceId: null }, { referenceId: dispense.id });
+        await manager.update(
+          MedicationStockLog,
+          {
+            medicationId: medication.id,
+            referenceType: 'dispense',
+            referenceId: null,
+          },
+          { referenceId: dispense.id },
+        );
 
         // Mark prescription dispensed
         prescription.status = PrescriptionStatus.DISPENSED;

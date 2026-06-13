@@ -21,7 +21,10 @@ export class CreateProcedureDto {
   @IsNotEmpty()
   procedureName: string;
 
-  @ApiPropertyOptional({ enum: ProcedureStatus, default: ProcedureStatus.COMPLETED })
+  @ApiPropertyOptional({
+    enum: ProcedureStatus,
+    default: ProcedureStatus.COMPLETED,
+  })
   @IsOptional()
   @IsEnum(ProcedureStatus)
   status?: ProcedureStatus;
@@ -41,7 +44,10 @@ export class CreateProcedureDto {
   @Min(1)
   reasonDiagnosisId?: number;
 
-  @ApiPropertyOptional({ description: 'FDI tooth notation (e.g. 46)', example: '46' })
+  @ApiPropertyOptional({
+    description: 'FDI tooth notation (e.g. 46)',
+    example: '46',
+  })
   @IsOptional()
   @IsString()
   toothNumber?: string;

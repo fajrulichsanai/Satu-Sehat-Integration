@@ -52,11 +52,18 @@ export const ICD10_DATA: Array<{ code: string; display: string }> = [
   { code: 'K07.5', display: 'Dentofacial functional abnormalities' },
   { code: 'K07.6', display: 'Temporomandibular joint disorders' },
   { code: 'K08.0', display: 'Exfoliation of teeth due to systemic causes' },
-  { code: 'K08.1', display: 'Loss of teeth due to accident, extraction or local periodontal disease' },
+  {
+    code: 'K08.1',
+    display:
+      'Loss of teeth due to accident, extraction or local periodontal disease',
+  },
   { code: 'K08.2', display: 'Atrophy of edentulous alveolar ridge' },
   { code: 'K08.3', display: 'Retained dental root' },
   { code: 'K09.0', display: 'Developmental odontogenic cysts' },
-  { code: 'K09.1', display: 'Developmental non-odontogenic cysts of oral region' },
+  {
+    code: 'K09.1',
+    display: 'Developmental non-odontogenic cysts of oral region',
+  },
   { code: 'K09.2', display: 'Other cysts of jaw' },
   { code: 'K10.0', display: 'Developmental disorders of jaws' },
   { code: 'K10.1', display: 'Giant cell granuloma, central' },
@@ -75,9 +82,15 @@ export const ICD10_DATA: Array<{ code: string; display: string }> = [
   { code: 'K12.2', display: 'Cellulitis and abscess of mouth' },
   { code: 'K13.0', display: 'Diseases of lips' },
   { code: 'K13.1', display: 'Cheek and lip biting' },
-  { code: 'K13.2', display: 'Leukoplakia and other disturbances of oral epithelium' },
+  {
+    code: 'K13.2',
+    display: 'Leukoplakia and other disturbances of oral epithelium',
+  },
   { code: 'K13.3', display: 'Hairy leukoplakia' },
-  { code: 'K13.4', display: 'Granuloma and granuloma-like lesions of oral mucosa' },
+  {
+    code: 'K13.4',
+    display: 'Granuloma and granuloma-like lesions of oral mucosa',
+  },
   { code: 'K13.5', display: 'Oral submucous fibrosis' },
   { code: 'K13.6', display: 'Irritative hyperplasia of oral mucosa' },
   { code: 'K13.7', display: 'Other and unspecified lesions of oral mucosa' },
@@ -89,14 +102,20 @@ export const ICD10_DATA: Array<{ code: string; display: string }> = [
   { code: 'K14.5', display: 'Plicated tongue' },
   { code: 'K14.6', display: 'Glossodynia' },
   // Common general
-  { code: 'A09', display: 'Diarrhoea and gastroenteritis of presumed infectious origin' },
+  {
+    code: 'A09',
+    display: 'Diarrhoea and gastroenteritis of presumed infectious origin',
+  },
   { code: 'B34.9', display: 'Viral infection, unspecified' },
   { code: 'J00', display: 'Acute nasopharyngitis (common cold)' },
   { code: 'J06.9', display: 'Acute upper respiratory infection, unspecified' },
   { code: 'J11.1', display: 'Influenza with other respiratory manifestations' },
   { code: 'J18.9', display: 'Pneumonia, unspecified' },
   { code: 'K29.7', display: 'Gastritis, unspecified' },
-  { code: 'K52.9', display: 'Noninfective gastroenteritis and colitis, unspecified' },
+  {
+    code: 'K52.9',
+    display: 'Noninfective gastroenteritis and colitis, unspecified',
+  },
   { code: 'R00.0', display: 'Tachycardia, unspecified' },
   { code: 'R05', display: 'Cough' },
   { code: 'R07.0', display: 'Pain in throat' },
@@ -106,5 +125,8 @@ export const ICD10_DATA: Array<{ code: string; display: string }> = [
   { code: 'R68.89', display: 'Other specified symptoms and signs' },
   { code: 'Z00.0', display: 'General medical examination' },
   { code: 'Z01.0', display: 'Examination of eyes and vision' },
-  { code: 'Z13.8', display: 'Special screening examination for other specified disorders' },
+  {
+    code: 'Z13.8',
+    display: 'Special screening examination for other specified disorders',
+  },
 ];

@@ -33,7 +33,11 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
         const nodeEnv = configService.get<string>('NODE_ENV', 'development');
-        const synchronize = configService.get<string>('DB_SYNCHRONIZE', nodeEnv !== 'production' ? 'true' : 'false') === 'true';
+        const synchronize =
+          configService.get<string>(
+            'DB_SYNCHRONIZE',
+            nodeEnv !== 'production' ? 'true' : 'false',
+          ) === 'true';
         return {
           type: 'mysql',
           host: configService.get('DB_HOST', 'localhost'),

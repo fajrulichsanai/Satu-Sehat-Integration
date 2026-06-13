@@ -27,7 +27,10 @@ export class CreateSoapTemplateDto {
   @IsString()
   plan?: string;
 
-  @ApiPropertyOptional({ default: false, description: 'Only owner can set isShared=true' })
+  @ApiPropertyOptional({
+    default: false,
+    description: 'Only owner can set isShared=true',
+  })
   @IsOptional()
   @IsBoolean()
   isShared?: boolean;

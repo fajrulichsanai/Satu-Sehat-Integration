@@ -8,10 +8,17 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Billing, BillingStatus } from './entities/billing.entity';
-import { BillingItem, DiscountType } from '../billing-item/entities/billing-item.entity';
+import {
+  BillingItem,
+  DiscountType,
+} from '../billing-item/entities/billing-item.entity';
 import { Tarif } from '../tarif/entities/tarif.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
-import { BillingItemDto, BillingQueryDto, CreateBillingDto } from './dto/billing.dto';
+import {
+  BillingItemDto,
+  BillingQueryDto,
+  CreateBillingDto,
+} from './dto/billing.dto';
 
 @Injectable()
 export class BillingsService {
@@ -37,7 +44,9 @@ export class BillingsService {
       qb.andWhere('b.status = :status', { status: query.status });
     }
     if (query.dateFrom) {
-      qb.andWhere('DATE(b.createdAt) >= :dateFrom', { dateFrom: query.dateFrom });
+      qb.andWhere('DATE(b.createdAt) >= :dateFrom', {
+        dateFrom: query.dateFrom,
+      });
     }
     if (query.dateTo) {
       qb.andWhere('DATE(b.createdAt) <= :dateTo', { dateTo: query.dateTo });
@@ -50,7 +59,10 @@ export class BillingsService {
 
     const page = query.page || 1;
     const limit = query.limit || 20;
-    const [items, total] = await qb.skip((page - 1) * limit).take(limit).getManyAndCount();
+    const [items, total] = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
 
     return {
       data: items.map((b) => ({
@@ -73,7 +85,8 @@ export class BillingsService {
       where: { id, clinicId },
       relations: { patient: true, items: true },
     });
-    if (!billing) throw new NotFoundException(`Billing dengan ID ${id} tidak ditemukan`);
+    if (!billing)
+      throw new NotFoundException(`Billing dengan ID ${id} tidak ditemukan`);
     return billing;
   }
 
@@ -81,7 +94,10 @@ export class BillingsService {
     const encounter = await this.encounterRepository.findOne({
       where: { id: dto.encounterId, clinicId },
     });
-    if (!encounter) throw new NotFoundException(`Encounter dengan ID ${dto.encounterId} tidak ditemukan`);
+    if (!encounter)
+      throw new NotFoundException(
+        `Encounter dengan ID ${dto.encounterId} tidak ditemukan`,
+      );
 
     const existingBilling = await this.billingRepository.findOne({
       where: { encounterId: dto.encounterId, clinicId },
@@ -108,15 +124,26 @@ export class BillingsService {
         const discountValue = item.discount || 0;
 
         if (item.tarifId) {
-          const tarif = await manager.findOne(Tarif, { where: { id: item.tarifId, clinicId } });
-          if (!tarif) throw new NotFoundException(`Tarif ID ${item.tarifId} tidak ditemukan`);
+          const tarif = await manager.findOne(Tarif, {
+            where: { id: item.tarifId, clinicId },
+          });
+          if (!tarif)
+            throw new NotFoundException(
+              `Tarif ID ${item.tarifId} tidak ditemukan`,
+            );
 
-          if (discountType === DiscountType.NOMINAL && discountValue > tarif.diskonMaksimal) {
+          if (
+            discountType === DiscountType.NOMINAL &&
+            discountValue > tarif.diskonMaksimal
+          ) {
             throw new UnprocessableEntityException(
               `Diskon untuk '${tarif.name}' melebihi batas maksimal (Rp ${tarif.diskonMaksimal})`,
             );
           }
-          if (discountType === DiscountType.PERCENT && discountValue > (tarif.diskonMaksimal / tarif.hargaJual) * 100) {
+          if (
+            discountType === DiscountType.PERCENT &&
+            discountValue > (tarif.diskonMaksimal / tarif.hargaJual) * 100
+          ) {
             throw new UnprocessableEntityException(
               `Diskon % untuk '${tarif.name}' melebihi batas maksimal`,
             );
@@ -171,14 +198,21 @@ export class BillingsService {
 
       await manager.save(
         BillingItem,
-        processedItems.map((i) => ({ ...i, billingId: billing.id, createdBy: userId })),
+        processedItems.map((i) => ({
+          ...i,
+          billingId: billing.id,
+          createdBy: userId,
+        })),
       );
 
       return billing;
     });
   }
 
-  private async generateInvoiceNumber(manager: any, clinicId: number): Promise<string> {
+  private async generateInvoiceNumber(
+    manager: any,
+    clinicId: number,
+  ): Promise<string> {
     const year = new Date().getFullYear();
     const result = await manager.query(
       `SELECT COUNT(*) AS total FROM billings WHERE clinic_id = ? AND YEAR(created_at) = ?`,

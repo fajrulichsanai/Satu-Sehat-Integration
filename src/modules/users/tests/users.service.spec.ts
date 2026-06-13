@@ -41,7 +41,9 @@ describe('UsersService', () => {
   describe('activate', () => {
     it('should throw NotFoundException if user not in clinic', async () => {
       mockRepo.findOne.mockResolvedValue(null);
-      await expect(service.activate(999, 1, 1)).rejects.toThrow(NotFoundException);
+      await expect(service.activate(999, 1, 1)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should activate pending user', async () => {

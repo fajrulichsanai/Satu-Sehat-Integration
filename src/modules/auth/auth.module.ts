@@ -16,7 +16,10 @@ import { Clinic } from '../clinics/entities/clinic.entity';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET', 'your-secret-key-change-in-production'),
+        secret: configService.get<string>(
+          'JWT_SECRET',
+          'your-secret-key-change-in-production',
+        ),
         signOptions: {
           expiresIn: '24h',
         },

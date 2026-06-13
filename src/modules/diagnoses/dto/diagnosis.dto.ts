@@ -6,7 +6,10 @@ import {
   IsString,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ClinicalStatus, DiagnosisCategory } from '../entities/diagnosis.entity';
+import {
+  ClinicalStatus,
+  DiagnosisCategory,
+} from '../entities/diagnosis.entity';
 
 export class CreateDiagnosisDto {
   @ApiProperty({ example: 'K02.1' })
@@ -24,7 +27,10 @@ export class CreateDiagnosisDto {
   @IsEnum(ClinicalStatus)
   clinicalStatus?: ClinicalStatus;
 
-  @ApiPropertyOptional({ enum: DiagnosisCategory, default: DiagnosisCategory.ENCOUNTER_DIAGNOSIS })
+  @ApiPropertyOptional({
+    enum: DiagnosisCategory,
+    default: DiagnosisCategory.ENCOUNTER_DIAGNOSIS,
+  })
   @IsOptional()
   @IsEnum(DiagnosisCategory)
   category?: DiagnosisCategory;

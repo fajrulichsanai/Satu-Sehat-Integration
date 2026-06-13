@@ -22,7 +22,10 @@ export const ICD9_DATA: Array<{ code: string; display: string }> = [
   { code: '23.6', display: 'Prosthetic dental implant' },
   { code: '23.73', display: 'Root scaling and planing' },
   { code: '23.79', display: 'Other excision of periodontal tissue' },
-  { code: '23.91', display: 'Extension or deepening of buccolabial or lingual sulcus' },
+  {
+    code: '23.91',
+    display: 'Extension or deepening of buccolabial or lingual sulcus',
+  },
   { code: '23.92', display: 'Intraoral gingivoplasty' },
   { code: '23.93', display: 'Subgingival curettage' },
   { code: '23.99', display: 'Other dental operations' },
@@ -47,23 +50,44 @@ export const ICD9_DATA: Array<{ code: string; display: string }> = [
   { code: '27.63', display: 'Revision of cleft palate repair' },
   // General surgical procedures relevant to dental/oral
   { code: '21.1', display: 'Incision of nose' },
-  { code: '21.32', display: 'Local excision or destruction of other lesion of nose' },
+  {
+    code: '21.32',
+    display: 'Local excision or destruction of other lesion of nose',
+  },
   { code: '29.12', display: 'Pharyngoscopy' },
-  { code: '29.39', display: 'Other excision or destruction of lesion of pharynx' },
+  {
+    code: '29.39',
+    display: 'Other excision or destruction of lesion of pharynx',
+  },
   // Minor procedures
-  { code: '86.22', display: 'Excisional debridement of wound, infection or burn' },
+  {
+    code: '86.22',
+    display: 'Excisional debridement of wound, infection or burn',
+  },
   { code: '86.59', display: 'Other skin graft' },
   { code: '89.01', display: 'Interview and evaluation, described as brief' },
   { code: '89.07', display: 'Comprehensive consultation and evaluation' },
-  { code: '89.11', display: 'Comprehensive ophthalmological examination, bilateral' },
+  {
+    code: '89.11',
+    display: 'Comprehensive ophthalmological examination, bilateral',
+  },
   { code: '89.39', display: 'Other nonoperative physical examination' },
-  { code: '93.94', display: 'Respiratory medication administered by nebulizer' },
+  {
+    code: '93.94',
+    display: 'Respiratory medication administered by nebulizer',
+  },
   { code: '94.25', display: 'Psychologic testing' },
   { code: '99.04', display: 'Transfusion of packed cells' },
   { code: '99.15', display: 'Parenteral infusion of vitamins' },
   { code: '99.21', display: 'Injection of antibiotic' },
   { code: '99.22', display: 'Injection of other anti-infective' },
   { code: '99.23', display: 'Injection of steroid' },
-  { code: '99.28', display: 'Injection or infusion of biological response modifier' },
-  { code: '99.29', display: 'Injection or infusion of other therapeutic substance' },
+  {
+    code: '99.28',
+    display: 'Injection or infusion of biological response modifier',
+  },
+  {
+    code: '99.29',
+    display: 'Injection or infusion of other therapeutic substance',
+  },
 ];

@@ -27,19 +27,29 @@ export class AnamnesisController {
     @Param('encounterId', ParseIntPipe) encounterId: number,
     @ClinicId() clinicId: number,
   ) {
-    const data = await this.anamnesisService.findByEncounter(encounterId, clinicId);
+    const data = await this.anamnesisService.findByEncounter(
+      encounterId,
+      clinicId,
+    );
     return { success: true, data };
   }
 
   @Put()
-  @ApiOperation({ summary: 'Upsert anamnesis (including allergies & medication history)' })
+  @ApiOperation({
+    summary: 'Upsert anamnesis (including allergies & medication history)',
+  })
   async upsert(
     @Param('encounterId', ParseIntPipe) encounterId: number,
     @ClinicId() clinicId: number,
     @Body() dto: UpsertAnamnesisDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.anamnesisService.upsert(encounterId, clinicId, dto, user.userId);
+    const data = await this.anamnesisService.upsert(
+      encounterId,
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data };
   }
 }

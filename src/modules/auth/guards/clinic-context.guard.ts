@@ -1,4 +1,10 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException, SetMetadata } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  SetMetadata,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
 export const SKIP_CLINIC_CHECK_KEY = 'skipClinicCheck';
@@ -12,7 +18,7 @@ export const SkipClinicCheck = () => SetMetadata(SKIP_CLINIC_CHECK_KEY, true);
 /**
  * Guard to ensure multi-tenant isolation
  * Validates that resources belong to user's clinic
- * 
+ *
  * Usage: Apply to controllers/endpoints that need clinic-based filtering
  * The guard ensures clinicId is present and accessible
  */
@@ -22,10 +28,10 @@ export class ClinicContextGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     // Check if endpoint explicitly skips clinic check
-    const skipCheck = this.reflector.getAllAndOverride<boolean>(SKIP_CLINIC_CHECK_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const skipCheck = this.reflector.getAllAndOverride<boolean>(
+      SKIP_CLINIC_CHECK_KEY,
+      [context.getHandler(), context.getClass()],
+    );
 
     if (skipCheck) {
       return true;

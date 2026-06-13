@@ -6,10 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Location } from '../location/entities/location.entity';
-import {
-  CreateLocationDto,
-  UpdateLocationDto,
-} from './dto/location.dto';
+import { CreateLocationDto, UpdateLocationDto } from './dto/location.dto';
 
 @Injectable()
 export class LocationsService {
@@ -23,7 +20,7 @@ export class LocationsService {
    */
   async findAll(clinicId: number, activeOnly?: boolean) {
     const where: any = { clinicId };
-    
+
     if (activeOnly) {
       where.isActive = true;
     }

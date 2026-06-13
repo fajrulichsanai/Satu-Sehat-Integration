@@ -8,7 +8,9 @@ import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Encounter, Billing, Payment, SatusehatSyncLog])],
+  imports: [
+    TypeOrmModule.forFeature([Encounter, Billing, Payment, SatusehatSyncLog]),
+  ],
   controllers: [ReportsController],
   providers: [ReportsService],
 })

@@ -8,7 +8,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Patient } from './entities/patient.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
-import { CreatePatientDto, PatientQueryDto, UpdatePatientDto } from './dto/patient.dto';
+import {
+  CreatePatientDto,
+  PatientQueryDto,
+  UpdatePatientDto,
+} from './dto/patient.dto';
 import { paginate, PaginatedResult } from '../../common/dto/pagination.dto';
 import { SatusehatClientService } from '../satusehat/satusehat-client.service';
 
@@ -23,7 +27,10 @@ export class PatientsService {
     private readonly satusehatClient: SatusehatClientService,
   ) {}
 
-  async findAll(clinicId: number, query: PatientQueryDto): Promise<PaginatedResult<Patient>> {
+  async findAll(
+    clinicId: number,
+    query: PatientQueryDto,
+  ): Promise<PaginatedResult<Patient>> {
     const qb = this.patientRepository
       .createQueryBuilder('p')
       .where('p.clinicId = :clinicId', { clinicId });
@@ -41,7 +48,9 @@ export class PatientsService {
 
     const sortBy = query.sortBy || 'p.createdAt';
     const validSortColumns = ['p.name', 'p.noRm', 'p.createdAt', 'p.updatedAt'];
-    const finalSort = validSortColumns.includes(sortBy) ? sortBy : 'p.createdAt';
+    const finalSort = validSortColumns.includes(sortBy)
+      ? sortBy
+      : 'p.createdAt';
     qb.orderBy(finalSort, query.sortOrder);
 
     return paginate(qb, query);
@@ -61,14 +70,22 @@ export class PatientsService {
     await this.findOne(patientId, clinicId);
     return this.encounterRepository.find({
       where: { patientId, clinicId },
-      select: { id: true, status: true, serviceType: true, arrivedTime: true, finishedTime: true },
+      select: {
+        id: true,
+        status: true,
+        serviceType: true,
+        arrivedTime: true,
+        finishedTime: true,
+      },
       order: { arrivedTime: 'DESC' },
     });
   }
 
   async create(clinicId: number, dto: CreatePatientDto): Promise<Patient> {
     if (!dto.isNewborn && !dto.nik) {
-      throw new BadRequestException('NIK wajib diisi untuk pasien bukan bayi baru lahir');
+      throw new BadRequestException(
+        'NIK wajib diisi untuk pasien bukan bayi baru lahir',
+      );
     }
 
     if (dto.nik) {
@@ -97,7 +114,11 @@ export class PatientsService {
     return this.patientRepository.save(patient);
   }
 
-  async update(id: number, clinicId: number, dto: UpdatePatientDto): Promise<Patient> {
+  async update(
+    id: number,
+    clinicId: number,
+    dto: UpdatePatientDto,
+  ): Promise<Patient> {
     const patient = await this.findOne(id, clinicId);
 
     if (dto.nik && dto.nik !== patient.nik) {
@@ -108,7 +129,9 @@ export class PatientsService {
       nik: dto.nik ?? patient.nik,
       nikIbu: dto.nikIbu ?? patient.nikIbu,
       name: dto.name ?? patient.name,
-      birthDate: dto.dateOfBirth ? new Date(dto.dateOfBirth) : patient.birthDate,
+      birthDate: dto.dateOfBirth
+        ? new Date(dto.dateOfBirth)
+        : patient.birthDate,
       gender: dto.gender ?? patient.gender,
       phone: dto.phone ?? patient.phone,
       email: dto.email ?? patient.email,
@@ -122,7 +145,11 @@ export class PatientsService {
     return this.patientRepository.save(patient);
   }
 
-  private async checkDuplicateNik(nik: string, clinicId: number, excludeId?: number): Promise<void> {
+  private async checkDuplicateNik(
+    nik: string,
+    clinicId: number,
+    excludeId?: number,
+  ): Promise<void> {
     const qb = this.patientRepository
       .createQueryBuilder('p')
       .where('p.nik = :nik AND p.clinicId = :clinicId', { nik, clinicId });
@@ -133,12 +160,15 @@ export class PatientsService {
 
     const existing = await qb.getOne();
     if (existing) {
-      throw new ConflictException(`Pasien dengan NIK ${nik} sudah terdaftar di klinik ini`);
+      throw new ConflictException(
+        `Pasien dengan NIK ${nik} sudah terdaftar di klinik ini`,
+      );
     }
   }
 
   async searchSatusehat(nik: string, clinicId: number) {
-    if (!nik) throw new BadRequestException('NIK diperlukan untuk pencarian SATUSEHAT');
+    if (!nik)
+      throw new BadRequestException('NIK diperlukan untuk pencarian SATUSEHAT');
     return this.satusehatClient.searchPatientByNik(clinicId, nik);
   }
 

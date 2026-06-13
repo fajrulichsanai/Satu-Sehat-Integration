@@ -7,14 +7,23 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Between, DataSource, Repository } from 'typeorm';
 import { Queue } from './entities/queue.entity';
 import { QueueStatus } from '../../enums';
-import { CreateQueueDto, QueueQueryDto, SlotsQueryDto, UpdateQueueStatusDto } from './dto/queue.dto';
+import {
+  CreateQueueDto,
+  QueueQueryDto,
+  SlotsQueryDto,
+  UpdateQueueStatusDto,
+} from './dto/queue.dto';
 import { startOfDay, endOfDay } from '../../common/utils/date.util';
 import { paginate, PaginatedResult } from '../../common/dto/pagination.dto';
 
 const STATUS_TRANSITIONS: Partial<Record<QueueStatus, QueueStatus[]>> = {
   [QueueStatus.WAITING]: [QueueStatus.CALLED, QueueStatus.CANCELLED],
   [QueueStatus.CONFIRMED]: [QueueStatus.CALLED, QueueStatus.CANCELLED],
-  [QueueStatus.CALLED]: [QueueStatus.DONE, QueueStatus.CANCELLED, QueueStatus.CALLED],
+  [QueueStatus.CALLED]: [
+    QueueStatus.DONE,
+    QueueStatus.CANCELLED,
+    QueueStatus.CALLED,
+  ],
   [QueueStatus.DONE]: [],
   [QueueStatus.CANCELLED]: [],
 };
@@ -33,7 +42,10 @@ export class QueuesService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async findAll(clinicId: number, query: QueueQueryDto): Promise<PaginatedResult<Queue>> {
+  async findAll(
+    clinicId: number,
+    query: QueueQueryDto,
+  ): Promise<PaginatedResult<Queue>> {
     const targetDate = query.date ? new Date(query.date) : new Date();
     const start = startOfDay(targetDate);
     const end = endOfDay(targetDate);
@@ -48,10 +60,14 @@ export class QueuesService {
       qb.andWhere('q.status = :status', { status: query.status });
     }
     if (query.locationId) {
-      qb.andWhere('q.locationId = :locationId', { locationId: query.locationId });
+      qb.andWhere('q.locationId = :locationId', {
+        locationId: query.locationId,
+      });
     }
     if (query.practitionerId) {
-      qb.andWhere('q.practitionerId = :practitionerId', { practitionerId: query.practitionerId });
+      qb.andWhere('q.practitionerId = :practitionerId', {
+        practitionerId: query.practitionerId,
+      });
     }
 
     qb.orderBy('q.nomorAntrian', 'ASC');
@@ -95,14 +111,18 @@ export class QueuesService {
     return this.queueRepository.save(queue);
   }
 
-  async updateStatus(id: number, clinicId: number, dto: UpdateQueueStatusDto): Promise<Queue> {
+  async updateStatus(
+    id: number,
+    clinicId: number,
+    dto: UpdateQueueStatusDto,
+  ): Promise<Queue> {
     const queue = await this.findOne(id, clinicId);
 
-    const allowed = STATUS_TRANSITIONS[queue.status!] ?? [];
+    const allowed = STATUS_TRANSITIONS[queue.status] ?? [];
     if (!allowed.includes(dto.status)) {
       throw new BadRequestException(
         `Tidak bisa mengubah status dari ${queue.status} ke ${dto.status}. ` +
-        `Status yang diperbolehkan: ${allowed.join(', ') || 'tidak ada'}`,
+          `Status yang diperbolehkan: ${allowed.join(', ') || 'tidak ada'}`,
       );
     }
 
@@ -127,10 +147,14 @@ export class QueuesService {
       .select('q.jamSlot', 'jamSlot')
       .where('q.clinicId = :clinicId', { clinicId })
       .andWhere('q.tanggal BETWEEN :start AND :end', { start, end })
-      .andWhere('q.status NOT IN (:...cancelled)', { cancelled: [QueueStatus.CANCELLED] });
+      .andWhere('q.status NOT IN (:...cancelled)', {
+        cancelled: [QueueStatus.CANCELLED],
+      });
 
     if (query.practitionerId) {
-      qb.andWhere('q.practitionerId = :practitionerId', { practitionerId: query.practitionerId });
+      qb.andWhere('q.practitionerId = :practitionerId', {
+        practitionerId: query.practitionerId,
+      });
     }
 
     const occupied = await qb.getRawMany();
@@ -150,12 +174,21 @@ export class QueuesService {
         tanggal: Between(startOfDay(today), endOfDay(today)),
         status: QueueStatus.WAITING,
       },
-      select: { id: true, nomorAntrian: true, patientName: true, status: true, jamSlot: true },
+      select: {
+        id: true,
+        nomorAntrian: true,
+        patientName: true,
+        status: true,
+        jamSlot: true,
+      },
       order: { nomorAntrian: 'ASC' },
     });
   }
 
-  private async generateQueueNumber(clinicId: number, tanggal: Date): Promise<number> {
+  private async generateQueueNumber(
+    clinicId: number,
+    tanggal: Date,
+  ): Promise<number> {
     return this.dataSource.transaction(async (manager) => {
       const start = startOfDay(tanggal);
       const end = endOfDay(tanggal);
@@ -169,6 +202,9 @@ export class QueuesService {
 
   generateToken(): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    return Array.from(
+      { length: 8 },
+      () => chars[Math.floor(Math.random() * chars.length)],
+    ).join('');
   }
 }

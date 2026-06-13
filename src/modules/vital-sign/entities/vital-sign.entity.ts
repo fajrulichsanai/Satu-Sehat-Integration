@@ -24,7 +24,11 @@ export class VitalSign extends BaseEntity {
   @Column({ name: 'is_out_of_range', default: false })
   isOutOfRange: boolean;
 
-  @Column({ name: 'recorded_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    name: 'recorded_at',
+    type: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   recordedAt: Date;
 
   @ManyToOne(() => Encounter, { onDelete: 'CASCADE' })

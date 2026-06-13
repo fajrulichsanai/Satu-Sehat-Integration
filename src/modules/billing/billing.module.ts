@@ -15,10 +15,23 @@ import { InvoiceService } from './invoice.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Billing, BillingItem, Tarif, Payment, RefundRequest, Encounter]),
+    TypeOrmModule.forFeature([
+      Billing,
+      BillingItem,
+      Tarif,
+      Payment,
+      RefundRequest,
+      Encounter,
+    ]),
   ],
   controllers: [BillingController],
-  providers: [BillingsService, PaymentsService, RefundsService, TarifsService, InvoiceService],
+  providers: [
+    BillingsService,
+    PaymentsService,
+    RefundsService,
+    TarifsService,
+    InvoiceService,
+  ],
   exports: [BillingsService],
 })
 export class BillingModule {}

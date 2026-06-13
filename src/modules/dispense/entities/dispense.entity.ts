@@ -20,7 +20,11 @@ export class Dispense extends BaseEntity {
   @Column({ name: 'quantity_dispensed' })
   quantityDispensed: number;
 
-  @Column({ name: 'dispensed_at', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Column({
+    name: 'dispensed_at',
+    type: 'timestamp',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   dispensedAt: Date;
 
   @ManyToOne(() => Encounter, { onDelete: 'CASCADE' })

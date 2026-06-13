@@ -17,7 +17,9 @@ export class TarifsService {
       .where('t.clinicId = :clinicId AND t.isActive = true', { clinicId });
 
     if (query.search) {
-      qb.andWhere('(t.name LIKE :s OR t.kodeIcd9 LIKE :s)', { s: `%${query.search}%` });
+      qb.andWhere('(t.name LIKE :s OR t.kodeIcd9 LIKE :s)', {
+        s: `%${query.search}%`,
+      });
     }
     if (query.kategori) {
       qb.andWhere('t.kategori = :kategori', { kategori: query.kategori });
@@ -27,17 +29,27 @@ export class TarifsService {
 
     const page = query.page || 1;
     const limit = query.limit || 50;
-    const [data, total] = await qb.skip((page - 1) * limit).take(limit).getManyAndCount();
+    const [data, total] = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
     return { data, meta: { total, page, limit } };
   }
 
   async findOne(id: number, clinicId: number): Promise<Tarif> {
-    const tarif = await this.tarifRepository.findOne({ where: { id, clinicId } });
-    if (!tarif) throw new NotFoundException(`Tarif dengan ID ${id} tidak ditemukan`);
+    const tarif = await this.tarifRepository.findOne({
+      where: { id, clinicId },
+    });
+    if (!tarif)
+      throw new NotFoundException(`Tarif dengan ID ${id} tidak ditemukan`);
     return tarif;
   }
 
-  async create(clinicId: number, dto: CreateTarifDto, userId: number): Promise<Tarif> {
+  async create(
+    clinicId: number,
+    dto: CreateTarifDto,
+    userId: number,
+  ): Promise<Tarif> {
     const tarif = this.tarifRepository.create({
       clinicId,
       name: dto.name!,
@@ -51,7 +63,12 @@ export class TarifsService {
     return this.tarifRepository.save(tarif) as unknown as Promise<Tarif>;
   }
 
-  async update(id: number, clinicId: number, dto: UpdateTarifDto, userId: number): Promise<Tarif> {
+  async update(
+    id: number,
+    clinicId: number,
+    dto: UpdateTarifDto,
+    userId: number,
+  ): Promise<Tarif> {
     const tarif = await this.findOne(id, clinicId);
     Object.assign(tarif, {
       name: dto.name ?? tarif.name,

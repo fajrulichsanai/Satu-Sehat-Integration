@@ -47,7 +47,11 @@ export class CreatePractitionerDto {
   @MaxLength(100)
   specialization?: string;
 
-  @ApiProperty({ example: 'N10000001', description: 'SATUSEHAT Practitioner ID', required: false })
+  @ApiProperty({
+    example: 'N10000001',
+    description: 'SATUSEHAT Practitioner ID',
+    required: false,
+  })
   @IsOptional()
   @MaxLength(100)
   satusehatPractitionerId?: string;
@@ -86,7 +90,10 @@ export class UpdatePractitionerDto {
 }
 
 export class SearchSatusehatPractitionerDto {
-  @ApiProperty({ example: '3201012312310001', description: 'NIK to search in SATUSEHAT' })
+  @ApiProperty({
+    example: '3201012312310001',
+    description: 'NIK to search in SATUSEHAT',
+  })
   @IsNotEmpty()
   @Length(16, 16)
   @Matches(/^\d{16}$/, { message: 'NIK harus 16 digit angka' })

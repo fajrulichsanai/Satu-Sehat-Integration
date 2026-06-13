@@ -6,7 +6,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { RefundRequest, RefundStatus } from '../refund-request/entities/refund-request.entity';
+import {
+  RefundRequest,
+  RefundStatus,
+} from '../refund-request/entities/refund-request.entity';
 import { Billing, BillingStatus } from './entities/billing.entity';
 import { ApproveRefundDto, CreateRefundRequestDto } from './dto/billing.dto';
 
@@ -19,23 +22,42 @@ export class RefundsService {
     private readonly billingRepository: Repository<Billing>,
   ) {}
 
-  async createRequest(billingId: number, clinicId: number, dto: CreateRefundRequestDto, userId: number) {
-    const billing = await this.billingRepository.findOne({ where: { id: billingId, clinicId } });
-    if (!billing) throw new NotFoundException(`Billing dengan ID ${billingId} tidak ditemukan`);
+  async createRequest(
+    billingId: number,
+    clinicId: number,
+    dto: CreateRefundRequestDto,
+    userId: number,
+  ) {
+    const billing = await this.billingRepository.findOne({
+      where: { id: billingId, clinicId },
+    });
+    if (!billing)
+      throw new NotFoundException(
+        `Billing dengan ID ${billingId} tidak ditemukan`,
+      );
 
-    if (billing.status !== BillingStatus.PAID && billing.status !== BillingStatus.PARTIAL) {
-      throw new BadRequestException('Refund hanya bisa diminta untuk billing yang sudah dibayar');
+    if (
+      billing.status !== BillingStatus.PAID &&
+      billing.status !== BillingStatus.PARTIAL
+    ) {
+      throw new BadRequestException(
+        'Refund hanya bisa diminta untuk billing yang sudah dibayar',
+      );
     }
 
     if (dto.amount! > Number(billing.paidAmount)) {
-      throw new BadRequestException('Jumlah refund melebihi total yang sudah dibayar');
+      throw new BadRequestException(
+        'Jumlah refund melebihi total yang sudah dibayar',
+      );
     }
 
     const existing = await this.refundRepository.findOne({
       where: { billingId, status: RefundStatus.PENDING_APPROVAL },
     });
     if (existing) {
-      throw new BadRequestException('Sudah ada permintaan refund yang sedang pending');
+      throw new BadRequestException(
+        'Sudah ada permintaan refund yang sedang pending',
+      );
     }
 
     const refund = this.refundRepository.create({
@@ -48,18 +70,35 @@ export class RefundsService {
     return this.refundRepository.save(refund);
   }
 
-  async processApproval(billingId: number, refundId: number, clinicId: number, dto: ApproveRefundDto, userId: number) {
-    const billing = await this.billingRepository.findOne({ where: { id: billingId, clinicId } });
-    if (!billing) throw new NotFoundException(`Billing dengan ID ${billingId} tidak ditemukan`);
+  async processApproval(
+    billingId: number,
+    refundId: number,
+    clinicId: number,
+    dto: ApproveRefundDto,
+    userId: number,
+  ) {
+    const billing = await this.billingRepository.findOne({
+      where: { id: billingId, clinicId },
+    });
+    if (!billing)
+      throw new NotFoundException(
+        `Billing dengan ID ${billingId} tidak ditemukan`,
+      );
 
-    const refund = await this.refundRepository.findOne({ where: { id: refundId, billingId } });
-    if (!refund) throw new NotFoundException(`Refund request dengan ID ${refundId} tidak ditemukan`);
+    const refund = await this.refundRepository.findOne({
+      where: { id: refundId, billingId },
+    });
+    if (!refund)
+      throw new NotFoundException(
+        `Refund request dengan ID ${refundId} tidak ditemukan`,
+      );
 
     if (refund.status !== RefundStatus.PENDING_APPROVAL) {
       throw new BadRequestException('Refund request sudah diproses sebelumnya');
     }
 
-    refund.status = dto.action === 'approved' ? RefundStatus.APPROVED : RefundStatus.REJECTED;
+    refund.status =
+      dto.action === 'approved' ? RefundStatus.APPROVED : RefundStatus.REJECTED;
     refund.approvedBy = userId;
     refund.approvedAt = new Date();
     refund.approvalNote = dto.approvalNote as string;

@@ -23,17 +23,30 @@ export class AnamnesisService {
   async findByEncounter(encounterId: number, clinicId: number) {
     await this.verifyEncounter(encounterId, clinicId);
 
-    const anamnesis = await this.anamnesisRepository.findOne({ where: { encounterId } });
-    const alergi = await this.allergyRepository.find({ where: { encounterId } });
-    const riwayatObat = await this.medHistoryRepository.find({ where: { encounterId } });
+    const anamnesis = await this.anamnesisRepository.findOne({
+      where: { encounterId },
+    });
+    const alergi = await this.allergyRepository.find({
+      where: { encounterId },
+    });
+    const riwayatObat = await this.medHistoryRepository.find({
+      where: { encounterId },
+    });
 
     return { anamnesis, alergi, riwayatObat };
   }
 
-  async upsert(encounterId: number, clinicId: number, dto: UpsertAnamnesisDto, userId: number) {
+  async upsert(
+    encounterId: number,
+    clinicId: number,
+    dto: UpsertAnamnesisDto,
+    userId: number,
+  ) {
     await this.verifyEncounter(encounterId, clinicId);
 
-    let anamnesis = await this.anamnesisRepository.findOne({ where: { encounterId } });
+    let anamnesis = await this.anamnesisRepository.findOne({
+      where: { encounterId },
+    });
 
     if (anamnesis) {
       Object.assign(anamnesis, {
@@ -62,7 +75,11 @@ export class AnamnesisService {
       if (dto.alergi.length > 0) {
         await this.allergyRepository.save(
           dto.alergi.map((a) =>
-            this.allergyRepository.create({ encounterId, ...a, createdBy: userId }),
+            this.allergyRepository.create({
+              encounterId,
+              ...a,
+              createdBy: userId,
+            }),
           ),
         );
       }
@@ -73,7 +90,11 @@ export class AnamnesisService {
       if (dto.riwayatObat.length > 0) {
         await this.medHistoryRepository.save(
           dto.riwayatObat.map((m) =>
-            this.medHistoryRepository.create({ encounterId, ...m, createdBy: userId }),
+            this.medHistoryRepository.create({
+              encounterId,
+              ...m,
+              createdBy: userId,
+            }),
           ),
         );
       }
@@ -82,10 +103,17 @@ export class AnamnesisService {
     return { savedAt: new Date() };
   }
 
-  private async verifyEncounter(encounterId: number, clinicId: number): Promise<void> {
-    const encounter = await this.encounterRepository.findOne({ where: { id: encounterId, clinicId } });
+  private async verifyEncounter(
+    encounterId: number,
+    clinicId: number,
+  ): Promise<void> {
+    const encounter = await this.encounterRepository.findOne({
+      where: { id: encounterId, clinicId },
+    });
     if (!encounter) {
-      throw new NotFoundException(`Encounter dengan ID ${encounterId} tidak ditemukan`);
+      throw new NotFoundException(
+        `Encounter dengan ID ${encounterId} tidak ditemukan`,
+      );
     }
   }
 }

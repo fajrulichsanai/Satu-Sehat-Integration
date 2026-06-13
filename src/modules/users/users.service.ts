@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
@@ -195,7 +200,8 @@ export class UsersService {
         success: false,
         error: {
           code: 'CANNOT_DELETE_ACTIVE_USER',
-          message: 'Hanya user pending yang bisa dihapus. Gunakan deactivate untuk user aktif.',
+          message:
+            'Hanya user pending yang bisa dihapus. Gunakan deactivate untuk user aktif.',
         },
       });
     }

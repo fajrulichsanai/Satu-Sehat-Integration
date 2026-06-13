@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 
 /**
  * Guard to ensure user account is active
@@ -8,6 +13,8 @@ import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@
 export class IsActiveGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const { user } = context.switchToHttp().getRequest();
+
+    console.log(`IsActiveGuard: Checking if user ${user?.userId} is active`);
 
     if (!user) {
       throw new ForbiddenException({

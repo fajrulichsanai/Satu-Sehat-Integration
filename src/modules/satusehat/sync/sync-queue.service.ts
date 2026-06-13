@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
-import { SatusehatSyncLog, SyncLogStatus } from './entities/satusehat-sync-log.entity';
+import {
+  SatusehatSyncLog,
+  SyncLogStatus,
+} from './entities/satusehat-sync-log.entity';
 import { SyncOrchestratorService } from './sync-orchestrator.service';
 
 const MAX_RETRY_ATTEMPTS = 5;
@@ -19,14 +22,20 @@ export class SyncQueueService {
   ) {}
 
   /** Process all pending/retryable failed items */
-  async processPending(): Promise<{ processed: number; succeeded: number; failed: number }> {
+  async processPending(): Promise<{
+    processed: number;
+    succeeded: number;
+    failed: number;
+  }> {
     if (this.processing) {
       this.logger.log('Sync queue already processing, skipping');
       return { processed: 0, succeeded: 0, failed: 0 };
     }
 
     this.processing = true;
-    let processed = 0, succeeded = 0, failed = 0;
+    let processed = 0,
+      succeeded = 0,
+      failed = 0;
 
     try {
       const items = await this.syncLogRepo.find({
@@ -37,7 +46,9 @@ export class SyncQueueService {
 
       for (const item of items) {
         if ((item.retryCount ?? 0) >= MAX_RETRY_ATTEMPTS) {
-          await this.syncLogRepo.update(item.id, { status: SyncLogStatus.FAILED });
+          await this.syncLogRepo.update(item.id, {
+            status: SyncLogStatus.FAILED,
+          });
           failed++;
           continue;
         }
@@ -51,9 +62,9 @@ export class SyncQueueService {
 
         try {
           const result = await this.orchestrator.syncResource(
-            item.resourceType!,
-            item.localId!,
-            item.clinicId!,
+            item.resourceType,
+            item.localId,
+            item.clinicId,
           );
 
           if (result.success) {
@@ -68,7 +79,9 @@ export class SyncQueueService {
           }
           processed++;
         } catch (err) {
-          this.logger.error(`Retry failed for ${item.resourceType}#${item.localId}: ${err.message}`);
+          this.logger.error(
+            `Retry failed for ${item.resourceType}#${item.localId}: ${err.message}`,
+          );
           await this.syncLogRepo.update(item.id, {
             retryCount: (item.retryCount ?? 0) + 1,
             lastRetryAt: new Date(),
@@ -82,12 +95,18 @@ export class SyncQueueService {
       this.processing = false;
     }
 
-    this.logger.log(`Sync queue processed: ${processed} items, ${succeeded} succeeded, ${failed} failed`);
+    this.logger.log(
+      `Sync queue processed: ${processed} items, ${succeeded} succeeded, ${failed} failed`,
+    );
     return { processed, succeeded, failed };
   }
 
   /** Queue a specific item for retry */
-  async enqueueRetry(clinicId: number, resourceType: string, localId: number): Promise<void> {
+  async enqueueRetry(
+    clinicId: number,
+    resourceType: string,
+    localId: number,
+  ): Promise<void> {
     await this.syncLogRepo.update(
       { clinicId, resourceType, localId, status: SyncLogStatus.FAILED },
       { status: SyncLogStatus.PENDING, lastRetryAt: new Date() },

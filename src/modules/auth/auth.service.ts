@@ -1,9 +1,18 @@
-import { Injectable, UnauthorizedException, ConflictException, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  BadRequestException,
+  NotFoundException,
+  Logger,
+} from '@nestjs/common';
 import * as crypto from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { ConfigService } from '@nestjs/config';
+import { Resend } from 'resend';
 import { User } from '../users/entities/user.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
@@ -11,13 +20,18 @@ import { UserRole } from '../../enums';
 
 @Injectable()
 export class AuthService {
+  private resend: Resend;
+
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
     @InjectRepository(Clinic)
     private clinicRepository: Repository<Clinic>,
     private jwtService: JwtService,
-  ) {}
+    private configService: ConfigService,
+  ) {
+    this.resend = new Resend(this.configService.get<string>('RESEND_API_KEY'));
+  }
 
   /**
    * Register new user
@@ -36,7 +50,9 @@ export class AuthService {
         error: {
           code: 'EMAIL_ALREADY_EXISTS',
           message: 'Email sudah terdaftar',
-          details: [{ field: 'email', message: `Email ${dto.email} sudah digunakan` }],
+          details: [
+            { field: 'email', message: `Email ${dto.email} sudah digunakan` },
+          ],
         },
       });
     }
@@ -86,6 +102,16 @@ export class AuthService {
 
     await this.userRepository.save(user);
 
+    // Send verification email
+    try {
+      await this.sendVerificationEmail(user.id, user.email);
+    } catch (error) {
+      Logger.error(
+        `Failed to send verification email to ${user.email}: ${error instanceof Error ? error.message : String(error)}`,
+        'AuthService',
+      );
+    }
+
     return {
       success: true,
       data: {
@@ -96,8 +122,8 @@ export class AuthService {
         isActive: user.isActive,
         message:
           dto.role === UserRole.OWNER
-            ? 'Registrasi berhasil. Silakan login.'
-            : 'Registrasi berhasil. Menunggu persetujuan owner.',
+            ? 'Registrasi berhasil. Silakan verifikasi email untuk login.'
+            : 'Registrasi berhasil. Silakan verifikasi email dan menunggu persetujuan owner.',
       },
     };
   }
@@ -122,13 +148,28 @@ export class AuthService {
     }
 
     // Verify password
-    const isPasswordValid = await bcrypt.compare(dto.password!, user.passwordHash!);
+    const isPasswordValid = await bcrypt.compare(
+      dto.password!,
+      user.passwordHash,
+    );
     if (!isPasswordValid) {
       throw new UnauthorizedException({
         success: false,
         error: {
           code: 'INVALID_CREDENTIALS',
           message: 'Email atau password salah',
+        },
+      });
+    }
+
+    // Check if email is verified
+    if (!user.emailVerifiedAt) {
+      throw new UnauthorizedException({
+        success: false,
+        error: {
+          code: 'EMAIL_NOT_VERIFIED',
+          message:
+            'Email Anda belum diverifikasi. Silakan cek email Anda untuk link verifikasi.',
         },
       });
     }
@@ -216,6 +257,9 @@ export class AuthService {
    */
   async getActivationStatus(userId: number) {
     const user = await this.userRepository.findOne({ where: { id: userId } });
+    console.log(
+      `Checking activation status for user ${userId}: isActive=${user?.isActive}`,
+    );
     if (!user) {
       throw new UnauthorizedException({
         success: false,
@@ -272,24 +316,64 @@ export class AuthService {
   }
 
   /**
-   * Send email verification token (mock: logs token to console)
+   * Send email verification token via Resend
    */
-  async sendVerificationEmail(userId: number): Promise<void> {
+  async sendVerificationEmail(
+    userId: number,
+    userEmail: string,
+  ): Promise<void> {
     const token = crypto.randomBytes(32).toString('hex');
     await this.userRepository.update(userId, { verificationToken: token });
-    Logger.log(`[MOCK EMAIL] Verification token for user ${userId}: ${token}`, 'AuthService');
+
+    const appUrl = this.configService.get<string>(
+      'APP_URL',
+      'http://localhost:3000',
+    );
+    const verificationUrl = `${appUrl}/auth/verify-email?token=${token}`;
+
+    try {
+      await this.resend.emails.send({
+        from: 'noreply@resend.dev',
+        to: userEmail,
+        subject: 'Verifikasi Email Anda - Satu Sehat',
+        html: `
+          <h2>Verifikasi Email</h2>
+          <p>Halo,</p>
+          <p>Terima kasih telah mendaftar di Satu Sehat. Silakan verifikasi email Anda dengan mengklik tombol di bawah ini:</p>
+          <a href="${verificationUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">
+            Verifikasi Email
+          </a>
+          <p>Atau salin dan buka link berikut di browser Anda:</p>
+          <p>${verificationUrl}</p>
+          <p>Link ini berlaku selama 24 jam.</p>
+          <p>Jika Anda tidak mendaftar akun ini, abaikan email ini.</p>
+          <p>Salam,<br>Tim Satu Sehat</p>
+        `,
+      });
+      Logger.log(`Verification email sent to ${userEmail}`, 'AuthService');
+    } catch (error) {
+      Logger.error(
+        `Failed to send verification email to ${userEmail}: ${error instanceof Error ? error.message : String(error)}`,
+        'AuthService',
+      );
+      throw error;
+    }
   }
 
   /**
    * Verify email with token
    */
   async verifyEmail(token: string) {
-    if (!token) throw new BadRequestException('Token verifikasi tidak boleh kosong');
+    if (!token)
+      throw new BadRequestException('Token verifikasi tidak boleh kosong');
 
     const user = await this.userRepository.findOne({
       where: { verificationToken: token },
     });
-    if (!user) throw new NotFoundException('Token verifikasi tidak valid atau sudah digunakan');
+    if (!user)
+      throw new NotFoundException(
+        'Token verifikasi tidak valid atau sudah digunakan',
+      );
 
     await this.userRepository.update(user.id, {
       emailVerifiedAt: new Date(),

@@ -1,5 +1,10 @@
 import { Controller, Post, Get, Body, UseGuards, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import {
   RegisterDto,
@@ -24,15 +29,23 @@ export class AuthController {
   @ApiResponse({ status: 409, description: 'Email already exists' })
   @ApiResponse({ status: 400, description: 'Validation error' })
   async register(@Body() dto: RegisterDto) {
+    console.log(
+      `Received registration request for email: ${dto.email}, role: ${dto.role}`,
+    );
     return this.authService.register(dto);
   }
 
   @Public()
   @Post('login')
   @ApiOperation({ summary: 'Login user' })
-  @ApiResponse({ status: 200, description: 'Login successful', type: LoginResponseDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Login successful',
+    type: LoginResponseDto,
+  })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(@Body() dto: LoginDto) {
+    console.log(`Received login request for email: ${dto.email}`);
     return this.authService.login(dto);
   }
 
@@ -40,7 +53,11 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get current user profile' })
-  @ApiResponse({ status: 200, description: 'User profile', type: UserResponseDto })
+  @ApiResponse({
+    status: 200,
+    description: 'User profile',
+    type: UserResponseDto,
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getMe(@CurrentUser() user: any) {
     return this.authService.getMe(user.userId);
@@ -49,9 +66,14 @@ export class AuthController {
   @Get('activation-status')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Check account activation status (for polling after register)' })
+  @ApiOperation({
+    summary: 'Check account activation status (for polling after register)',
+  })
   @ApiResponse({ status: 200, type: ActivationStatusResponseDto })
   async getActivationStatus(@CurrentUser() user: any) {
+    console.log(
+      `Received request for activation status of user ${user.userId}`,
+    );
     return this.authService.getActivationStatus(user.userId);
   }
 

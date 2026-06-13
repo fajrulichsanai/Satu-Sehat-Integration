@@ -31,7 +31,10 @@ export class MedicationsController {
 
   @Get()
   @ApiOperation({ summary: 'List medications with optional filters' })
-  async findAll(@ClinicId() clinicId: number, @Query() query: MedicationQueryDto) {
+  async findAll(
+    @ClinicId() clinicId: number,
+    @Query() query: MedicationQueryDto,
+  ) {
     return this.medicationsService.findAll(clinicId, query);
   }
 
@@ -42,7 +45,11 @@ export class MedicationsController {
     @Body() dto: CreateMedicationDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.medicationsService.create(clinicId, dto, user.userId);
+    const data = await this.medicationsService.create(
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data };
   }
 
@@ -54,7 +61,12 @@ export class MedicationsController {
     @Body() dto: UpdateMedicationDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.medicationsService.update(id, clinicId, dto, user.userId);
+    const data = await this.medicationsService.update(
+      id,
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data };
   }
 
@@ -66,7 +78,12 @@ export class MedicationsController {
     @Body() dto: AdjustStockDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.medicationsService.adjustStock(id, clinicId, dto, user.userId);
+    const data = await this.medicationsService.adjustStock(
+      id,
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data };
   }
 }

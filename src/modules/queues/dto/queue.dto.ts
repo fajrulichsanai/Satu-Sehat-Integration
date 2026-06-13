@@ -18,13 +18,18 @@ export enum QueueType {
 }
 
 export class CreateQueueDto {
-  @ApiPropertyOptional({ description: 'Patient ID (null for walk-in without registered patient)' })
+  @ApiPropertyOptional({
+    description: 'Patient ID (null for walk-in without registered patient)',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   patientId?: number;
 
-  @ApiProperty({ example: 'Budi Santoso', description: 'Patient name (required for walk-in without patientId)' })
+  @ApiProperty({
+    example: 'Budi Santoso',
+    description: 'Patient name (required for walk-in without patientId)',
+  })
   @IsNotEmpty()
   @MaxLength(100)
   patientName: string;
@@ -84,7 +89,10 @@ export class UpdateQueueStatusDto {
 }
 
 export class QueueQueryDto extends PaginationDto {
-  @ApiPropertyOptional({ example: '2026-06-12', description: 'Filter by date (default: today)' })
+  @ApiPropertyOptional({
+    example: '2026-06-12',
+    description: 'Filter by date (default: today)',
+  })
   @IsOptional()
   @IsDateString()
   date?: string;

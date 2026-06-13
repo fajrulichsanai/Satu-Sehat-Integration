@@ -1,11 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Post,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ReportsService } from './reports.service';
 import {
@@ -64,10 +57,7 @@ export class ReportsController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.OWNER)
   @ApiOperation({ summary: 'Retry failed SATUSEHAT syncs' })
-  async retrySync(
-    @ClinicId() clinicId: number,
-    @Body() dto: RetrySyncDto,
-  ) {
+  async retrySync(@ClinicId() clinicId: number, @Body() dto: RetrySyncDto) {
     const data = await this.reportsService.retrySync(clinicId, dto);
     return { success: true, data };
   }

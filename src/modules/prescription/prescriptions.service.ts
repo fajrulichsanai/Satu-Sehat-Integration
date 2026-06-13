@@ -7,7 +7,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Prescription, PrescriptionStatus } from '../prescription/entities/prescription.entity';
+import {
+  Prescription,
+  PrescriptionStatus,
+} from '../prescription/entities/prescription.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import { EncounterStatus } from '../../enums';
 import { CreatePrescriptionDto } from './dto/prescription.dto';
@@ -30,15 +33,26 @@ export class PrescriptionsService {
     });
   }
 
-  async create(encounterId: number, clinicId: number, dto: CreatePrescriptionDto, userId: number) {
+  async create(
+    encounterId: number,
+    clinicId: number,
+    dto: CreatePrescriptionDto,
+    userId: number,
+  ) {
     const encounter = await this.verifyEncounter(encounterId, clinicId);
 
     if (encounter.status === EncounterStatus.FINISHED) {
-      throw new ForbiddenException('Tidak dapat menambah resep pada encounter yang sudah selesai');
+      throw new ForbiddenException(
+        'Tidak dapat menambah resep pada encounter yang sudah selesai',
+      );
     }
 
     const existing = await this.prescriptionRepository.findOne({
-      where: { encounterId, medicationId: dto.medicationId, status: PrescriptionStatus.ACTIVE },
+      where: {
+        encounterId,
+        medicationId: dto.medicationId,
+        status: PrescriptionStatus.ACTIVE,
+      },
     });
     if (existing) {
       throw new ConflictException('Obat sudah ada di resep encounter ini');
@@ -59,24 +73,41 @@ export class PrescriptionsService {
     return this.prescriptionRepository.save(prescription);
   }
 
-  async remove(encounterId: number, prescriptionId: number, clinicId: number): Promise<void> {
+  async remove(
+    encounterId: number,
+    prescriptionId: number,
+    clinicId: number,
+  ): Promise<void> {
     await this.verifyEncounter(encounterId, clinicId);
 
     const prescription = await this.prescriptionRepository.findOne({
       where: { id: prescriptionId, encounterId },
     });
-    if (!prescription) throw new NotFoundException(`Resep dengan ID ${prescriptionId} tidak ditemukan`);
+    if (!prescription)
+      throw new NotFoundException(
+        `Resep dengan ID ${prescriptionId} tidak ditemukan`,
+      );
 
     if (prescription.status === PrescriptionStatus.DISPENSED) {
-      throw new UnprocessableEntityException('Resep sudah di-dispense, tidak bisa dibatalkan');
+      throw new UnprocessableEntityException(
+        'Resep sudah di-dispense, tidak bisa dibatalkan',
+      );
     }
 
     await this.prescriptionRepository.remove(prescription);
   }
 
-  private async verifyEncounter(encounterId: number, clinicId: number): Promise<Encounter> {
-    const encounter = await this.encounterRepository.findOne({ where: { id: encounterId, clinicId } });
-    if (!encounter) throw new NotFoundException(`Encounter dengan ID ${encounterId} tidak ditemukan`);
+  private async verifyEncounter(
+    encounterId: number,
+    clinicId: number,
+  ): Promise<Encounter> {
+    const encounter = await this.encounterRepository.findOne({
+      where: { id: encounterId, clinicId },
+    });
+    if (!encounter)
+      throw new NotFoundException(
+        `Encounter dengan ID ${encounterId} tidak ditemukan`,
+      );
     return encounter;
   }
 }

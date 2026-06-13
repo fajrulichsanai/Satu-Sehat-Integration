@@ -49,7 +49,7 @@ export class Clinic extends BaseEntity {
   satusehatEnvironment: SatusehatEnvironment;
 
   @Column({ name: 'satusehat_token', type: 'text', nullable: true })
-  satusehatToken: string | undefined ;
+  satusehatToken: string | undefined;
 
   @Column({ name: 'satusehat_token_expires_at', nullable: true })
   satusehatTokenExpiresAt: Date;

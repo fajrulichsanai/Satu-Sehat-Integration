@@ -42,7 +42,12 @@ export class PrescriptionsController {
     @Body() dto: CreatePrescriptionDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.prescriptionsService.create(encounterId, clinicId, dto, user.userId);
+    const data = await this.prescriptionsService.create(
+      encounterId,
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data };
   }
 
@@ -54,7 +59,11 @@ export class PrescriptionsController {
     @Param('prescriptionId', ParseIntPipe) prescriptionId: number,
     @ClinicId() clinicId: number,
   ) {
-    await this.prescriptionsService.remove(encounterId, prescriptionId, clinicId);
+    await this.prescriptionsService.remove(
+      encounterId,
+      prescriptionId,
+      clinicId,
+    );
     return { success: true };
   }
 }

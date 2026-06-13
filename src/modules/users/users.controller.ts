@@ -1,5 +1,18 @@
-import { Controller, Get, Post, Delete, Param, UseGuards, ParseIntPipe } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  UseGuards,
+  ParseIntPipe,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { JwtAuthGuard, RolesGuard, ClinicContextGuard } from '../auth/guards';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -18,19 +31,24 @@ export class UsersController {
   @Get()
   @Roles(UserRole.OWNER)
   @ApiOperation({ summary: 'Get all users in clinic (Owner only)' })
-  @ApiResponse({ status: 200, description: 'User list', type: UserListResponseDto })
+  @ApiResponse({
+    status: 200,
+    description: 'User list',
+    type: UserListResponseDto,
+  })
   @ApiResponse({ status: 403, description: 'Forbidden - Owner only' })
-  async findAll(
-    @CurrentUser() user: any,
-    @ClinicId() clinicId: number,
-  ) {
+  async findAll(@CurrentUser() user: any, @ClinicId() clinicId: number) {
     return this.usersService.findAll(clinicId, user.role);
   }
 
   @Get(':id')
   @Roles(UserRole.OWNER)
   @ApiOperation({ summary: 'Get user by ID (Owner only)' })
-  @ApiResponse({ status: 200, description: 'User details', type: UserResponseDto })
+  @ApiResponse({
+    status: 200,
+    description: 'User details',
+    type: UserResponseDto,
+  })
   @ApiResponse({ status: 404, description: 'User not found' })
   async findOne(
     @Param('id', ParseIntPipe) id: number,
@@ -44,7 +62,10 @@ export class UsersController {
   @ApiOperation({ summary: 'Activate pending user (Owner only)' })
   @ApiResponse({ status: 200, description: 'User activated successfully' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  @ApiResponse({ status: 409, description: 'User already active or invalid status' })
+  @ApiResponse({
+    status: 409,
+    description: 'User already active or invalid status',
+  })
   async activate(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: any,

@@ -28,19 +28,32 @@ export class SoapTemplatesService {
     if (query.type === 'shared') {
       qb.andWhere('t.isShared = true');
     } else if (query.type === 'personal') {
-      qb.andWhere('t.isShared = false AND t.createdBy = :userId', { userId: user.userId });
+      qb.andWhere('t.isShared = false AND t.createdBy = :userId', {
+        userId: user.userId,
+      });
     } else {
       // 'all' — show shared + own personal
-      qb.andWhere('(t.isShared = true OR t.createdBy = :userId)', { userId: user.userId });
+      qb.andWhere('(t.isShared = true OR t.createdBy = :userId)', {
+        userId: user.userId,
+      });
     }
 
-    return qb.orderBy('t.isShared', 'DESC').addOrderBy('t.name', 'ASC').getMany();
+    return qb
+      .orderBy('t.isShared', 'DESC')
+      .addOrderBy('t.name', 'ASC')
+      .getMany();
   }
 
-  async create(clinicId: number, dto: CreateSoapTemplateDto, user: any): Promise<SoapTemplate> {
+  async create(
+    clinicId: number,
+    dto: CreateSoapTemplateDto,
+    user: any,
+  ): Promise<SoapTemplate> {
     // Only owner can create shared templates
     if (dto.isShared && user.role !== UserRole.OWNER) {
-      throw new ForbiddenException('Hanya owner yang dapat membuat template bersama');
+      throw new ForbiddenException(
+        'Hanya owner yang dapat membuat template bersama',
+      );
     }
 
     const template = this.templateRepository.create({
@@ -56,11 +69,18 @@ export class SoapTemplatesService {
     return this.templateRepository.save(template);
   }
 
-  async update(id: number, clinicId: number, dto: UpdateSoapTemplateDto, user: any): Promise<SoapTemplate> {
+  async update(
+    id: number,
+    clinicId: number,
+    dto: UpdateSoapTemplateDto,
+    user: any,
+  ): Promise<SoapTemplate> {
     const template = await this.findOwned(id, clinicId, user);
 
     if (dto.isShared && user.role !== UserRole.OWNER) {
-      throw new ForbiddenException('Hanya owner yang dapat mengubah template menjadi bersama');
+      throw new ForbiddenException(
+        'Hanya owner yang dapat mengubah template menjadi bersama',
+      );
     }
 
     Object.assign(template, {
@@ -80,12 +100,21 @@ export class SoapTemplatesService {
     await this.templateRepository.remove(template);
   }
 
-  private async findOwned(id: number, clinicId: number, user: any): Promise<SoapTemplate> {
-    const template = await this.templateRepository.findOne({ where: { id, clinicId } });
-    if (!template) throw new NotFoundException(`Template dengan ID ${id} tidak ditemukan`);
+  private async findOwned(
+    id: number,
+    clinicId: number,
+    user: any,
+  ): Promise<SoapTemplate> {
+    const template = await this.templateRepository.findOne({
+      where: { id, clinicId },
+    });
+    if (!template)
+      throw new NotFoundException(`Template dengan ID ${id} tidak ditemukan`);
     // Owner can edit all; dokter only own
     if (user.role !== UserRole.OWNER && template.createdBy !== user.userId) {
-      throw new ForbiddenException('Tidak punya akses untuk mengubah template ini');
+      throw new ForbiddenException(
+        'Tidak punya akses untuk mengubah template ini',
+      );
     }
     return template;
   }

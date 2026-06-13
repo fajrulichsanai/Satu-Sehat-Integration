@@ -17,12 +17,23 @@ import { SyncQueueService } from './sync/sync-queue.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      Encounter, Patient, Diagnosis, Procedure,
-      VitalSign, Prescription, Allergy, Clinic, SatusehatSyncLog,
+      Encounter,
+      Patient,
+      Diagnosis,
+      Procedure,
+      VitalSign,
+      Prescription,
+      Allergy,
+      Clinic,
+      SatusehatSyncLog,
     ]),
   ],
   controllers: [SatusehatController],
-  providers: [SatusehatClientService, SyncOrchestratorService, SyncQueueService],
+  providers: [
+    SatusehatClientService,
+    SyncOrchestratorService,
+    SyncQueueService,
+  ],
   exports: [SatusehatClientService, SyncOrchestratorService, SyncQueueService],
 })
 export class SatusehatModule {}

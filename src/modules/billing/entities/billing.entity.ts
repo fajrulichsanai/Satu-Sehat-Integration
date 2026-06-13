@@ -1,4 +1,11 @@
-import { Entity, Column, ManyToOne, OneToMany, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import { BillingItem } from '../../billing-item/entities/billing-item.entity';
 import { BaseEntity } from '../../../common/base.entity';
 import { Clinic } from '../../clinics/entities/clinic.entity';
@@ -33,13 +40,23 @@ export class Billing extends BaseEntity {
   @Column('decimal', { precision: 10, scale: 2 })
   subtotal: number;
 
-  @Column('decimal', { name: 'total_discount', precision: 10, scale: 2, default: 0 })
+  @Column('decimal', {
+    name: 'total_discount',
+    precision: 10,
+    scale: 2,
+    default: 0,
+  })
   totalDiscount: number;
 
   @Column('decimal', { name: 'grand_total', precision: 10, scale: 2 })
   grandTotal: number;
 
-  @Column('decimal', { name: 'paid_amount', precision: 10, scale: 2, default: 0 })
+  @Column('decimal', {
+    name: 'paid_amount',
+    precision: 10,
+    scale: 2,
+    default: 0,
+  })
   paidAmount: number;
 
   @Column('decimal', { name: 'outstanding_amount', precision: 10, scale: 2 })

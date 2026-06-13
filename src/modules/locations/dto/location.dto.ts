@@ -13,7 +13,11 @@ export class CreateLocationDto {
   @MaxLength(100)
   name: string;
 
-  @ApiProperty({ example: 'treatment_room', description: 'Type of location (treatment_room, consultation_room, waiting_room, etc.)' })
+  @ApiProperty({
+    example: 'treatment_room',
+    description:
+      'Type of location (treatment_room, consultation_room, waiting_room, etc.)',
+  })
   @IsNotEmpty()
   @MaxLength(50)
   type: string;
@@ -28,7 +32,11 @@ export class CreateLocationDto {
   @IsBoolean()
   isActive?: boolean;
 
-  @ApiProperty({ example: 'LOC123456', description: 'SATUSEHAT Location ID', required: false })
+  @ApiProperty({
+    example: 'LOC123456',
+    description: 'SATUSEHAT Location ID',
+    required: false,
+  })
   @IsOptional()
   @MaxLength(100)
   satusehatLocationId?: string;

@@ -42,7 +42,12 @@ export class ProceduresController {
     @Body() dto: CreateProcedureDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.proceduresService.create(encounterId, clinicId, dto, user.userId);
+    const data = await this.proceduresService.create(
+      encounterId,
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data };
   }
 

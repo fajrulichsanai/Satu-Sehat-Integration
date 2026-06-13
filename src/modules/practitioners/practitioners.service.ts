@@ -62,7 +62,11 @@ export class PractitionersService {
   /**
    * Register new practitioner
    */
-  async create(dto: CreatePractitionerDto, clinicId: number, createdBy: number) {
+  async create(
+    dto: CreatePractitionerDto,
+    clinicId: number,
+    createdBy: number,
+  ) {
     // Check if NIK already exists in this clinic
     const existing = await this.practitionerRepository.findOne({
       where: { nik: dto.nik, clinicId },
@@ -167,7 +171,7 @@ export class PractitionersService {
   async searchSatusehat(dto: SearchSatusehatPractitionerDto, clinicId: number) {
     // Check if clinic has SATUSEHAT config
     // For now, return mock data
-    
+
     // TODO: Implement actual API call to SATUSEHAT
     // POST https://api-satusehat.kemkes.go.id/fhir-r4/v1/Practitioner?identifier=https://fhir.kemkes.go.id/id/nik|{nik}
 

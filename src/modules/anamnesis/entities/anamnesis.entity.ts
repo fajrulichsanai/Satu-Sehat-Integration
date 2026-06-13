@@ -30,13 +30,23 @@ export class Anamnesis extends BaseEntity {
   @Column({ name: 'riwayat_penyakit', type: 'text', nullable: true })
   riwayatPenyakit: string;
 
-  @Column({ name: 'golongan_darah', type: 'enum', enum: BloodType, nullable: true })
+  @Column({
+    name: 'golongan_darah',
+    type: 'enum',
+    enum: BloodType,
+    nullable: true,
+  })
   golonganDarah: BloodType;
 
   @Column({ type: 'enum', enum: Rhesus, nullable: true })
   rhesus: Rhesus;
 
-  @Column({ name: 'status_kehamilan', type: 'enum', enum: PregnancyStatus, nullable: true })
+  @Column({
+    name: 'status_kehamilan',
+    type: 'enum',
+    enum: PregnancyStatus,
+    nullable: true,
+  })
   statusKehamilan: PregnancyStatus;
 
   @OneToOne(() => Encounter, { onDelete: 'CASCADE' })

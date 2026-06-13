@@ -9,7 +9,13 @@ export async function seedOwnerCodes(dataSource: DataSource): Promise<void> {
     {
       name: 'owner_codes',
       columns: [
-        { name: 'id', type: 'int', isPrimary: true, isGenerated: true, generationStrategy: 'increment' },
+        {
+          name: 'id',
+          type: 'int',
+          isPrimary: true,
+          isGenerated: true,
+          generationStrategy: 'increment',
+        },
         { name: 'code', type: 'varchar', length: '20', isUnique: true },
         { name: 'is_used', type: 'boolean', default: false },
         { name: 'used_by', type: 'int', isNullable: true },
@@ -25,10 +31,9 @@ export async function seedOwnerCodes(dataSource: DataSource): Promise<void> {
       [code],
     );
     if (!exists.length) {
-      await queryRunner.query(
-        `INSERT INTO owner_codes (code) VALUES (?)`,
-        [code],
-      );
+      await queryRunner.query(`INSERT INTO owner_codes (code) VALUES (?)`, [
+        code,
+      ]);
       console.log(`Seeded owner code: ${code}`);
     }
   }

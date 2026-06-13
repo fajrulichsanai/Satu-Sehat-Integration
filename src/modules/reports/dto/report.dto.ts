@@ -1,4 +1,10 @@
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { EncounterStatus } from '../../../enums';
@@ -65,7 +71,10 @@ export class SatusehatSyncReportQueryDto {
   @IsString()
   resourceType?: string;
 
-  @ApiPropertyOptional({ enum: ['synced', 'failed', 'pending', 'all'], default: 'all' })
+  @ApiPropertyOptional({
+    enum: ['synced', 'failed', 'pending', 'all'],
+    default: 'all',
+  })
   @IsOptional()
   @IsString()
   syncStatus?: string;

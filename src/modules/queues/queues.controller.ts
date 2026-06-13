@@ -68,6 +68,10 @@ export class QueuesController {
     @Body() dto: UpdateQueueStatusDto,
   ) {
     const queue = await this.queuesService.updateStatus(id, clinicId, dto);
-    return { success: true, message: 'Status antrian berhasil diperbarui', data: queue };
+    return {
+      success: true,
+      message: 'Status antrian berhasil diperbarui',
+      data: queue,
+    };
   }
 }

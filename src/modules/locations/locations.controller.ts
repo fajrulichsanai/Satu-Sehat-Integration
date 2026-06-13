@@ -41,7 +41,12 @@ export class LocationsController {
   @Get()
   @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DOKTER)
   @ApiOperation({ summary: 'Get all locations in clinic' })
-  @ApiQuery({ name: 'activeOnly', required: false, type: Boolean, description: 'Filter active locations only' })
+  @ApiQuery({
+    name: 'activeOnly',
+    required: false,
+    type: Boolean,
+    description: 'Filter active locations only',
+  })
   @ApiResponse({
     status: 200,
     description: 'List of locations',

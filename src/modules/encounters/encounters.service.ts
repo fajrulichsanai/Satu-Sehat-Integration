@@ -45,11 +45,16 @@ export class EncountersService {
 
     // Dokter only sees own encounters
     if (user.role === UserRole.DOKTER) {
-      qb.andWhere('e.practitionerId = (SELECT id FROM practitioners WHERE user_id = :uid LIMIT 1)', {
-        uid: user.userId,
-      });
+      qb.andWhere(
+        'e.practitionerId = (SELECT id FROM practitioners WHERE user_id = :uid LIMIT 1)',
+        {
+          uid: user.userId,
+        },
+      );
     } else if (query.practitionerId) {
-      qb.andWhere('e.practitionerId = :practitionerId', { practitionerId: query.practitionerId });
+      qb.andWhere('e.practitionerId = :practitionerId', {
+        practitionerId: query.practitionerId,
+      });
     }
 
     const date = query.date || new Date().toISOString().split('T')[0];
@@ -88,14 +93,22 @@ export class EncountersService {
   async findOne(id: number, clinicId: number, user?: any): Promise<Encounter> {
     const encounter = await this.encounterRepository.findOne({
       where: { id, clinicId },
-      relations: { patient: true, practitioner: true, location: true, queue: true },
+      relations: {
+        patient: true,
+        practitioner: true,
+        location: true,
+        queue: true,
+      },
     });
     if (!encounter) {
       throw new NotFoundException(`Encounter dengan ID ${id} tidak ditemukan`);
     }
 
     if (user?.role === UserRole.DOKTER) {
-      const isOwn = await this.isDokterOwn(encounter.practitionerId, user.userId);
+      const isOwn = await this.isDokterOwn(
+        encounter.practitionerId,
+        user.userId,
+      );
       if (!isOwn) {
         throw new ForbiddenException('Akses ditolak: bukan kunjungan Anda');
       }
@@ -104,13 +117,19 @@ export class EncountersService {
     return encounter;
   }
 
-  async create(clinicId: number, dto: CreateEncounterDto, userId: number): Promise<Encounter> {
+  async create(
+    clinicId: number,
+    dto: CreateEncounterDto,
+    userId: number,
+  ): Promise<Encounter> {
     if (dto.queueId) {
       const queue = await this.queueRepository.findOne({
         where: { id: dto.queueId, clinicId },
       });
       if (!queue) {
-        throw new NotFoundException(`Antrian dengan ID ${dto.queueId} tidak ditemukan`);
+        throw new NotFoundException(
+          `Antrian dengan ID ${dto.queueId} tidak ditemukan`,
+        );
       }
       if (queue.status !== QueueStatus.WAITING) {
         throw new BadRequestException('Antrian tidak dalam status waiting');
@@ -133,7 +152,9 @@ export class EncountersService {
     const saved = await this.encounterRepository.save(encounter);
 
     if (dto.queueId) {
-      await this.queueRepository.update(dto.queueId, { status: QueueStatus.CALLED });
+      await this.queueRepository.update(dto.queueId, {
+        status: QueueStatus.CALLED,
+      });
     }
 
     return saved;
@@ -145,13 +166,18 @@ export class EncountersService {
     dto: UpdateEncounterStatusDto,
     user: any,
   ): Promise<Encounter> {
-    const encounter = await this.encounterRepository.findOne({ where: { id, clinicId } });
+    const encounter = await this.encounterRepository.findOne({
+      where: { id, clinicId },
+    });
     if (!encounter) {
       throw new NotFoundException(`Encounter dengan ID ${id} tidak ditemukan`);
     }
 
     if (user.role === UserRole.DOKTER) {
-      const isOwn = await this.isDokterOwn(encounter.practitionerId, user.userId);
+      const isOwn = await this.isDokterOwn(
+        encounter.practitionerId,
+        user.userId,
+      );
       if (!isOwn) {
         throw new ForbiddenException('Akses ditolak: bukan kunjungan Anda');
       }
@@ -176,12 +202,16 @@ export class EncountersService {
     } else if (dto.status === EncounterStatus.FINISHED) {
       encounter.finishedTime = now;
       if (encounter.queueId) {
-        await this.queueRepository.update(encounter.queueId, { status: QueueStatus.DONE });
+        await this.queueRepository.update(encounter.queueId, {
+          status: QueueStatus.DONE,
+        });
       }
     } else if (dto.status === EncounterStatus.CANCELLED) {
       encounter.cancelledReason = dto.reason as string;
       if (encounter.queueId) {
-        await this.queueRepository.update(encounter.queueId, { status: QueueStatus.CANCELLED });
+        await this.queueRepository.update(encounter.queueId, {
+          status: QueueStatus.CANCELLED,
+        });
       }
     }
 
@@ -190,8 +220,14 @@ export class EncountersService {
 
   private validateTransition(from: EncounterStatus, to: EncounterStatus): void {
     const allowed: Record<EncounterStatus, EncounterStatus[]> = {
-      [EncounterStatus.ARRIVED]: [EncounterStatus.IN_PROGRESS, EncounterStatus.CANCELLED],
-      [EncounterStatus.IN_PROGRESS]: [EncounterStatus.FINISHED, EncounterStatus.CANCELLED],
+      [EncounterStatus.ARRIVED]: [
+        EncounterStatus.IN_PROGRESS,
+        EncounterStatus.CANCELLED,
+      ],
+      [EncounterStatus.IN_PROGRESS]: [
+        EncounterStatus.FINISHED,
+        EncounterStatus.CANCELLED,
+      ],
       [EncounterStatus.FINISHED]: [],
       [EncounterStatus.CANCELLED]: [],
     };
@@ -206,13 +242,19 @@ export class EncountersService {
   private async validateFinished(encounterId: number): Promise<void> {
     const missing: string[] = [];
 
-    const anamnesis = await this.anamnesisRepository.findOne({ where: { encounterId } });
+    const anamnesis = await this.anamnesisRepository.findOne({
+      where: { encounterId },
+    });
     if (!anamnesis) missing.push('anamnesis');
 
-    const vitalCount = await this.vitalSignRepository.count({ where: { encounterId } });
+    const vitalCount = await this.vitalSignRepository.count({
+      where: { encounterId },
+    });
     if (vitalCount === 0) missing.push('vitalSigns');
 
-    const diagnosisCount = await this.diagnosisRepository.count({ where: { encounterId } });
+    const diagnosisCount = await this.diagnosisRepository.count({
+      where: { encounterId },
+    });
     if (diagnosisCount === 0) missing.push('diagnosis');
 
     if (missing.length > 0) {
@@ -224,7 +266,10 @@ export class EncountersService {
     }
   }
 
-  private async isDokterOwn(practitionerId: number, userId: number): Promise<boolean> {
+  private async isDokterOwn(
+    practitionerId: number,
+    userId: number,
+  ): Promise<boolean> {
     const result = await this.encounterRepository.query(
       'SELECT id FROM practitioners WHERE id = ? AND user_id = ? LIMIT 1',
       [practitionerId, userId],

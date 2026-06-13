@@ -11,7 +11,11 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PatientsService } from './patients.service';
-import { CreatePatientDto, PatientQueryDto, UpdatePatientDto } from './dto/patient.dto';
+import {
+  CreatePatientDto,
+  PatientQueryDto,
+  UpdatePatientDto,
+} from './dto/patient.dto';
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { IsString } from 'class-validator';
@@ -35,7 +39,11 @@ export class PatientsController {
   @ApiOperation({ summary: 'Register new patient' })
   async create(@ClinicId() clinicId: number, @Body() dto: CreatePatientDto) {
     const patient = await this.patientsService.create(clinicId, dto);
-    return { success: true, message: 'Pasien berhasil didaftarkan', data: patient };
+    return {
+      success: true,
+      message: 'Pasien berhasil didaftarkan',
+      data: patient,
+    };
   }
 
   @Get(':id')
@@ -56,7 +64,11 @@ export class PatientsController {
     @Body() dto: UpdatePatientDto,
   ) {
     const patient = await this.patientsService.update(id, clinicId, dto);
-    return { success: true, message: 'Data pasien berhasil diperbarui', data: patient };
+    return {
+      success: true,
+      message: 'Data pasien berhasil diperbarui',
+      data: patient,
+    };
   }
 
   @Get(':id/encounters')

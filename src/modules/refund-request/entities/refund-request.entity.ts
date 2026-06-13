@@ -22,7 +22,11 @@ export class RefundRequest extends BaseEntity {
   @Column({ type: 'text' })
   reason: string;
 
-  @Column({ type: 'enum', enum: RefundStatus, default: RefundStatus.PENDING_APPROVAL })
+  @Column({
+    type: 'enum',
+    enum: RefundStatus,
+    default: RefundStatus.PENDING_APPROVAL,
+  })
   status: RefundStatus;
 
   @Column({ name: 'approved_by', nullable: true })

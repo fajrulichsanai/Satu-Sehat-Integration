@@ -42,7 +42,9 @@ export class SoapTemplatesController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create SOAP template (owner can share, dokter personal only)' })
+  @ApiOperation({
+    summary: 'Create SOAP template (owner can share, dokter personal only)',
+  })
   async create(
     @ClinicId() clinicId: number,
     @Body() dto: CreateSoapTemplateDto,
@@ -60,7 +62,12 @@ export class SoapTemplatesController {
     @Body() dto: UpdateSoapTemplateDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.soapTemplatesService.update(id, clinicId, dto, user);
+    const data = await this.soapTemplatesService.update(
+      id,
+      clinicId,
+      dto,
+      user,
+    );
     return { success: true, data };
   }
 

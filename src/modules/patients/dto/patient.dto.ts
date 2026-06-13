@@ -18,7 +18,10 @@ export class CreatePatientDto {
   @MaxLength(100)
   name: string | undefined;
 
-  @ApiPropertyOptional({ example: '3171234567890001', description: 'Required unless isNewborn' })
+  @ApiPropertyOptional({
+    example: '3171234567890001',
+    description: 'Required unless isNewborn',
+  })
   @IsOptional()
   @IsValidNIK()
   nik?: string;
@@ -68,11 +71,17 @@ export class CreatePatientDto {
   @IsEnum(MaritalStatus)
   maritalStatus?: MaritalStatus;
 
-  @ApiPropertyOptional({ example: false, description: 'Set true for newborn without NIK' })
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Set true for newborn without NIK',
+  })
   @IsOptional()
   isNewborn?: boolean;
 
-  @ApiPropertyOptional({ example: 'Siti Rahayu', description: 'NIK Ibu (for newborn)' })
+  @ApiPropertyOptional({
+    example: 'Siti Rahayu',
+    description: 'NIK Ibu (for newborn)',
+  })
   @IsOptional()
   @IsValidNIK()
   nikIbu?: string;

@@ -42,7 +42,12 @@ export class DiagnosesController {
     @Body() dto: CreateDiagnosisDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.diagnosesService.create(encounterId, clinicId, dto, user.userId);
+    const data = await this.diagnosesService.create(
+      encounterId,
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data };
   }
 

@@ -1,5 +1,10 @@
 import { Controller, Get, Put, Post, Body, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { ClinicsService } from './clinics.service';
 import { JwtAuthGuard, RolesGuard, ClinicContextGuard } from '../auth/guards';
 import { Roles } from '../auth/decorators/roles.decorator';

@@ -7,7 +7,14 @@ import { UpsertOdontogramDto } from './dto/odontogram.dto';
 
 const STATUS_DECAYED = new Set(['karies', 'caries']);
 const STATUS_MISSING = new Set(['cabut', 'missing', 'extracted', 'M']);
-const STATUS_FILLED = new Set(['tumpatan', 'filled', 'komposit', 'amalgam', 'F', 'RCT']);
+const STATUS_FILLED = new Set([
+  'tumpatan',
+  'filled',
+  'komposit',
+  'amalgam',
+  'F',
+  'RCT',
+]);
 
 @Injectable()
 export class OdontogramService {
@@ -34,7 +41,12 @@ export class OdontogramService {
     };
   }
 
-  async upsert(encounterId: number, clinicId: number, dto: UpsertOdontogramDto, userId: number) {
+  async upsert(
+    encounterId: number,
+    clinicId: number,
+    dto: UpsertOdontogramDto,
+    userId: number,
+  ) {
     await this.verifyEncounter(encounterId, clinicId);
 
     const dmft = this.calculateDmft(dto.teeth);
@@ -65,14 +77,17 @@ export class OdontogramService {
   }
 
   private calculateDmft(teeth: Record<string, any>) {
-    let decayed = 0, missing = 0, filled = 0;
+    let decayed = 0,
+      missing = 0,
+      filled = 0;
 
     for (const toothData of Object.values(teeth)) {
       if (!toothData) continue;
 
       // Check surfaces for caries/filling status
       const surfaces = toothData.surfaces || {};
-      let toothDecayed = false, toothFilled = false;
+      let toothDecayed = false,
+        toothFilled = false;
 
       for (const surface of Object.values(surfaces)) {
         if (typeof surface === 'string') {
@@ -98,8 +113,16 @@ export class OdontogramService {
     return { decayed, missing, filled, total: decayed + missing + filled };
   }
 
-  private async verifyEncounter(encounterId: number, clinicId: number): Promise<void> {
-    const enc = await this.encounterRepo.findOne({ where: { id: encounterId, clinicId } });
-    if (!enc) throw new NotFoundException(`Encounter dengan ID ${encounterId} tidak ditemukan`);
+  private async verifyEncounter(
+    encounterId: number,
+    clinicId: number,
+  ): Promise<void> {
+    const enc = await this.encounterRepo.findOne({
+      where: { id: encounterId, clinicId },
+    });
+    if (!enc)
+      throw new NotFoundException(
+        `Encounter dengan ID ${encounterId} tidak ditemukan`,
+      );
   }
 }

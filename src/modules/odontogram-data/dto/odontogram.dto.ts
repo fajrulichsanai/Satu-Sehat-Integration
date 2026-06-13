@@ -15,7 +15,9 @@ export class ToothDataDto {
 }
 
 export class UpsertOdontogramDto {
-  @ApiProperty({ description: 'Tooth data keyed by FDI number (e.g. "16", "11")' })
+  @ApiProperty({
+    description: 'Tooth data keyed by FDI number (e.g. "16", "11")',
+  })
   @IsObject()
   teeth: Record<string, ToothDataDto>;
 

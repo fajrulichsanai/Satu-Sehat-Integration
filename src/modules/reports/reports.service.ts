@@ -4,7 +4,10 @@ import { Repository } from 'typeorm';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import { Billing } from '../billing/entities/billing.entity';
 import { Payment } from '../payments/entities/payment.entity';
-import { SatusehatSyncLog, SyncLogStatus } from '../satusehat/sync/entities/satusehat-sync-log.entity';
+import {
+  SatusehatSyncLog,
+  SyncLogStatus,
+} from '../satusehat/sync/entities/satusehat-sync-log.entity';
 import { UserRole } from '../../enums/user-role.enum';
 import {
   FinancialReportQueryDto,
@@ -26,14 +29,23 @@ export class ReportsService {
     private readonly syncLogRepo: Repository<SatusehatSyncLog>,
   ) {}
 
-  async getVisitReport(clinicId: number, query: VisitReportQueryDto, user: any) {
+  async getVisitReport(
+    clinicId: number,
+    query: VisitReportQueryDto,
+    user: any,
+  ) {
     const qb = this.encounterRepo
       .createQueryBuilder('e')
       .leftJoin('e.patient', 'patient')
       .leftJoin('e.practitioner', 'practitioner')
       .select([
-        'e.id', 'e.status', 'e.arrivedTime', 'e.inProgressTime', 'e.finishedTime',
-        'patient.name', 'practitioner.name',
+        'e.id',
+        'e.status',
+        'e.arrivedTime',
+        'e.inProgressTime',
+        'e.finishedTime',
+        'patient.name',
+        'practitioner.name',
       ])
       .where('e.clinicId = :clinicId', { clinicId })
       .andWhere('DATE(e.arrivedTime) BETWEEN :dateFrom AND :dateTo', {
@@ -101,10 +113,18 @@ export class ReportsService {
           finished: parseInt(summaryRows.finished),
           cancelled: parseInt(summaryRows.cancelled),
           inProgress: parseInt(summaryRows.inProgress),
-          avgDurationMinutes: summaryRows.avgDuration ? Math.round(parseFloat(summaryRows.avgDuration)) : null,
+          avgDurationMinutes: summaryRows.avgDuration
+            ? Math.round(parseFloat(summaryRows.avgDuration))
+            : null,
         },
-        byDay: byDay.map((r: any) => ({ date: r.date, count: parseInt(r.count) })),
-        byDoctor: byDoctor.map((r: any) => ({ practitionerName: r.practitionerName, count: parseInt(r.count) })),
+        byDay: byDay.map((r: any) => ({
+          date: r.date,
+          count: parseInt(r.count),
+        })),
+        byDoctor: byDoctor.map((r: any) => ({
+          practitionerName: r.practitionerName,
+          count: parseInt(r.count),
+        })),
         encounters: encounters.map((e) => ({
           encounterId: e.id,
           date: e.arrivedTime?.toISOString().split('T')[0],
@@ -113,7 +133,10 @@ export class ReportsService {
           status: e.status,
           durationMinutes:
             e.finishedTime && e.inProgressTime
-              ? Math.round((e.finishedTime.getTime() - e.inProgressTime.getTime()) / 60000)
+              ? Math.round(
+                  (e.finishedTime.getTime() - e.inProgressTime.getTime()) /
+                    60000,
+                )
               : null,
         })),
       },
@@ -175,7 +198,10 @@ export class ReportsService {
           totalBilling: totalBilling,
           totalPaid: totalPaid,
           totalOutstanding: parseFloat(summaryRow.totalOutstanding || 0),
-          collectionRate: totalBilling > 0 ? parseFloat(((totalPaid / totalBilling) * 100).toFixed(1)) : 0,
+          collectionRate:
+            totalBilling > 0
+              ? parseFloat(((totalPaid / totalBilling) * 100).toFixed(1))
+              : 0,
           totalRefunded: parseFloat(summaryRow.totalRefunded || 0),
         },
         byDay: byDay.map((r: any) => ({
@@ -195,15 +221,24 @@ export class ReportsService {
     };
   }
 
-  async getSatusehatSyncReport(clinicId: number, query: SatusehatSyncReportQueryDto) {
+  async getSatusehatSyncReport(
+    clinicId: number,
+    query: SatusehatSyncReportQueryDto,
+  ) {
     const qb = this.syncLogRepo
       .createQueryBuilder('s')
       .where('s.clinicId = :clinicId', { clinicId });
 
-    if (query.dateFrom) qb.andWhere('DATE(s.createdAt) >= :dateFrom', { dateFrom: query.dateFrom });
-    if (query.dateTo) qb.andWhere('DATE(s.createdAt) <= :dateTo', { dateTo: query.dateTo });
+    if (query.dateFrom)
+      qb.andWhere('DATE(s.createdAt) >= :dateFrom', {
+        dateFrom: query.dateFrom,
+      });
+    if (query.dateTo)
+      qb.andWhere('DATE(s.createdAt) <= :dateTo', { dateTo: query.dateTo });
     if (query.resourceType && query.resourceType !== 'all') {
-      qb.andWhere('s.resourceType = :resourceType', { resourceType: query.resourceType });
+      qb.andWhere('s.resourceType = :resourceType', {
+        resourceType: query.resourceType,
+      });
     }
     if (query.syncStatus && query.syncStatus !== 'all') {
       qb.andWhere('s.status = :status', { status: query.syncStatus });
@@ -220,7 +255,11 @@ export class ReportsService {
        WHERE clinic_id = ?
        ${query.dateFrom ? 'AND DATE(created_at) >= ?' : ''}
        ${query.dateTo ? 'AND DATE(created_at) <= ?' : ''}`,
-      [clinicId, ...(query.dateFrom ? [query.dateFrom] : []), ...(query.dateTo ? [query.dateTo] : [])],
+      [
+        clinicId,
+        ...(query.dateFrom ? [query.dateFrom] : []),
+        ...(query.dateTo ? [query.dateTo] : []),
+      ],
     );
 
     const total = parseInt(summaryRow.total);
@@ -241,7 +280,13 @@ export class ReportsService {
       where: { clinicId, status: SyncLogStatus.FAILED },
       order: { createdAt: 'DESC' },
       take: 50,
-      select: { resourceType: true, localId: true, errorMessage: true, retryCount: true, createdAt: true },
+      select: {
+        resourceType: true,
+        localId: true,
+        errorMessage: true,
+        retryCount: true,
+        createdAt: true,
+      },
     });
 
     return {
@@ -251,7 +296,8 @@ export class ReportsService {
           synced,
           failed: parseInt(summaryRow.failed),
           pending: parseInt(summaryRow.pending),
-          syncRate: total > 0 ? parseFloat(((synced / total) * 100).toFixed(1)) : 0,
+          syncRate:
+            total > 0 ? parseFloat(((synced / total) * 100).toFixed(1)) : 0,
         },
         byResource: byResource.map((r: any) => ({
           resourceType: r.resourceType,
@@ -281,13 +327,18 @@ export class ReportsService {
       });
 
     if (dto.resourceType) {
-      qb.andWhere('resourceType = :resourceType', { resourceType: dto.resourceType });
+      qb.andWhere('resourceType = :resourceType', {
+        resourceType: dto.resourceType,
+      });
     }
     if (dto.localIds && dto.localIds.length > 0) {
       qb.andWhere('localId IN (:...localIds)', { localIds: dto.localIds });
     }
 
     const result = await qb.execute();
-    return { queued: result.affected || 0, message: 'Proses retry dimulai di background' };
+    return {
+      queued: result.affected || 0,
+      message: 'Proses retry dimulai di background',
+    };
   }
 }

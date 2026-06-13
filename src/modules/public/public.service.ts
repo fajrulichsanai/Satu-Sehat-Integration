@@ -1,11 +1,19 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { Patient } from '../patients/entities/patient.entity';
 import { Queue } from '../queues/entities/queue.entity';
 import { Gender, QueueStatus } from '../../enums';
-import { AvailableSlotsQueryDto, BookingDto, QueueStatusQueryDto } from './dto/public.dto';
+import {
+  AvailableSlotsQueryDto,
+  BookingDto,
+  QueueStatusQueryDto,
+} from './dto/public.dto';
 import { QueuesService } from '../queues/queues.service';
 import { PatientsService } from '../patients/patients.service';
 import { startOfDay, endOfDay } from '../../common/utils/date.util';
@@ -26,7 +34,16 @@ export class PublicService {
   async getClinicInfo(clinicId: number) {
     const clinic = await this.clinicRepository.findOne({
       where: { id: clinicId, setupComplete: true },
-      select: { id: true, name: true, address: true, city: true, province: true, phone: true, email: true, operationalHours: true },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        city: true,
+        province: true,
+        phone: true,
+        email: true,
+        operationalHours: true,
+      },
     });
     if (!clinic) {
       throw new NotFoundException('Klinik tidak ditemukan atau belum aktif');
@@ -58,7 +75,7 @@ export class PublicService {
 
     const queue = await this.queuesService.create(dto.clinicId, {
       patientId: patient.id,
-      patientName: patient.name!,
+      patientName: patient.name,
       phone: dto.patientPhone,
       practitionerId: dto.practitionerId || 0,
       appointmentDate: dto.appointmentDate,
@@ -71,7 +88,7 @@ export class PublicService {
     return {
       bookingToken: queue.token,
       queueNumber: queue.nomorAntrian,
-      patientName: patient.name!,
+      patientName: patient.name,
       appointmentDate: dto.appointmentDate,
       jamSlot: dto.jamSlot,
     };
@@ -80,7 +97,14 @@ export class PublicService {
   async getQueueStatus(query: QueueStatusQueryDto) {
     const queue = await this.queueRepository.findOne({
       where: { token: query.token },
-      select: { id: true, nomorAntrian: true, status: true, tanggal: true, jamSlot: true, patientName: true },
+      select: {
+        id: true,
+        nomorAntrian: true,
+        status: true,
+        tanggal: true,
+        jamSlot: true,
+        patientName: true,
+      },
     });
     if (!queue) {
       throw new NotFoundException('Token antrian tidak ditemukan');

@@ -7,7 +7,10 @@ import { Practitioner } from '../../practitioners/entities/practitioner.entity';
 import { DataSource } from 'typeorm';
 
 const mockQueueRepo = {
-  findOne: jest.fn(), find: jest.fn(), save: jest.fn(), create: jest.fn(),
+  findOne: jest.fn(),
+  find: jest.fn(),
+  save: jest.fn(),
+  create: jest.fn(),
   createQueryBuilder: jest.fn().mockReturnThis(),
   leftJoinAndSelect: jest.fn().mockReturnThis(),
   where: jest.fn().mockReturnThis(),
@@ -29,7 +32,10 @@ describe('QueuesService', () => {
       providers: [
         QueuesService,
         { provide: getRepositoryToken(Queue), useValue: mockQueueRepo },
-        { provide: getRepositoryToken(Practitioner), useValue: mockPractitionerRepo },
+        {
+          provide: getRepositoryToken(Practitioner),
+          useValue: mockPractitionerRepo,
+        },
         { provide: DataSource, useValue: mockDataSource },
       ],
     }).compile();
@@ -42,12 +48,20 @@ describe('QueuesService', () => {
   describe('updateStatus', () => {
     it('should throw NotFoundException if queue not found', async () => {
       mockQueueRepo.findOne.mockResolvedValue(null);
-      await expect(service.updateStatus(999, 1, { status: 'called' as any })).rejects.toThrow(NotFoundException);
+      await expect(
+        service.updateStatus(999, 1, { status: 'called' as any }),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw BadRequestException for invalid transition', async () => {
-      mockQueueRepo.findOne.mockResolvedValue({ id: 1, clinicId: 1, status: 'done' });
-      await expect(service.updateStatus(1, 1, { status: 'waiting' as any })).rejects.toThrow(BadRequestException);
+      mockQueueRepo.findOne.mockResolvedValue({
+        id: 1,
+        clinicId: 1,
+        status: 'done',
+      });
+      await expect(
+        service.updateStatus(1, 1, { status: 'waiting' as any }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

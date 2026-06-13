@@ -23,14 +23,24 @@ export class DiagnosesService {
 
   async findAll(encounterId: number, clinicId: number) {
     await this.verifyEncounter(encounterId, clinicId);
-    return this.diagnosisRepository.find({ where: { encounterId }, order: { isPrimary: 'DESC', createdAt: 'ASC' } });
+    return this.diagnosisRepository.find({
+      where: { encounterId },
+      order: { isPrimary: 'DESC', createdAt: 'ASC' },
+    });
   }
 
-  async create(encounterId: number, clinicId: number, dto: CreateDiagnosisDto, userId: number) {
+  async create(
+    encounterId: number,
+    clinicId: number,
+    dto: CreateDiagnosisDto,
+    userId: number,
+  ) {
     const encounter = await this.verifyEncounter(encounterId, clinicId);
 
     if (encounter.status === EncounterStatus.FINISHED) {
-      throw new ForbiddenException('Tidak dapat menambah diagnosis pada encounter yang sudah selesai');
+      throw new ForbiddenException(
+        'Tidak dapat menambah diagnosis pada encounter yang sudah selesai',
+      );
     }
 
     if (dto.isPrimary) {
@@ -38,7 +48,9 @@ export class DiagnosesService {
         where: { encounterId, isPrimary: true },
       });
       if (existingPrimary) {
-        throw new BadRequestException('Sudah ada diagnosis primer. Hapus atau ubah terlebih dahulu.');
+        throw new BadRequestException(
+          'Sudah ada diagnosis primer. Hapus atau ubah terlebih dahulu.',
+        );
       }
     }
 
@@ -59,27 +71,42 @@ export class DiagnosesService {
     return this.diagnosisRepository.save(diagnosis);
   }
 
-  async remove(encounterId: number, diagnosisId: number, clinicId: number): Promise<void> {
+  async remove(
+    encounterId: number,
+    diagnosisId: number,
+    clinicId: number,
+  ): Promise<void> {
     const encounter = await this.verifyEncounter(encounterId, clinicId);
 
     if (encounter.status === EncounterStatus.FINISHED) {
-      throw new ForbiddenException('Tidak dapat menghapus diagnosis pada encounter yang sudah selesai');
+      throw new ForbiddenException(
+        'Tidak dapat menghapus diagnosis pada encounter yang sudah selesai',
+      );
     }
 
     const diagnosis = await this.diagnosisRepository.findOne({
       where: { id: diagnosisId, encounterId },
     });
     if (!diagnosis) {
-      throw new NotFoundException(`Diagnosis dengan ID ${diagnosisId} tidak ditemukan`);
+      throw new NotFoundException(
+        `Diagnosis dengan ID ${diagnosisId} tidak ditemukan`,
+      );
     }
 
     await this.diagnosisRepository.remove(diagnosis);
   }
 
-  private async verifyEncounter(encounterId: number, clinicId: number): Promise<Encounter> {
-    const encounter = await this.encounterRepository.findOne({ where: { id: encounterId, clinicId } });
+  private async verifyEncounter(
+    encounterId: number,
+    clinicId: number,
+  ): Promise<Encounter> {
+    const encounter = await this.encounterRepository.findOne({
+      where: { id: encounterId, clinicId },
+    });
     if (!encounter) {
-      throw new NotFoundException(`Encounter dengan ID ${encounterId} tidak ditemukan`);
+      throw new NotFoundException(
+        `Encounter dengan ID ${encounterId} tidak ditemukan`,
+      );
     }
     return encounter;
   }

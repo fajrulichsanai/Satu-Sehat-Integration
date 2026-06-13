@@ -15,7 +15,10 @@ export class RegisterDto {
   @IsNotEmpty()
   email: string | undefined;
 
-  @ApiProperty({ example: 'SecurePass123!', description: 'Password (min 8 characters)' })
+  @ApiProperty({
+    example: 'SecurePass123!',
+    description: 'Password (min 8 characters)',
+  })
   @IsNotEmpty()
   @MinLength(8)
   password: string | undefined;
@@ -71,17 +74,19 @@ export class LoginResponseDto {
       },
     },
   })
-  data: {
-    accessToken: string | undefined;
-    user: {
-      id: number | undefined;
-      email: string | undefined;
-      name: string | undefined;
-      role: string | undefined;
-      clinicId: number | undefined;
-      practitionerId?: number | undefined;
-    };
-  } | undefined;
+  data:
+    | {
+        accessToken: string | undefined;
+        user: {
+          id: number | undefined;
+          email: string | undefined;
+          name: string | undefined;
+          role: string | undefined;
+          clinicId: number | undefined;
+          practitionerId?: number | undefined;
+        };
+      }
+    | undefined;
 }
 
 export class UserResponseDto {
@@ -118,7 +123,7 @@ export class ActivationStatusResponseDto {
   isActive: boolean | undefined;
 
   @ApiProperty({ example: 'owner' })
-  role: string | undefined ;
+  role: string | undefined;
 
   @ApiProperty({ example: 1, nullable: true })
   clinicId: number | undefined;

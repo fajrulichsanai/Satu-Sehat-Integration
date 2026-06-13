@@ -27,7 +27,10 @@ export class VitalSignsController {
     @Param('encounterId', ParseIntPipe) encounterId: number,
     @ClinicId() clinicId: number,
   ) {
-    const data = await this.vitalSignsService.findByEncounter(encounterId, clinicId);
+    const data = await this.vitalSignsService.findByEncounter(
+      encounterId,
+      clinicId,
+    );
     return { success: true, data };
   }
 
@@ -39,7 +42,12 @@ export class VitalSignsController {
     @Body() dto: UpsertVitalSignsDto,
     @CurrentUser() user: any,
   ) {
-    const result = await this.vitalSignsService.upsert(encounterId, clinicId, dto, user.userId);
+    const result = await this.vitalSignsService.upsert(
+      encounterId,
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, ...result };
   }
 }

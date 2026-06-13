@@ -1,4 +1,11 @@
-import { Body, Controller, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Param,
+  ParseIntPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { DispenseService } from './dispense.service';
 import { DispenseMedicationsDto } from './dto/dispense.dto';
@@ -21,7 +28,12 @@ export class DispenseController {
     @Body() dto: DispenseMedicationsDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.dispenseService.dispense(encounterId, clinicId, dto, user.userId);
+    const data = await this.dispenseService.dispense(
+      encounterId,
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data };
   }
 }

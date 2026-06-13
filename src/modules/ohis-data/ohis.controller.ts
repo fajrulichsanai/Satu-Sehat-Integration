@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { OhisService } from './ohis.service';
 import { UpsertOhisDto } from './dto/ohis.dto';
@@ -24,14 +32,21 @@ export class OhisController {
   }
 
   @Put()
-  @ApiOperation({ summary: 'Upsert OHI-S scores (DI-S, CI-S, OHI-S calculated automatically)' })
+  @ApiOperation({
+    summary: 'Upsert OHI-S scores (DI-S, CI-S, OHI-S calculated automatically)',
+  })
   async upsert(
     @Param('encounterId', ParseIntPipe) encounterId: number,
     @ClinicId() clinicId: number,
     @Body() dto: UpsertOhisDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.ohisService.upsert(encounterId, clinicId, dto, user.userId);
+    const data = await this.ohisService.upsert(
+      encounterId,
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data };
   }
 }

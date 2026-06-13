@@ -44,7 +44,11 @@ export class EncountersController {
     @Body() dto: CreateEncounterDto,
     @CurrentUser() user: any,
   ) {
-    const encounter = await this.encountersService.create(clinicId, dto, user.userId);
+    const encounter = await this.encountersService.create(
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data: encounter };
   }
 
@@ -67,7 +71,12 @@ export class EncountersController {
     @Body() dto: UpdateEncounterStatusDto,
     @CurrentUser() user: any,
   ) {
-    const encounter = await this.encountersService.updateStatus(id, clinicId, dto, user);
+    const encounter = await this.encountersService.updateStatus(
+      id,
+      clinicId,
+      dto,
+      user,
+    );
     return { success: true, data: encounter };
   }
 }
