@@ -35,5 +35,6 @@ export * from './odontogram-data.entity';
 export * from './ohis-data.entity';
 
 // Settings & Integration
+export * from './owner-code.entity';
 export * from './soap-template.entity';
 export * from './satusehat-sync-log.entity';

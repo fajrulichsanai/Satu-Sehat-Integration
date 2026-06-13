@@ -1,7 +1,7 @@
 import { Entity, Column, ManyToOne, OneToMany, JoinColumn, Index } from 'typeorm';
-import { BillingItem } from './billing-item.entity';
-import { BaseEntity } from '../common/base.entity';
-import { Clinic } from './clinic.entity';
+import { BillingItem } from '../../../billing-item.entity';
+import { BaseEntity } from '../../../common/base.entity';
+import { Clinic } from './../../clinics/entities/clinic.entity';
 import { Encounter } from './encounter.entity';
 import { Patient } from './patient.entity';
 
@@ -27,7 +27,7 @@ export class Billing extends BaseEntity {
   @Column({ name: 'patient_id' })
   patientId: number;
 
-  @Column({ name: 'invoice_number', length: 50, unique: true })
+  @Column({ name: 'invoice_number', length: 50 })
   invoiceNumber: string;
 
   @Column('decimal', { precision: 10, scale: 2 })

@@ -1,33 +1,33 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
-import { BaseEntity } from '../common/base.entity';
-import { Clinic } from './clinic.entity';
+import { BaseEntity } from '../../../common/base.entity';
+import { Clinic } from '../../clinics/entities/clinic.entity';
 
 @Entity('soap_templates')
 @Index(['clinicId'])
 @Index(['createdBy'])
 export class SoapTemplate extends BaseEntity {
   @Column({ name: 'clinic_id' })
-  clinicId: number;
+  clinicId: number | undefined;
 
   @Column({ length: 100 })
-  name: string;
+  name: string | undefined;
 
   @Column({ type: 'text', nullable: true })
-  subjective: string;
+  subjective: string | undefined;
 
   @Column({ type: 'text', nullable: true })
-  objective: string;
+  objective: string | undefined;
 
   @Column({ type: 'text', nullable: true })
-  assessment: string;
+  assessment: string | undefined;
 
   @Column({ type: 'text', nullable: true })
-  plan: string;
+  plan: string | undefined;
 
   @Column({ name: 'is_shared', default: false })
-  isShared: boolean;
+  isShared: boolean | undefined;
 
   @ManyToOne(() => Clinic, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'clinic_id' })
-  clinic: Clinic;
+  clinic: Clinic | undefined;
 }

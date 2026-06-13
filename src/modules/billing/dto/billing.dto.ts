@@ -12,7 +12,7 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { DiscountType } from '../../../entities/billing-item.entity';
-import { BillingStatus } from '../../../entities/billing.entity';
+import { BillingStatus } from '../entities/billing.entity';
 import { PaymentMethod } from '../../../entities/payment.entity';
 
 export class BillingItemDto {
@@ -20,12 +20,12 @@ export class BillingItemDto {
   @IsOptional()
   @IsInt()
   @Min(1)
-  tarifId?: number;
+  tarifId?: number | null;
 
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name: string | undefined;
 
   @ApiPropertyOptional({ default: 1 })
   @IsOptional()
@@ -36,7 +36,7 @@ export class BillingItemDto {
   @ApiProperty()
   @IsNumber()
   @Min(0)
-  unitPrice: number;
+  unitPrice: number | undefined;
 
   @ApiPropertyOptional({ default: 0 })
   @IsOptional()
@@ -54,13 +54,13 @@ export class CreateBillingDto {
   @ApiProperty()
   @IsInt()
   @Min(1)
-  encounterId: number;
+  encounterId: number | undefined;
 
   @ApiProperty({ type: [BillingItemDto] })
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => BillingItemDto)
-  items: BillingItemDto[];
+  items: BillingItemDto[] | undefined;
 
   @ApiPropertyOptional({ default: 0 })
   @IsOptional()
@@ -115,12 +115,12 @@ export class BillingQueryDto {
 export class CreatePaymentDto {
   @ApiProperty({ enum: PaymentMethod })
   @IsEnum(PaymentMethod)
-  method: PaymentMethod;
+  method: PaymentMethod | undefined;
 
   @ApiProperty()
   @IsNumber()
   @Min(0.01)
-  amount: number;
+  amount: number | undefined;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -132,18 +132,18 @@ export class CreateRefundRequestDto {
   @ApiProperty()
   @IsNumber()
   @Min(0.01)
-  amount: number;
+  amount: number | undefined;
 
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
-  reason: string;
+  reason: string | undefined;
 }
 
 export class ApproveRefundDto {
   @ApiProperty({ enum: ['approved', 'rejected'] })
   @IsEnum(['approved', 'rejected'])
-  action: 'approved' | 'rejected';
+  action: 'approved' | 'rejected' | undefined;
 
   @ApiPropertyOptional()
   @IsOptional()

@@ -13,17 +13,17 @@ export class CreateTarifDto {
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name: string | undefined;
 
   @ApiProperty({ example: 'konsultasi' })
   @IsString()
   @IsNotEmpty()
-  kategori: string;
+  kategori: string | undefined;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  kodeIcd9?: string;
+  kodeIcd9?: string | null;
 
   @ApiPropertyOptional({ default: 0 })
   @IsOptional()
@@ -34,7 +34,7 @@ export class CreateTarifDto {
   @ApiProperty()
   @IsNumber()
   @Min(0)
-  hargaJual: number;
+  hargaJual: number | undefined;
 
   @ApiPropertyOptional({ default: 0 })
   @IsOptional()

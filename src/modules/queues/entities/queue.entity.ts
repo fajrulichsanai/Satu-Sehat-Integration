@@ -1,9 +1,9 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
-import { BaseEntity } from '../common/base.entity';
-import { QueueStatus } from '../enums';
-import { Clinic } from './clinic.entity';
-import { Patient } from './patient.entity';
-import { Practitioner } from './practitioner.entity';
+import { BaseEntity } from '../../../common/base.entity';
+import { QueueStatus } from '../../../enums';
+import { Clinic } from '../../clinics/entities/clinic.entity';
+import { Patient } from '../../patients/entities/patient.entity';
+import { Practitioner } from '../../practitioners/entities/practitioner.entity';
 
 @Entity('queues')
 @Index(['clinicId', 'tanggal', 'nomorAntrian'], { unique: true })
@@ -11,64 +11,64 @@ import { Practitioner } from './practitioner.entity';
 @Index(['practitionerId', 'tanggal'])
 export class Queue extends BaseEntity {
   @Column({ name: 'clinic_id' })
-  clinicId: number;
+  clinicId: number | undefined;
 
   @Column({ name: 'patient_id', nullable: true })
-  patientId: number;
+  patientId: number | undefined;
 
   @Column({ name: 'practitioner_id' })
-  practitionerId: number;
+  practitionerId: number | undefined;
 
   @Column({ name: 'nomor_antrian' })
-  nomorAntrian: number;
+  nomorAntrian: number | undefined;
 
   @Column({ type: 'date' })
-  tanggal: Date;
+  tanggal: Date | undefined;
 
   @Column({ name: 'jam_slot', type: 'time' })
-  jamSlot: string;
+  jamSlot: string | undefined;
 
   @Column({ name: 'patient_name', length: 100 })
-  patientName: string;
+  patientName: string | undefined;
 
   @Column({ length: 20 })
-  phone: string;
+  phone: string | undefined;
 
   @Column({ name: 'chief_complaint', type: 'text', nullable: true })
-  chiefComplaint: string;
+  chiefComplaint: string | undefined;
 
   @Column({ name: 'is_first_visit', default: false })
-  isFirstVisit: boolean;
+  isFirstVisit: boolean | undefined;
 
   @Column({ name: 'is_online_booking', default: false })
-  isOnlineBooking: boolean;
+  isOnlineBooking: boolean | undefined;
 
   @Column({ length: 8, unique: true })
-  token: string;
+  token: string | undefined;
 
   @Column({
     type: 'enum',
     enum: QueueStatus,
     default: QueueStatus.WAITING,
   })
-  status: QueueStatus;
+  status: QueueStatus | undefined;
 
   @Column({ name: 'cancelled_reason', type: 'text', nullable: true })
-  cancelledReason: string;
+  cancelledReason: string | undefined;
 
   @Column({ name: 'called_at', nullable: true })
-  calledAt: Date;
+  calledAt: Date | undefined;
 
   // Relations
   @ManyToOne(() => Clinic, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'clinic_id' })
-  clinic: Clinic;
+  clinic: Clinic | undefined;
 
   @ManyToOne(() => Patient, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'patient_id' })
-  patient: Patient;
+  patient: Patient | undefined;
 
   @ManyToOne(() => Practitioner, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'practitioner_id' })
-  practitioner: Practitioner;
+  practitioner: Practitioner | undefined;
 }

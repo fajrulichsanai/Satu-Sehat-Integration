@@ -1,6 +1,6 @@
 import { Entity, Column, OneToOne, JoinColumn, OneToMany } from 'typeorm';
-import { BaseEntity } from '../common/base.entity';
-import { Encounter } from './encounter.entity';
+import { BaseEntity } from '../../../common/base.entity';
+import { Encounter } from './../../encounters/entities/encounter.entity';
 
 export enum BloodType {
   A = 'A',
@@ -22,24 +22,24 @@ export enum PregnancyStatus {
 @Entity('anamnesis')
 export class Anamnesis extends BaseEntity {
   @Column({ name: 'encounter_id', unique: true })
-  encounterId: number;
+  encounterId: number | undefined;
 
   @Column({ name: 'keluhan_utama', type: 'text' })
-  keluhanUtama: string;
+  keluhanUtama: string | undefined;
 
   @Column({ name: 'riwayat_penyakit', type: 'text', nullable: true })
-  riwayatPenyakit: string;
+  riwayatPenyakit: string | undefined;
 
   @Column({ name: 'golongan_darah', type: 'enum', enum: BloodType, nullable: true })
-  golonganDarah: BloodType;
+  golonganDarah: BloodType | undefined;
 
   @Column({ type: 'enum', enum: Rhesus, nullable: true })
-  rhesus: Rhesus;
+  rhesus: Rhesus | undefined;
 
   @Column({ name: 'status_kehamilan', type: 'enum', enum: PregnancyStatus, nullable: true })
-  statusKehamilan: PregnancyStatus;
+  statusKehamilan: PregnancyStatus | undefined;
 
   @OneToOne(() => Encounter, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'encounter_id' })
-  encounter: Encounter;
+  encounter: Encounter | undefined;
 }

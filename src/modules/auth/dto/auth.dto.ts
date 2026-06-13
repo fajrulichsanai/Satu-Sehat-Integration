@@ -13,17 +13,17 @@ export class RegisterDto {
   @ApiProperty({ example: 'admin@clinic.com', description: 'Email address' })
   @IsEmail()
   @IsNotEmpty()
-  email: string;
+  email: string | undefined;
 
   @ApiProperty({ example: 'SecurePass123!', description: 'Password (min 8 characters)' })
   @IsNotEmpty()
   @MinLength(8)
-  password: string;
+  password: string | undefined;
 
   @ApiProperty({ example: 'Dr. John Doe', description: 'Full name' })
   @IsNotEmpty()
   @MaxLength(100)
-  name: string;
+  name: string | undefined;
 
   @ApiProperty({
     example: 'owner',
@@ -32,7 +32,7 @@ export class RegisterDto {
   })
   @IsEnum(UserRole)
   @IsNotEmpty()
-  role: UserRole;
+  role: UserRole | undefined;
 
   @ApiProperty({
     example: 'ABC123',
@@ -48,16 +48,16 @@ export class LoginDto {
   @ApiProperty({ example: 'admin@clinic.com' })
   @IsEmail()
   @IsNotEmpty()
-  email: string;
+  email: string | undefined;
 
   @ApiProperty({ example: 'SecurePass123!' })
   @IsNotEmpty()
-  password: string;
+  password: string | undefined;
 }
 
 export class LoginResponseDto {
   @ApiProperty({ example: true })
-  success: boolean;
+  success: boolean | undefined;
 
   @ApiProperty({
     example: {
@@ -72,54 +72,54 @@ export class LoginResponseDto {
     },
   })
   data: {
-    accessToken: string;
+    accessToken: string | undefined;
     user: {
-      id: number;
-      email: string;
-      name: string;
-      role: string;
-      clinicId: number;
-      practitionerId?: number;
+      id: number | undefined;
+      email: string | undefined;
+      name: string | undefined;
+      role: string | undefined;
+      clinicId: number | undefined;
+      practitionerId?: number | undefined;
     };
-  };
+  } | undefined;
 }
 
 export class UserResponseDto {
   @ApiProperty({ example: 1 })
-  id: number;
+  id: number | undefined;
 
   @ApiProperty({ example: 'admin@clinic.com' })
-  email: string;
+  email: string | undefined;
 
   @ApiProperty({ example: 'Dr. John Doe' })
-  name: string;
+  name: string | undefined;
 
   @ApiProperty({ example: 'owner' })
-  role: string;
+  role: string | undefined;
 
   @ApiProperty({ example: 1 })
-  clinicId: number;
+  clinicId: number | undefined;
 
   @ApiProperty({ example: 1, required: false })
-  practitionerId?: number;
+  practitionerId?: number | undefined;
 
   @ApiProperty({ example: true })
-  isActive: boolean;
+  isActive: boolean | undefined;
 }
 
 export class RefreshTokenDto {
   @ApiProperty({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' })
   @IsNotEmpty()
-  refreshToken: string;
+  refreshToken: string | undefined;
 }
 
 export class ActivationStatusResponseDto {
   @ApiProperty({ example: true })
-  isActive: boolean;
+  isActive: boolean | undefined;
 
   @ApiProperty({ example: 'owner' })
-  role: string;
+  role: string | undefined ;
 
   @ApiProperty({ example: 1, nullable: true })
-  clinicId: number | null;
+  clinicId: number | undefined;
 }

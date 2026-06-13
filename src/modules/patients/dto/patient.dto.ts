@@ -16,7 +16,7 @@ export class CreatePatientDto {
   @ApiProperty({ example: 'Budi Santoso' })
   @IsNotEmpty()
   @MaxLength(100)
-  name: string;
+  name: string | undefined;
 
   @ApiPropertyOptional({ example: '3171234567890001', description: 'Required unless isNewborn' })
   @IsOptional()
@@ -31,7 +31,7 @@ export class CreatePatientDto {
   @ApiProperty({ enum: Gender })
   @IsEnum(Gender)
   @IsNotEmpty()
-  gender: Gender;
+  gender: Gender | undefined;
 
   @ApiPropertyOptional({ example: 'Jl. Merdeka No. 1, Jakarta' })
   @IsOptional()
@@ -93,13 +93,13 @@ export class PatientQueryDto extends PaginationDto {
 }
 
 export class PatientResponseDto {
-  @ApiProperty() id: number;
-  @ApiProperty() noRm: string;
-  @ApiProperty() clinicId: number;
+  @ApiProperty() id: number | undefined;
+  @ApiProperty() noRm: string | undefined;
+  @ApiProperty() clinicId: number | undefined;
   @ApiPropertyOptional() nik?: string;
-  @ApiProperty() name: string;
+  @ApiProperty() name: string | undefined;
   @ApiPropertyOptional() dateOfBirth?: Date;
-  @ApiProperty({ enum: Gender }) gender: Gender;
+  @ApiProperty({ enum: Gender }) gender: Gender | undefined;
   @ApiPropertyOptional() phone?: string;
   @ApiPropertyOptional() email?: string;
   @ApiPropertyOptional() address?: string;
@@ -107,7 +107,7 @@ export class PatientResponseDto {
   @ApiPropertyOptional() province?: string;
   @ApiPropertyOptional({ enum: MaritalStatus }) maritalStatus?: MaritalStatus;
   @ApiPropertyOptional() satusehatPatientId?: string;
-  @ApiProperty({ enum: SyncStatus }) syncStatus: SyncStatus;
-  @ApiProperty() createdAt: Date;
-  @ApiProperty() updatedAt: Date;
+  @ApiProperty({ enum: SyncStatus }) syncStatus: SyncStatus | undefined;
+  @ApiProperty() createdAt: Date | undefined;
+  @ApiProperty() updatedAt: Date | undefined;
 }

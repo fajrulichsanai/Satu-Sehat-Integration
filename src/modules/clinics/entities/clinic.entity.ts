@@ -1,44 +1,44 @@
 import { Entity, Column, OneToMany } from 'typeorm';
-import { BaseEntity } from '../common/base.entity';
-import { SatusehatEnvironment } from '../enums';
+import { BaseEntity } from '../../../common/base.entity';
+import { SatusehatEnvironment } from '../../../enums';
 
 @Entity('clinics')
 export class Clinic extends BaseEntity {
   @Column({ length: 100 })
-  name: string;
+  name: string | undefined;
 
   @Column('text')
-  address: string;
+  address: string | undefined;
 
   @Column({ length: 100 })
-  city: string;
+  city: string | undefined;
 
   @Column({ length: 100 })
-  province: string;
+  province: string | undefined;
 
   @Column({ name: 'postal_code', length: 10, nullable: true })
-  postalCode: string;
+  postalCode: string | undefined;
 
   @Column({ length: 20 })
-  phone: string;
+  phone: string | undefined;
 
   @Column({ length: 100, nullable: true })
-  email: string;
+  email: string | undefined;
 
   @Column({ name: 'sip_number', length: 50, nullable: true })
-  sipNumber: string;
+  sipNumber: string | undefined;
 
   @Column({ name: 'operational_hours', type: 'json', nullable: true })
-  operationalHours: Record<string, any>;
+  operationalHours: Record<string, any> | undefined;
 
   @Column({ name: 'satusehat_org_id', length: 100, nullable: true })
-  satusehatOrgId: string;
+  satusehatOrgId: string | undefined;
 
   @Column({ name: 'satusehat_client_id', length: 255, nullable: true })
-  satusehatClientId: string;
+  satusehatClientId: string | undefined;
 
   @Column({ name: 'satusehat_client_secret', length: 255, nullable: true })
-  satusehatClientSecret: string;
+  satusehatClientSecret: string | undefined;
 
   @Column({
     name: 'satusehat_environment',
@@ -46,14 +46,14 @@ export class Clinic extends BaseEntity {
     enum: SatusehatEnvironment,
     default: SatusehatEnvironment.SANDBOX,
   })
-  satusehatEnvironment: SatusehatEnvironment;
+  satusehatEnvironment: SatusehatEnvironment | undefined;
 
   @Column({ name: 'satusehat_token', type: 'text', nullable: true })
-  satusehatToken: string;
+  satusehatToken: string | undefined ;
 
   @Column({ name: 'satusehat_token_expires_at', nullable: true })
-  satusehatTokenExpiresAt: Date;
+  satusehatTokenExpiresAt: Date | undefined;
 
   @Column({ name: 'setup_complete', default: false })
-  setupComplete: boolean;
+  setupComplete: boolean | undefined;
 }

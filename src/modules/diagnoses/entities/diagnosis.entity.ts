@@ -1,7 +1,7 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
-import { BaseEntity } from '../common/base.entity';
-import { SyncStatus } from '../enums';
-import { Encounter } from './encounter.entity';
+import { BaseEntity } from '../../../common/base.entity';
+import { SyncStatus } from '../../../enums';
+import { Encounter } from './../..encounters/entities/encounter.entity';
 
 export enum ClinicalStatus {
   ACTIVE = 'active',
@@ -21,13 +21,13 @@ export enum DiagnosisCategory {
 @Index(['encounterId'])
 export class Diagnosis extends BaseEntity {
   @Column({ name: 'encounter_id' })
-  encounterId: number;
+  encounterId: number | undefined;
 
   @Column({ name: 'icd10_code', length: 10 })
-  icd10Code: string;
+  icd10Code: string | undefined;
 
   @Column({ name: 'icd10_display', length: 255 })
-  icd10Display: string;
+  icd10Display: string | undefined;
 
   @Column({
     name: 'clinical_status',
@@ -35,32 +35,32 @@ export class Diagnosis extends BaseEntity {
     enum: ClinicalStatus,
     default: ClinicalStatus.ACTIVE,
   })
-  clinicalStatus: ClinicalStatus;
+  clinicalStatus: ClinicalStatus | undefined;
 
   @Column({
     type: 'enum',
     enum: DiagnosisCategory,
     default: DiagnosisCategory.ENCOUNTER_DIAGNOSIS,
   })
-  category: DiagnosisCategory;
+  category: DiagnosisCategory | undefined;
 
   @Column({ name: 'body_site_code', length: 20, nullable: true })
-  bodySiteCode: string;
+  bodySiteCode: string | undefined;
 
   @Column({ name: 'body_site_display', length: 255, nullable: true })
-  bodySiteDisplay: string;
+  bodySiteDisplay: string | undefined;
 
   @Column({ name: 'onset_date', type: 'date', nullable: true })
-  onsetDate: Date;
+  onsetDate: Date | undefined;
 
   @Column('text', { nullable: true })
-  note: string;
+  note: string | undefined;
 
   @Column({ name: 'is_primary', default: false })
-  isPrimary: boolean;
+  isPrimary: boolean | undefined;
 
   @Column({ name: 'satusehat_condition_id', length: 100, nullable: true })
-  satusehatConditionId: string;
+  satusehatConditionId: string | undefined;
 
   @Column({
     name: 'sync_status',
@@ -68,7 +68,7 @@ export class Diagnosis extends BaseEntity {
     enum: SyncStatus,
     default: SyncStatus.PENDING,
   })
-  syncStatus: SyncStatus;
+  syncStatus: SyncStatus | undefined;
 
   // Relations
   @ManyToOne(() => Encounter, { onDelete: 'CASCADE' })

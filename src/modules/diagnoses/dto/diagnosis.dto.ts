@@ -12,12 +12,12 @@ export class CreateDiagnosisDto {
   @ApiProperty({ example: 'K02.1' })
   @IsString()
   @IsNotEmpty()
-  icd10Code: string;
+  icd10Code: string | undefined;
 
   @ApiProperty({ example: 'Dental caries limited to enamel' })
   @IsString()
   @IsNotEmpty()
-  icd10Display: string;
+  icd10Display: string | undefined;
 
   @ApiPropertyOptional({ enum: ClinicalStatus, default: ClinicalStatus.ACTIVE })
   @IsOptional()

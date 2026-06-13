@@ -14,18 +14,18 @@ export class CreatePractitionerDto {
   @ApiProperty({ example: 'Dr. John Doe, Sp.KG' })
   @IsNotEmpty()
   @MaxLength(100)
-  name: string;
+  name: string | undefined;
 
   @ApiProperty({ example: '3201012312310001', description: '16-digit NIK' })
   @IsNotEmpty()
   @Length(16, 16)
   @Matches(/^\d{16}$/, { message: 'NIK harus 16 digit angka' })
-  nik: string;
+  nik: string | undefined;
 
   @ApiProperty({ example: 'male', enum: Gender })
   @IsEnum(Gender)
   @IsNotEmpty()
-  gender: Gender;
+  gender: Gender | undefined;
 
   @ApiProperty({ example: '081234567890', required: false })
   @IsOptional()
@@ -90,55 +90,55 @@ export class SearchSatusehatPractitionerDto {
   @IsNotEmpty()
   @Length(16, 16)
   @Matches(/^\d{16}$/, { message: 'NIK harus 16 digit angka' })
-  nik: string;
+  nik: string | undefined;
 }
 
 export class PractitionerResponseDto {
   @ApiProperty({ example: 1 })
-  id: number;
+  id: number | undefined;
 
   @ApiProperty({ example: 'Dr. John Doe, Sp.KG' })
-  name: string;
+  name: string | undefined;
 
   @ApiProperty({ example: '3201012312310001' })
-  nik: string;
+  nik: string | undefined;
 
   @ApiProperty({ example: 'male' })
-  gender: string;
+  gender: string | undefined;
 
   @ApiProperty({ example: '081234567890' })
-  phone: string;
+  phone: string | undefined;
 
   @ApiProperty({ example: 'dokter@example.com' })
-  email: string;
+  email: string | undefined;
 
   @ApiProperty({ example: 'SIP/123/2026' })
-  sipNumber: string;
+  sipNumber: string | undefined;
 
   @ApiProperty({ example: 'Spesialis Konservasi Gigi' })
-  specialization: string;
+  specialization: string | undefined;
 
   @ApiProperty({ example: 'N10000001' })
-  satusehatPractitionerId: string;
+  satusehatPractitionerId: string | undefined;
 
   @ApiProperty({ example: 1 })
-  clinicId: number;
+  clinicId: number | undefined;
 
   @ApiProperty({ example: '2026-06-11T12:00:00Z' })
-  createdAt: Date;
+  createdAt: Date | undefined;
 }
 
 export class PractitionerListResponseDto {
   @ApiProperty({ example: true })
-  success: boolean;
+  success: boolean | undefined;
 
   @ApiProperty({ type: [PractitionerResponseDto] })
-  data: PractitionerResponseDto[];
+  data: PractitionerResponseDto[] | undefined;
 }
 
 export class SatusehatPractitionerSearchResultDto {
   @ApiProperty({ example: true })
-  success: boolean;
+  success: boolean | undefined;
 
   @ApiProperty({
     example: {
@@ -150,5 +150,5 @@ export class SatusehatPractitionerSearchResultDto {
       note: 'TODO: Implement actual SATUSEHAT API call',
     },
   })
-  data: any;
+  data: any | undefined;
 }
