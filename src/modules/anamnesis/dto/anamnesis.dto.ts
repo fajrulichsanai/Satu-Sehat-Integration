@@ -9,7 +9,7 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { AllergyLevel } from '../../allergy/entities/allergy.entity';
-import { BloodType, PregnancyStatus, Rhesus } from '../../anamnesis/entities/anamnesis.entity';
+import { BloodType, PregnancyStatus, Rhesus } from '../entities/anamnesis.entity';
 
 export class AllergyItemDto {
   @ApiProperty()

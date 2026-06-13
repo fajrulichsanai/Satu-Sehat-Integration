@@ -5,7 +5,7 @@ import { Anamnesis } from './entities/anamnesis.entity';
 import { Allergy } from '../allergy/entities/allergy.entity';
 import { MedicationHistory } from '../medical-history/entities/medication-history.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
-import { UpsertAnamnesisDto } from '../encounters/dto/anamnesis.dto';
+import { UpsertAnamnesisDto } from './dto/anamnesis.dto';
 
 @Injectable()
 export class AnamnesisService {

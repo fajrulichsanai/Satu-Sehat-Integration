@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OhisData } from '../ohis-data/entities/ohis-data.entity';
-import { Encounter } from './entities/encounter.entity';
+import { Encounter } from '../encounters/entities/encounter.entity';
 import { UpsertOhisDto } from './dto/ohis.dto';
 
 const INDEX_TEETH = ['16', '11', '26', '46', '31', '36'];

@@ -7,7 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Procedure, ProcedureStatus } from '../procedures/entities/procedure.entity';
-import { Encounter } from './entities/encounter.entity';
+import { Encounter } from '../encounters/entities/encounter.entity';
 import { EncounterStatus } from '../../enums';
 import { CreateProcedureDto } from './dto/procedure.dto';
 

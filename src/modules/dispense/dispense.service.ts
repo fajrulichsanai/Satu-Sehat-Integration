@@ -6,11 +6,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { Dispense } from '../dispense/entities/dispense.entity';
+import { Dispense } from './entities/dispense.entity';
 import { Prescription, PrescriptionStatus } from '../prescription/entities/prescription.entity';
 import { Medication } from '../medications/entities/medication.entity';
 import { MedicationStockLog, StockLogType } from '../medication-stock-log/entities/medication-stock-log.entity';
-import { Encounter } from './entities/encounter.entity';
+import { Encounter } from '../encounters/entities/encounter.entity';
 import { DispenseMedicationsDto } from './dto/dispense.dto';
 
 @Injectable()

@@ -18,20 +18,20 @@ import { EncountersController } from './encounters.controller';
 import { EncountersService } from './encounters.service';
 import { AnamnesisController } from '../anamnesis/anamnesis.controller';
 import { AnamnesisService } from '../anamnesis/anamnesis.service';
-import { VitalSignsController } from './vital-signs.controller';
-import { VitalSignsService } from './vital-signs.service';
+import { VitalSignsController } from '../vital-sign/vital-signs.controller';
+import { VitalSignsService } from '../vital-sign/vital-signs.service';
 import { DiagnosesController } from '../diagnoses/diagnoses.controller';
 import { DiagnosesService } from '../diagnoses/diagnoses.service';
-import { ProceduresController } from './procedures.controller';
-import { ProceduresService } from './procedures.service';
-import { PrescriptionsController } from './prescriptions.controller';
-import { PrescriptionsService } from './prescriptions.service';
-import { DispenseController } from './dispense.controller';
-import { DispenseService } from './dispense.service';
-import { OdontogramController } from './odontogram.controller';
-import { OdontogramService } from './odontogram.service';
-import { OhisController } from './ohis.controller';
-import { OhisService } from './ohis.service';
+import { ProceduresController } from '../procedures/procedures.controller';
+import { ProceduresService } from '../procedures/procedures.service';
+import { PrescriptionsController } from '../prescription/prescriptions.controller';
+import { PrescriptionsService } from '../prescription/prescriptions.service';
+import { DispenseController } from '../dispense/dispense.controller';
+import { DispenseService } from '../dispense/dispense.service';
+import { OdontogramController } from '../odontogram-data/odontogram.controller';
+import { OdontogramService } from '../odontogram-data/odontogram.service';
+import { OhisController } from '../ohis-data/ohis.controller';
+import { OhisService } from '../ohis-data/ohis.service';
 
 @Module({
   imports: [

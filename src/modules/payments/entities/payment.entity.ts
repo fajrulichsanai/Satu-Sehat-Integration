@@ -10,7 +10,6 @@ export enum PaymentMethod {
 }
 
 @Entity('payments')
-@Index(['receiptNumber'], { unique: true })
 export class Payment extends BaseEntity {
   @Column({ name: 'billing_id' })
   billingId: number;

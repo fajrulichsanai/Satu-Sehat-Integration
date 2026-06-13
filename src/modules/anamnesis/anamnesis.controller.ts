@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AnamnesisService } from './anamnesis.service';
-import { UpsertAnamnesisDto } from '../encounters/dto/anamnesis.dto';
+import { UpsertAnamnesisDto } from './dto/anamnesis.dto';
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
