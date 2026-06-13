@@ -8,6 +8,7 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { User } from '../users/entities/user.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
+import { OwnerCodeModule } from '../owner-code/owner-code.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { Clinic } from '../clinics/entities/clinic.entity';
       }),
       inject: [ConfigService],
     }),
+    OwnerCodeModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

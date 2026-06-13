@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -212,6 +213,93 @@ export class UsersService {
       success: true,
       data: {
         message: 'User pending berhasil ditolak/dihapus',
+      },
+    };
+  }
+
+  /**
+   * Get all pending users in a clinic
+   */
+  async findPending(clinicId: number) {
+    const users = await this.userRepository.find({
+      where: {
+        clinicId,
+        role: UserRole.PENDING,
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      success: true,
+      data: users.map((user) => this.sanitizeUser(user)),
+    };
+  }
+
+  /**
+   * Update user role
+   */
+  async updateRole(id: number, clinicId: number, newRole: UserRole) {
+    const user = await this.userRepository.findOne({
+      where: { id, clinicId },
+    });
+
+    if (!user) {
+      throw new NotFoundException({
+        success: false,
+        error: {
+          code: 'USER_NOT_FOUND',
+          message: `User dengan ID ${id} tidak ditemukan`,
+        },
+      });
+    }
+
+    // Cannot change owner role
+    if (user.role === UserRole.OWNER) {
+      throw new ForbiddenException({
+        success: false,
+        error: {
+          code: 'CANNOT_CHANGE_OWNER_ROLE',
+          message: 'Role owner tidak bisa diubah',
+        },
+      });
+    }
+
+    // Only pending users can have their role updated to admin/dokter
+    if (user.role !== UserRole.PENDING) {
+      throw new ConflictException({
+        success: false,
+        error: {
+          code: 'INVALID_USER_STATUS',
+          message: 'Hanya user dengan status pending yang bisa diupdate rolenya',
+        },
+      });
+    }
+
+    // Validate new role
+    if (![UserRole.ADMIN, UserRole.DOKTER].includes(newRole)) {
+      throw new BadRequestException({
+        success: false,
+        error: {
+          code: 'INVALID_ROLE',
+          message: 'Role hanya bisa diubah ke admin atau dokter',
+        },
+      });
+    }
+
+    user.role = newRole;
+    user.isActive = true;
+
+    await this.userRepository.save(user);
+
+    return {
+      success: true,
+      data: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        isActive: user.isActive,
+        message: 'Role user berhasil diupdate',
       },
     };
   }

@@ -20,6 +20,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { SatusehatModule } from './modules/satusehat/satusehat.module';
 import { SoapTemplatesModule } from './modules/soap-templates/soap-templates.module';
 import { IcdModule } from './modules/icd/icd.module';
+import { OwnerCodeModule } from './modules/owner-code/owner-code.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 
 @Module({
@@ -69,6 +70,7 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     SatusehatModule,
     SoapTemplatesModule,
     IcdModule,
+    OwnerCodeModule,
   ],
   controllers: [AppController],
   providers: [

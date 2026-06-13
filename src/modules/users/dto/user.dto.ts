@@ -7,7 +7,7 @@ import {
   IsOptional,
   MaxLength,
 } from 'class-validator';
-import { UserRole } from '../../../enums';
+import { UserRole } from '../../../enums/user-role.enum';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'dokter@clinic.com' })
@@ -36,6 +36,13 @@ export class CreateUserDto {
 }
 
 export class UpdateUserDto extends PartialType(CreateUserDto) {}
+
+export class UpdateUserRoleDto {
+  @ApiProperty({ example: 'admin', enum: UserRole })
+  @IsEnum(UserRole)
+  @IsNotEmpty()
+  role: UserRole;
+}
 
 export class UserResponseDto {
   @ApiProperty({ example: 1 })

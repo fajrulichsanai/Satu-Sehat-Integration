@@ -17,6 +17,7 @@ import { User } from '../users/entities/user.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
 import { UserRole } from '../../enums';
+import { OwnerCodeService } from '../owner-code/owner-code.service';
 
 @Injectable()
 export class AuthService {
@@ -29,6 +30,7 @@ export class AuthService {
     private clinicRepository: Repository<Clinic>,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private ownerCodeService: OwnerCodeService,
   ) {
     this.resend = new Resend(this.configService.get<string>('RESEND_API_KEY'));
   }
@@ -333,7 +335,7 @@ export class AuthService {
 
     try {
       await this.resend.emails.send({
-        from: 'noreply@resend.dev',
+        from: 'noreply@send.finarch.my.id',
         to: userEmail,
         subject: 'Verifikasi Email Anda - Satu Sehat',
         html: `

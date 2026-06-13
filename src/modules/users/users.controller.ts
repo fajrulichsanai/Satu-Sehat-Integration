@@ -3,7 +3,9 @@ import {
   Get,
   Post,
   Delete,
+  Patch,
   Param,
+  Body,
   UseGuards,
   ParseIntPipe,
 } from '@nestjs/common';
@@ -19,7 +21,11 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { UserRole } from '../../enums';
-import { UserListResponseDto, UserResponseDto } from './dto/user.dto';
+import {
+  UserListResponseDto,
+  UserResponseDto,
+  UpdateUserRoleDto,
+} from './dto/user.dto';
 
 @ApiTags('users')
 @Controller('users')
@@ -100,5 +106,33 @@ export class UsersController {
     @ClinicId() clinicId: number,
   ) {
     return this.usersService.remove(id, clinicId);
+  }
+
+  @Get('pending/list')
+  @Roles(UserRole.OWNER)
+  @ApiOperation({ summary: 'Get all pending users in clinic (Owner only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Pending users list',
+    type: UserListResponseDto,
+  })
+  async findPending(@ClinicId() clinicId: number) {
+    return this.usersService.findPending(clinicId);
+  }
+
+  @Patch(':id/role')
+  @Roles(UserRole.OWNER)
+  @ApiOperation({
+    summary: 'Update pending user role to admin/dokter (Owner only)',
+  })
+  @ApiResponse({ status: 200, description: 'User role updated successfully' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 409, description: 'User status invalid' })
+  async updateRole(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateUserRoleDto,
+    @ClinicId() clinicId: number,
+  ) {
+    return this.usersService.updateRole(id, clinicId, dto.role);
   }
 }
