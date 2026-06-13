@@ -1,0 +1,1215 @@
+{
+  "info": {
+    "name": "ApexRecord API",
+    "_postman_id": "apexrecord-satusehat-collection-v1",
+    "description": "Sistem Manajemen Klinik Kesehatan dengan integrasi SATUSEHAT\n\n## Setup\n1. Set variable `baseUrl` ke URL server (default: http://localhost:3001)\n2. Login via `POST /auth/login`, copy `accessToken` dari response\n3. Set variable `token` dengan nilai accessToken tersebut\n4. Semua request berprotected akan otomatis menggunakan token",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string",
+      "description": "JWT access token dari response /auth/login"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "01. Auth",
+      "description": "Authentication & Authorization",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"owner@klinik.com\",\n  \"password\": \"SecurePass123!\",\n  \"name\": \"Dr. Budi Santoso\",\n  \"role\": \"owner\",\n  \"ownerCode\": \"ABC123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.accessToken) {",
+                  "  pm.collectionVariables.set('token', json.data.accessToken);",
+                  "  console.log('Token saved:', json.data.accessToken.substring(0, 30) + '...');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"owner@klinik.com\",\n  \"password\": \"SecurePass123!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Current User (Me)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth", "me"] }
+          }
+        },
+        {
+          "name": "Check Activation Status",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/auth/activation-status", "host": ["{{baseUrl}}"], "path": ["auth", "activation-status"] }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/auth/refresh", "host": ["{{baseUrl}}"], "path": ["auth", "refresh"] }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/auth/logout", "host": ["{{baseUrl}}"], "path": ["auth", "logout"] }
+          }
+        },
+        {
+          "name": "Verify Email",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify-email?token=YOUR_VERIFICATION_TOKEN",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "verify-email"],
+              "query": [{ "key": "token", "value": "YOUR_VERIFICATION_TOKEN" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Users",
+      "description": "User Management (Role: OWNER)",
+      "item": [
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"] }
+          }
+        },
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/users/1", "host": ["{{baseUrl}}"], "path": ["users", "1"] }
+          }
+        },
+        {
+          "name": "Activate User",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/users/1/activate", "host": ["{{baseUrl}}"], "path": ["users", "1", "activate"] }
+          }
+        },
+        {
+          "name": "Deactivate User",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/users/1/deactivate", "host": ["{{baseUrl}}"], "path": ["users", "1", "deactivate"] }
+          }
+        },
+        {
+          "name": "Delete User (Reject Pending)",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/users/1", "host": ["{{baseUrl}}"], "path": ["users", "1"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Settings - Clinic",
+      "description": "Clinic Settings & Configuration",
+      "item": [
+        {
+          "name": "Get Clinic Settings",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/settings/clinic", "host": ["{{baseUrl}}"], "path": ["settings", "clinic"] }
+          }
+        },
+        {
+          "name": "Update Clinic Profile",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/settings/clinic", "host": ["{{baseUrl}}"], "path": ["settings", "clinic"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Klinik Sehat Bersama\",\n  \"address\": \"Jl. Kesehatan No. 123\",\n  \"city\": \"Jakarta Selatan\",\n  \"province\": \"DKI Jakarta\",\n  \"postalCode\": \"12345\",\n  \"phone\": \"021-12345678\",\n  \"email\": \"info@klinik.com\",\n  \"sipNumber\": \"SIP/001/2026\",\n  \"operationalHours\": {\n    \"senin\": \"08:00-17:00\",\n    \"selasa\": \"08:00-17:00\",\n    \"rabu\": \"08:00-17:00\",\n    \"kamis\": \"08:00-17:00\",\n    \"jumat\": \"08:00-16:00\",\n    \"sabtu\": \"08:00-12:00\",\n    \"minggu\": \"Tutup\"\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Configure SATUSEHAT Integration",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/settings/clinic/satusehat", "host": ["{{baseUrl}}"], "path": ["settings", "clinic", "satusehat"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"satusehatOrgId\": \"ORG123456\",\n  \"satusehatClientId\": \"client_id_from_satusehat\",\n  \"satusehatClientSecret\": \"client_secret_from_satusehat\",\n  \"satusehatEnvironment\": \"sandbox\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Test SATUSEHAT Connection",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/settings/clinic/satusehat/test", "host": ["{{baseUrl}}"], "path": ["settings", "clinic", "satusehat", "test"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04. Settings - Practitioners",
+      "description": "Practitioner Management (Role: OWNER, ADMIN)",
+      "item": [
+        {
+          "name": "Get All Practitioners",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/settings/practitioners", "host": ["{{baseUrl}}"], "path": ["settings", "practitioners"] }
+          }
+        },
+        {
+          "name": "Get Practitioner by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/settings/practitioners/1", "host": ["{{baseUrl}}"], "path": ["settings", "practitioners", "1"] }
+          }
+        },
+        {
+          "name": "Create Practitioner",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/settings/practitioners", "host": ["{{baseUrl}}"], "path": ["settings", "practitioners"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Dr. John Doe, Sp.KG\",\n  \"nik\": \"3201012312310001\",\n  \"gender\": \"male\",\n  \"phone\": \"081234567890\",\n  \"email\": \"dokter@example.com\",\n  \"sipNumber\": \"SIP/123/2026\",\n  \"specialization\": \"Spesialis Konservasi Gigi\",\n  \"satusehatPractitionerId\": \"N10000001\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Practitioner",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/settings/practitioners/1", "host": ["{{baseUrl}}"], "path": ["settings", "practitioners", "1"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Dr. John Doe, Sp.KG\",\n  \"phone\": \"081234567890\",\n  \"email\": \"dokter@example.com\",\n  \"sipNumber\": \"SIP/123/2026\",\n  \"specialization\": \"Spesialis Konservasi Gigi\",\n  \"satusehatPractitionerId\": \"N10000001\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Practitioner",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/settings/practitioners/1", "host": ["{{baseUrl}}"], "path": ["settings", "practitioners", "1"] }
+          }
+        },
+        {
+          "name": "Search Practitioner in SATUSEHAT",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/settings/practitioners/search-satusehat", "host": ["{{baseUrl}}"], "path": ["settings", "practitioners", "search-satusehat"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nik\": \"3201012312310001\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05. Settings - Locations",
+      "description": "Location/Room Management",
+      "item": [
+        {
+          "name": "Get All Locations",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/settings/locations?activeOnly=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["settings", "locations"],
+              "query": [{ "key": "activeOnly", "value": "true", "description": "Filter only active locations" }]
+            }
+          }
+        },
+        {
+          "name": "Get Location by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/settings/locations/1", "host": ["{{baseUrl}}"], "path": ["settings", "locations", "1"] }
+          }
+        },
+        {
+          "name": "Create Location",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/settings/locations", "host": ["{{baseUrl}}"], "path": ["settings", "locations"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ruang Perawatan 1\",\n  \"type\": \"treatment_room\",\n  \"description\": \"Ruangan perawatan gigi lantai 1\",\n  \"isActive\": true,\n  \"satusehatLocationId\": \"LOC123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Location",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/settings/locations/1", "host": ["{{baseUrl}}"], "path": ["settings", "locations", "1"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ruang Perawatan 1\",\n  \"type\": \"treatment_room\",\n  \"description\": \"Ruangan perawatan gigi lantai 1\",\n  \"isActive\": true,\n  \"satusehatLocationId\": \"LOC123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Location",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/settings/locations/1", "host": ["{{baseUrl}}"], "path": ["settings", "locations", "1"] }
+          }
+        },
+        {
+          "name": "Toggle Active Location",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/settings/locations/1/toggle-active", "host": ["{{baseUrl}}"], "path": ["settings", "locations", "1", "toggle-active"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06. Settings - Tarifs",
+      "description": "Service Price/Tarif Management",
+      "item": [
+        {
+          "name": "Get All Tarifs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/settings/tarifs?search=&kategori=&page=1&limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["settings", "tarifs"],
+              "query": [
+                { "key": "search", "value": "", "description": "Search by name" },
+                { "key": "kategori", "value": "", "description": "Filter by category" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "50" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Tarif",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/settings/tarifs", "host": ["{{baseUrl}}"], "path": ["settings", "tarifs"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Konsultasi Dokter Umum\",\n  \"kategori\": \"konsultasi\",\n  \"kodeIcd9\": null,\n  \"hargaPokok\": 50000,\n  \"hargaJual\": 100000,\n  \"diskonMaksimal\": 20000\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Tarif",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/settings/tarifs/1", "host": ["{{baseUrl}}"], "path": ["settings", "tarifs", "1"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Konsultasi Dokter Umum\",\n  \"kategori\": \"konsultasi\",\n  \"hargaPokok\": 50000,\n  \"hargaJual\": 120000,\n  \"diskonMaksimal\": 20000,\n  \"isActive\": true\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07. Settings - SOAP Templates",
+      "description": "SOAP Template Management",
+      "item": [
+        {
+          "name": "Get All SOAP Templates",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/settings/soap-templates?type=all",
+              "host": ["{{baseUrl}}"],
+              "path": ["settings", "soap-templates"],
+              "query": [{ "key": "type", "value": "all", "description": "personal | shared | all" }]
+            }
+          }
+        },
+        {
+          "name": "Create SOAP Template",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/settings/soap-templates", "host": ["{{baseUrl}}"], "path": ["settings", "soap-templates"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Template Scaling\",\n  \"subjective\": \"Pasien mengeluh karang gigi\",\n  \"objective\": \"Terdapat kalkulus supragingival\",\n  \"assessment\": \"Calculus pada region anterior bawah\",\n  \"plan\": \"Scaling ultrasonic, oral hygiene instruction\",\n  \"isShared\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "Update SOAP Template",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/settings/soap-templates/1", "host": ["{{baseUrl}}"], "path": ["settings", "soap-templates", "1"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Template Scaling Updated\",\n  \"subjective\": \"Pasien mengeluh karang gigi\",\n  \"objective\": \"Terdapat kalkulus supragingival dan subgingival\",\n  \"assessment\": \"Calculus pada seluruh region\",\n  \"plan\": \"Scaling ultrasonic full mouth, kontrol 1 minggu\",\n  \"isShared\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete SOAP Template",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/settings/soap-templates/1", "host": ["{{baseUrl}}"], "path": ["settings", "soap-templates", "1"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "08. Patients",
+      "description": "Patient Management",
+      "item": [
+        {
+          "name": "Get All Patients",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/patients?page=1&limit=20&search=&gender=",
+              "host": ["{{baseUrl}}"],
+              "path": ["patients"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "search", "value": "", "description": "Search by name, NIK, or No. RM" },
+                { "key": "gender", "value": "", "description": "male | female" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Patient",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/patients", "host": ["{{baseUrl}}"], "path": ["patients"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Budi Santoso\",\n  \"nik\": \"3171234567890001\",\n  \"dateOfBirth\": \"1990-05-20\",\n  \"gender\": \"male\",\n  \"address\": \"Jl. Merdeka No. 1, Jakarta\",\n  \"city\": \"Jakarta\",\n  \"province\": \"DKI Jakarta\",\n  \"postalCode\": \"12345\",\n  \"phone\": \"08123456789\",\n  \"email\": \"budi@email.com\",\n  \"maritalStatus\": \"married\",\n  \"isNewborn\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Patient by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/patients/1", "host": ["{{baseUrl}}"], "path": ["patients", "1"] }
+          }
+        },
+        {
+          "name": "Update Patient",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/patients/1", "host": ["{{baseUrl}}"], "path": ["patients", "1"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Budi Santoso\",\n  \"phone\": \"08123456789\",\n  \"email\": \"budi@email.com\",\n  \"address\": \"Jl. Merdeka No. 1, Jakarta\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Patient Encounter History",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/patients/1/encounters", "host": ["{{baseUrl}}"], "path": ["patients", "1", "encounters"] }
+          }
+        },
+        {
+          "name": "Search Patient in SATUSEHAT by NIK",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/patients/search-satusehat?nik=3171234567890001",
+              "host": ["{{baseUrl}}"],
+              "path": ["patients", "search-satusehat"],
+              "query": [{ "key": "nik", "value": "3171234567890001" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "09. Queues",
+      "description": "Queue Management",
+      "item": [
+        {
+          "name": "Get All Queues",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/queues?date=2026-06-13&status=&locationId=&practitionerId=&serviceType=&page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["queues"],
+              "query": [
+                { "key": "date", "value": "2026-06-13", "description": "Filter by date (default: today)" },
+                { "key": "status", "value": "", "description": "waiting | in_progress | completed | cancelled | no_show" },
+                { "key": "locationId", "value": "" },
+                { "key": "practitionerId", "value": "" },
+                { "key": "serviceType", "value": "" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Walk-in Queue",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/queues", "host": ["{{baseUrl}}"], "path": ["queues"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": 1,\n  \"patientName\": \"Budi Santoso\",\n  \"phone\": \"08123456789\",\n  \"serviceType\": \"general\",\n  \"locationId\": 1,\n  \"practitionerId\": 1,\n  \"appointmentDate\": \"2026-06-13\",\n  \"jamSlot\": \"09:00\",\n  \"chiefComplaint\": \"Sakit gigi geraham kanan\",\n  \"isFirstVisit\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Available Time Slots",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/queues/slots?date=2026-06-13&locationId=1&practitionerId=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["queues", "slots"],
+              "query": [
+                { "key": "date", "value": "2026-06-13" },
+                { "key": "locationId", "value": "1" },
+                { "key": "practitionerId", "value": "1" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Waiting Room Monitor (Public)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/queues/monitor?clinicId=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["queues", "monitor"],
+              "query": [{ "key": "clinicId", "value": "1" }]
+            }
+          }
+        },
+        {
+          "name": "Update Queue Status",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/queues/1/status", "host": ["{{baseUrl}}"], "path": ["queues", "1", "status"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"in_progress\",\n  \"cancelledReason\": \"\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Public",
+      "description": "Public Endpoints (No Auth Required) - Rate limited: 10 req/60s",
+      "item": [
+        {
+          "name": "Get Clinic Public Info",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/public/clinic-info?clinicId=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["public", "clinic-info"],
+              "query": [{ "key": "clinicId", "value": "1" }]
+            }
+          }
+        },
+        {
+          "name": "Get Available Booking Slots",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/public/available-slots?clinicId=1&date=2026-06-13&locationId=1&practitionerId=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["public", "available-slots"],
+              "query": [
+                { "key": "clinicId", "value": "1" },
+                { "key": "date", "value": "2026-06-13" },
+                { "key": "locationId", "value": "1" },
+                { "key": "practitionerId", "value": "1" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Online Booking",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/public/book", "host": ["{{baseUrl}}"], "path": ["public", "book"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientNik\": \"3171234567890001\",\n  \"patientName\": \"Budi Santoso\",\n  \"patientPhone\": \"08123456789\",\n  \"clinicId\": 1,\n  \"locationId\": 1,\n  \"practitionerId\": 1,\n  \"appointmentDate\": \"2026-06-14\",\n  \"jamSlot\": \"09:00\",\n  \"serviceType\": \"general\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Check Queue Status by Token",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/public/queue-status?token=AB12CD34",
+              "host": ["{{baseUrl}}"],
+              "path": ["public", "queue-status"],
+              "query": [{ "key": "token", "value": "AB12CD34" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Encounters",
+      "description": "Clinical Encounters",
+      "item": [
+        {
+          "name": "Get All Encounters",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/encounters?date=2026-06-13&practitionerId=&status=&page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["encounters"],
+              "query": [
+                { "key": "date", "value": "2026-06-13" },
+                { "key": "practitionerId", "value": "" },
+                { "key": "status", "value": "", "description": "in_progress | finished | cancelled" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Encounter",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/encounters", "host": ["{{baseUrl}}"], "path": ["encounters"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patientId\": 1,\n  \"practitionerId\": 1,\n  \"locationId\": 1,\n  \"queueId\": 1,\n  \"serviceType\": \"general\",\n  \"chiefComplaint\": \"Sakit gigi geraham kanan bawah\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Encounter by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/encounters/1", "host": ["{{baseUrl}}"], "path": ["encounters", "1"] }
+          }
+        },
+        {
+          "name": "Update Encounter Status",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/encounters/1/status", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "status"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"finished\",\n  \"reason\": \"Pemeriksaan selesai\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Encounter - Anamnesis",
+      "description": "Anamnesis per Encounter",
+      "item": [
+        {
+          "name": "Get Anamnesis",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/encounters/1/anamnesis", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "anamnesis"] }
+          }
+        },
+        {
+          "name": "Upsert Anamnesis",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/encounters/1/anamnesis", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "anamnesis"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"keluhanUtama\": \"Sakit gigi geraham kanan bawah sejak 3 hari lalu\",\n  \"riwayatPenyakit\": \"Tidak ada riwayat penyakit sistemik\",\n  \"golonganDarah\": \"O\",\n  \"rhesus\": \"positive\",\n  \"statusKehamilan\": \"not_pregnant\",\n  \"alergi\": [\n    {\n      \"substansi\": \"Penisilin\",\n      \"reaksi\": \"Ruam kulit\",\n      \"tingkat\": \"moderate\"\n    }\n  ],\n  \"riwayatObat\": [\n    {\n      \"namaObat\": \"Amoxicillin\",\n      \"dosis\": \"500mg\",\n      \"frekuensi\": \"3x sehari\"\n    }\n  ]\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "13. Encounter - Vital Signs",
+      "description": "Vital Signs per Encounter",
+      "item": [
+        {
+          "name": "Get Vital Signs",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/encounters/1/vital-signs", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "vital-signs"] }
+          }
+        },
+        {
+          "name": "Upsert Vital Signs",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/encounters/1/vital-signs", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "vital-signs"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sistolic\": 120,\n  \"diastolic\": 80,\n  \"heartRate\": 78,\n  \"respiratoryRate\": 18,\n  \"temperature\": 36.7,\n  \"weight\": 65,\n  \"height\": 170,\n  \"spo2\": 98\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "14. Encounter - Diagnoses",
+      "description": "Diagnoses per Encounter (ICD-10)",
+      "item": [
+        {
+          "name": "Get Diagnoses",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/encounters/1/diagnoses", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "diagnoses"] }
+          }
+        },
+        {
+          "name": "Add Diagnosis",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/encounters/1/diagnoses", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "diagnoses"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"icd10Code\": \"K02.1\",\n  \"icd10Display\": \"Dental caries limited to enamel\",\n  \"clinicalStatus\": \"active\",\n  \"category\": \"encounter-diagnosis\",\n  \"bodySiteCode\": \"76505004\",\n  \"bodySiteDisplay\": \"Lower right first molar tooth\",\n  \"onsetDate\": \"2026-06-10\",\n  \"note\": \"Karies mencapai dentin\",\n  \"isPrimary\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Remove Diagnosis",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/encounters/1/diagnoses/1", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "diagnoses", "1"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "15. Encounter - Procedures",
+      "description": "Procedures per Encounter (ICD-9-CM)",
+      "item": [
+        {
+          "name": "Get Procedures",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/encounters/1/procedures", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "procedures"] }
+          }
+        },
+        {
+          "name": "Add Procedure",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/encounters/1/procedures", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "procedures"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"icd9Code\": \"96.54\",\n  \"procedureName\": \"Dental scaling\",\n  \"status\": \"completed\",\n  \"performedStart\": \"2026-06-13T09:00:00Z\",\n  \"performedEnd\": \"2026-06-13T09:30:00Z\",\n  \"reasonDiagnosisId\": 1,\n  \"toothNumber\": \"46\",\n  \"note\": \"Scaling menggunakan ultrasonic scaler\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Remove Procedure",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/encounters/1/procedures/1", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "procedures", "1"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "16. Encounter - Odontogram",
+      "description": "Odontogram per Encounter",
+      "item": [
+        {
+          "name": "Get Odontogram",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/encounters/1/odontogram", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "odontogram"] }
+          }
+        },
+        {
+          "name": "Upsert Odontogram",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/encounters/1/odontogram", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "odontogram"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"toothData\": {\n    \"11\": { \"status\": \"normal\", \"notes\": \"\" },\n    \"12\": { \"status\": \"caries\", \"surface\": [\"mesial\", \"distal\"], \"notes\": \"Karies mencapai dentin\" },\n    \"16\": { \"status\": \"missing\", \"notes\": \"Dicabut 2 tahun lalu\" },\n    \"46\": { \"status\": \"caries\", \"surface\": [\"oklusal\"], \"notes\": \"Karies luas\" }\n  },\n  \"notes\": \"Perlu tindakan restorasi gigi 12 dan 46\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "17. Encounter - OHI-S",
+      "description": "Oral Hygiene Index Simplified per Encounter",
+      "item": [
+        {
+          "name": "Get OHI-S Scores",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/encounters/1/ohis", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "ohis"] }
+          }
+        },
+        {
+          "name": "Upsert OHI-S Scores",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/encounters/1/ohis", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "ohis"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dis16\": 1,\n  \"dis11\": 2,\n  \"dis26\": 1,\n  \"dis31\": 1,\n  \"dis36\": 0,\n  \"dis46\": 2,\n  \"cis16\": 0,\n  \"cis11\": 1,\n  \"cis26\": 0,\n  \"cis31\": 0,\n  \"cis36\": 0,\n  \"cis46\": 1\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "18. Encounter - Prescriptions",
+      "description": "Prescriptions per Encounter",
+      "item": [
+        {
+          "name": "Get Prescriptions",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/encounters/1/prescriptions", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "prescriptions"] }
+          }
+        },
+        {
+          "name": "Add Prescription",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/encounters/1/prescriptions", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "prescriptions"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"medicationId\": 1,\n  \"dosageInstruction\": \"3x1 kapsul sesudah makan\",\n  \"quantity\": 15,\n  \"duration\": 5,\n  \"durationUnit\": \"days\",\n  \"note\": \"Habiskan obat, jangan dihentikan sebelum habis\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Cancel Prescription",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/encounters/1/prescriptions/1", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "prescriptions", "1"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "19. Encounter - Dispense",
+      "description": "Medication Dispensing per Encounter",
+      "item": [
+        {
+          "name": "Dispense Medications",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/encounters/1/dispense", "host": ["{{baseUrl}}"], "path": ["encounters", "1", "dispense"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"prescriptionId\": 1,\n      \"medicationId\": 1,\n      \"quantityDispensed\": 15\n    }\n  ]\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "20. Medications",
+      "description": "Medication & Stock Management",
+      "item": [
+        {
+          "name": "Get All Medications",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/medications?search=&lowStock=false&nearExpiry=false&page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["medications"],
+              "query": [
+                { "key": "search", "value": "" },
+                { "key": "lowStock", "value": "false", "description": "Filter low stock medications" },
+                { "key": "nearExpiry", "value": "false", "description": "Filter near expiry medications" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Medication",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/medications", "host": ["{{baseUrl}}"], "path": ["medications"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Amoxicillin 500mg\",\n  \"genericName\": \"Amoxicillin\",\n  \"strength\": \"500\",\n  \"strengthUnit\": \"mg\",\n  \"dosageForm\": \"kapsul\",\n  \"quantity\": 100,\n  \"minStock\": 20,\n  \"price\": 5000,\n  \"supplier\": \"PT Kimia Farma\",\n  \"expirationDate\": \"2027-12-31\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Medication",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/medications/1", "host": ["{{baseUrl}}"], "path": ["medications", "1"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Amoxicillin 500mg\",\n  \"minStock\": 30,\n  \"price\": 5500,\n  \"supplier\": \"PT Kimia Farma\",\n  \"isActive\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Adjust Medication Stock",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/medications/1/stock", "host": ["{{baseUrl}}"], "path": ["medications", "1", "stock"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"purchase\",\n  \"quantity\": 50,\n  \"reason\": \"Pembelian obat dari distributor\",\n  \"batchNo\": \"BATCH-2026-001\",\n  \"expirationDate\": \"2028-06-30\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "21. Billing",
+      "description": "Billing & Payment Management",
+      "item": [
+        {
+          "name": "Get All Billings",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/billings?status=&dateFrom=2026-06-01&dateTo=2026-06-30&patientId=&page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["billings"],
+              "query": [
+                { "key": "status", "value": "", "description": "pending | partial | paid | cancelled | refunded" },
+                { "key": "dateFrom", "value": "2026-06-01" },
+                { "key": "dateTo", "value": "2026-06-30" },
+                { "key": "patientId", "value": "" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Billing",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/billings", "host": ["{{baseUrl}}"], "path": ["billings"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"encounterId\": 1,\n  \"items\": [\n    {\n      \"tarifId\": 1,\n      \"name\": \"Konsultasi Dokter\",\n      \"quantity\": 1,\n      \"unitPrice\": 100000,\n      \"discount\": 0,\n      \"discountType\": \"nominal\"\n    },\n    {\n      \"tarifId\": null,\n      \"name\": \"Amoxicillin 500mg\",\n      \"quantity\": 15,\n      \"unitPrice\": 5000,\n      \"discount\": 0,\n      \"discountType\": \"nominal\"\n    }\n  ],\n  \"totalDiscount\": 0,\n  \"totalDiscountType\": \"nominal\",\n  \"notes\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Billing Detail",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/billings/1", "host": ["{{baseUrl}}"], "path": ["billings", "1"] }
+          }
+        },
+        {
+          "name": "Record Payment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/billings/1/payments", "host": ["{{baseUrl}}"], "path": ["billings", "1", "payments"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"method\": \"cash\",\n  \"amount\": 175000,\n  \"note\": \"Pembayaran lunas\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Submit Refund Request",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/billings/1/refund-request", "host": ["{{baseUrl}}"], "path": ["billings", "1", "refund-request"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 50000,\n  \"reason\": \"Kelebihan pembayaran dari pasien\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Invoice (PDF)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/billings/1/invoice", "host": ["{{baseUrl}}"], "path": ["billings", "1", "invoice"] }
+          }
+        },
+        {
+          "name": "Approve / Reject Refund",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/billings/1/refund-request/1/approve", "host": ["{{baseUrl}}"], "path": ["billings", "1", "refund-request", "1", "approve"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"approved\",\n  \"approvalNote\": \"Disetujui oleh owner\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "22. Reports",
+      "description": "Reports & Analytics (Role: OWNER)",
+      "item": [
+        {
+          "name": "Visit Report",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/reports/visits?dateFrom=2026-06-01&dateTo=2026-06-30&practitionerId=&locationId=",
+              "host": ["{{baseUrl}}"],
+              "path": ["reports", "visits"],
+              "query": [
+                { "key": "dateFrom", "value": "2026-06-01" },
+                { "key": "dateTo", "value": "2026-06-30" },
+                { "key": "practitionerId", "value": "" },
+                { "key": "locationId", "value": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Financial Report",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/reports/financial?dateFrom=2026-06-01&dateTo=2026-06-30",
+              "host": ["{{baseUrl}}"],
+              "path": ["reports", "financial"],
+              "query": [
+                { "key": "dateFrom", "value": "2026-06-01" },
+                { "key": "dateTo", "value": "2026-06-30" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "SATUSEHAT Sync Status Report",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/reports/satusehat-sync?dateFrom=2026-06-01&dateTo=2026-06-30&status=",
+              "host": ["{{baseUrl}}"],
+              "path": ["reports", "satusehat-sync"],
+              "query": [
+                { "key": "dateFrom", "value": "2026-06-01" },
+                { "key": "dateTo", "value": "2026-06-30" },
+                { "key": "status", "value": "", "description": "pending | success | failed" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Retry Failed SATUSEHAT Syncs",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/reports/satusehat-sync/retry", "host": ["{{baseUrl}}"], "path": ["reports", "satusehat-sync", "retry"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ids\": [1, 2, 3]\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "23. SATUSEHAT Integration",
+      "description": "Manual SATUSEHAT Sync (Role: OWNER)",
+      "item": [
+        {
+          "name": "Sync Patient",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/satusehat/sync/patient/1", "host": ["{{baseUrl}}"], "path": ["satusehat", "sync", "patient", "1"] }
+          }
+        },
+        {
+          "name": "Sync Encounter",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/satusehat/sync/encounter/1", "host": ["{{baseUrl}}"], "path": ["satusehat", "sync", "encounter", "1"] }
+          }
+        },
+        {
+          "name": "Sync Condition (Diagnosis)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/satusehat/sync/condition/1", "host": ["{{baseUrl}}"], "path": ["satusehat", "sync", "condition", "1"] }
+          }
+        },
+        {
+          "name": "Sync Procedure",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/satusehat/sync/procedure/1", "host": ["{{baseUrl}}"], "path": ["satusehat", "sync", "procedure", "1"] }
+          }
+        },
+        {
+          "name": "Sync Observation (Vital Signs)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/satusehat/sync/observation/1", "host": ["{{baseUrl}}"], "path": ["satusehat", "sync", "observation", "1"] }
+          }
+        },
+        {
+          "name": "Sync Medication",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/satusehat/sync/medication/1", "host": ["{{baseUrl}}"], "path": ["satusehat", "sync", "medication", "1"] }
+          }
+        },
+        {
+          "name": "Sync Prescription",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/satusehat/sync/prescription/1", "host": ["{{baseUrl}}"], "path": ["satusehat", "sync", "prescription", "1"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "24. ICD Code Search",
+      "description": "ICD Code Lookup",
+      "item": [
+        {
+          "name": "Search ICD-10 Codes",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/icd10/search?q=karies&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["icd10", "search"],
+              "query": [
+                { "key": "q", "value": "karies", "description": "Search keyword (required)" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search ICD-9-CM Codes",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/icd9/search?q=scaling&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["icd9", "search"],
+              "query": [
+                { "key": "q", "value": "scaling", "description": "Search keyword (required)" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
