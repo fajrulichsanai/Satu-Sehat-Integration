@@ -14,6 +14,7 @@ import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import { User } from '../users/entities/user.entity';
+import { Clinic } from '../clinics/entities/clinic.entity';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
 import { UserRole } from '../../enums';
 import { OwnerCodeService } from '../owner-code/owner-code.service';
@@ -25,6 +26,8 @@ export class AuthService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(Clinic)
+    private clinicRepository: Repository<Clinic>,
     private jwtService: JwtService,
     private configService: ConfigService,
     private ownerCodeService: OwnerCodeService,
@@ -56,32 +59,52 @@ export class AuthService {
       });
     }
 
-    // Validate owner code
-    const isValidOwnerCode = await this.ownerCodeService.validate(
-      dto.ownerCode || '',
-    );
-
-    if (!isValidOwnerCode && dto.ownerCode) {
-      Logger.warn(
-        `Invalid owner code for user ${dto.email}. Role set to PENDING.`,
-        'AuthService',
-      );
+    // Validate owner code if provided
+    let isValidOwnerCode = false;
+    if (dto.ownerCode) {
+      isValidOwnerCode = await this.ownerCodeService.validate(dto.ownerCode);
+      if (!isValidOwnerCode) {
+        throw new BadRequestException({
+          success: false,
+          error: {
+            code: 'INVALID_OWNER_CODE',
+            message: 'Owner code tidak valid',
+            details: [
+              { field: 'ownerCode', message: 'Owner code yang Anda masukkan tidak valid atau sudah digunakan' },
+            ],
+          },
+        });
+      }
     }
 
     // Hash password
     const passwordHash = await bcrypt.hash(dto.password!, 10);
 
+    // Create clinic for owner (only if owner code is valid)
+    let clinic: Clinic | null = null;
+    if (isValidOwnerCode) {
+      clinic = this.clinicRepository.create({
+        name: `Klinik ${dto.name}`,
+        address: 'To be completed',
+        city: 'To be completed',
+        province: 'To be completed',
+        phone: '000000000',
+        setupComplete: false,
+      });
+      clinic = await this.clinicRepository.save(clinic);
+    }
+
     // Determine user role and active status based on owner code validity
     const userRole = isValidOwnerCode ? UserRole.OWNER : UserRole.PENDING;
     const isActive = isValidOwnerCode;
 
-    // Create user (clinicId will be set later when owner creates clinic)
+    // Create user
     const user = this.userRepository.create({
       email: dto.email,
       passwordHash,
       name: dto.name,
       role: userRole,
-      clinicId: null,
+      clinicId: clinic?.id || null,
       isActive,
     });
 

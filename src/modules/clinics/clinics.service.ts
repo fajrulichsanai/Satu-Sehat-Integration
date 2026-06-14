@@ -7,7 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
 import { Clinic } from './entities/clinic.entity';
-import { CreateClinicDto, UpdateClinicDto, SatusehatConfigDto } from './dto/clinic.dto';
+import { UpdateClinicDto, SatusehatConfigDto } from './dto/clinic.dto';
 import { encrypt, decrypt } from '../../common/utils/crypto.util';
 
 @Injectable()
@@ -23,32 +23,6 @@ export class ClinicsService {
       'ENCRYPTION_KEY',
       'default-key-32-chars-padded!!!!!',
     );
-  }
-
-  /**
-   * Create new clinic
-   */
-  async create(dto: CreateClinicDto, userId: number) {
-    const clinic = this.clinicRepository.create({
-      ...dto,
-      createdBy: userId,
-      updatedBy: userId,
-      setupComplete: !!(
-        dto.name &&
-        dto.address &&
-        dto.city &&
-        dto.province &&
-        dto.phone
-      ),
-    });
-
-    await this.clinicRepository.save(clinic);
-
-    return {
-      success: true,
-      data: clinic,
-      message: 'Klinik berhasil dibuat',
-    };
   }
 
   /**

@@ -223,7 +223,6 @@ export class UsersService {
   async findPending(clinicId: number) {
     const users = await this.userRepository.find({
       where: {
-        clinicId,
         role: UserRole.PENDING,
       },
       order: { createdAt: 'DESC' },
