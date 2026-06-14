@@ -13,6 +13,7 @@ import { SatusehatSyncLog } from './sync/entities/satusehat-sync-log.entity';
 import { SatusehatController } from './satusehat.controller';
 import { SatusehatClientService } from './satusehat-client.service';
 import { SatusehatGlobalOauthService } from './satusehat-global-oauth.service';
+import { SatusehatFhirService } from './satusehat-fhir.service';
 import { SyncOrchestratorService } from './sync/sync-orchestrator.service';
 import { SyncQueueService } from './sync/sync-queue.service';
 
@@ -35,9 +36,10 @@ import { SyncQueueService } from './sync/sync-queue.service';
   providers: [
     SatusehatClientService,
     SatusehatGlobalOauthService,
+    SatusehatFhirService,
     SyncOrchestratorService,
     SyncQueueService,
   ],
-  exports: [SatusehatClientService, SatusehatGlobalOauthService, SyncOrchestratorService, SyncQueueService],
+  exports: [SatusehatClientService, SatusehatGlobalOauthService, SatusehatFhirService, SyncOrchestratorService, SyncQueueService],
 })
 export class SatusehatModule {}

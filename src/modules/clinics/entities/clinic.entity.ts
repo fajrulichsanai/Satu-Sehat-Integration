@@ -25,6 +25,9 @@ export class Clinic extends BaseEntity {
   @Column({ length: 100, nullable: true })
   email: string;
 
+  @Column({ length: 255, nullable: true })
+  website: string;
+
   @Column({ name: 'sip_number', length: 50, nullable: true })
   sipNumber: string;
 
@@ -56,4 +59,27 @@ export class Clinic extends BaseEntity {
 
   @Column({ name: 'setup_complete', default: false })
   setupComplete: boolean;
+
+  // Satu Sehat FHIR Resource IDs
+  @Column({ name: 'satusehat_divisi_org_id', length: 100, nullable: true })
+  satusehatDivisiOrgId: string;
+
+  @Column({ name: 'satusehat_layanan_org_id', length: 100, nullable: true })
+  satusehatLayananOrgId: string;
+
+  @Column({ name: 'satusehat_poli_location_id', length: 100, nullable: true })
+  satusehatPoliLocationId: string;
+
+  // Satu Sehat Kewilayahan codes
+  @Column({ name: 'satusehat_province_code', length: 10, nullable: true })
+  satusehatProvinceCode: string;
+
+  @Column({ name: 'satusehat_city_code', length: 10, nullable: true })
+  satusehatCityCode: string;
+
+  @Column({ name: 'satusehat_district_code', length: 10, nullable: true })
+  satusehatDistrictCode: string;
+
+  @Column({ name: 'satusehat_village_code', length: 10, nullable: true })
+  satusehatVillageCode: string;
 }

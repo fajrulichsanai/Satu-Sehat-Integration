@@ -63,6 +63,35 @@ export class UpdateClinicDto {
   })
   @IsOptional()
   operationalHours?: Record<string, any>;
+
+  @ApiProperty({ example: 'www.klinik.com', required: false })
+  @IsOptional()
+  @MaxLength(255)
+  website?: string;
+
+  @ApiProperty({ example: '31', required: false, description: 'Kode provinsi Satu Sehat' })
+  @IsOptional()
+  @MaxLength(10)
+  satusehatProvinceCode?: string;
+
+  @ApiProperty({ example: '3101', required: false, description: 'Kode kota Satu Sehat' })
+  @IsOptional()
+  @MaxLength(10)
+  satusehatCityCode?: string;
+
+  @ApiProperty({ example: '310101', required: false, description: 'Kode district Satu Sehat' })
+  @IsOptional()
+  @MaxLength(10)
+  satusehatDistrictCode?: string;
+
+  @ApiProperty({ example: '3101011', required: false, description: 'Kode village/sub-district Satu Sehat' })
+  @IsOptional()
+  @MaxLength(10)
+  satusehatVillageCode?: string;
+
+  @ApiProperty({ example: true, required: false, description: 'Create Satu Sehat resources (Organization & Location)' })
+  @IsOptional()
+  createSatusehatResources?: boolean;
 }
 
 export class SatusehatConfigDto {
