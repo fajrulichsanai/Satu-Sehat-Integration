@@ -18,6 +18,7 @@ import { MedicationsModule } from './modules/medications/medications.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SatusehatModule } from './modules/satusehat/satusehat.module';
+import { MasterDataModule } from './modules/master-data/master-data.module';
 import { SoapTemplatesModule } from './modules/soap-templates/soap-templates.module';
 import { IcdModule } from './modules/icd/icd.module';
 import { OwnerCodeModule } from './modules/owner-code/owner-code.module';
@@ -68,6 +69,7 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     BillingModule,
     ReportsModule,
     SatusehatModule,
+    MasterDataModule,
     SoapTemplatesModule,
     IcdModule,
     OwnerCodeModule,

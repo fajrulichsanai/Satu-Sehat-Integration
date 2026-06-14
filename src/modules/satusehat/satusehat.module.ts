@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import { Patient } from '../patients/entities/patient.entity';
 import { Diagnosis } from '../diagnoses/entities/diagnosis.entity';
@@ -11,11 +12,13 @@ import { Clinic } from '../clinics/entities/clinic.entity';
 import { SatusehatSyncLog } from './sync/entities/satusehat-sync-log.entity';
 import { SatusehatController } from './satusehat.controller';
 import { SatusehatClientService } from './satusehat-client.service';
+import { SatusehatGlobalOauthService } from './satusehat-global-oauth.service';
 import { SyncOrchestratorService } from './sync/sync-orchestrator.service';
 import { SyncQueueService } from './sync/sync-queue.service';
 
 @Module({
   imports: [
+    ConfigModule,
     TypeOrmModule.forFeature([
       Encounter,
       Patient,
@@ -31,9 +34,10 @@ import { SyncQueueService } from './sync/sync-queue.service';
   controllers: [SatusehatController],
   providers: [
     SatusehatClientService,
+    SatusehatGlobalOauthService,
     SyncOrchestratorService,
     SyncQueueService,
   ],
-  exports: [SatusehatClientService, SyncOrchestratorService, SyncQueueService],
+  exports: [SatusehatClientService, SatusehatGlobalOauthService, SyncOrchestratorService, SyncQueueService],
 })
 export class SatusehatModule {}
