@@ -12,6 +12,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { UserRole } from '../../enums';
 import {
+  CreateClinicDto,
   UpdateClinicDto,
   SatusehatConfigDto,
   ClinicResponseDto,
@@ -23,6 +24,17 @@ import {
 @ApiBearerAuth('JWT-auth')
 export class ClinicsController {
   constructor(private readonly clinicsService: ClinicsService) {}
+
+  @Post()
+  @Roles(UserRole.OWNER)
+  @ApiOperation({ summary: 'Create new clinic (Owner only)' })
+  @ApiResponse({ status: 201, description: 'Clinic created successfully' })
+  async create(
+    @Body() dto: CreateClinicDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.clinicsService.create(dto, user.userId);
+  }
 
   @Get()
   @Roles(UserRole.OWNER, UserRole.ADMIN)

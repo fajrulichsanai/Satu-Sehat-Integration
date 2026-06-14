@@ -14,7 +14,6 @@ import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import { User } from '../users/entities/user.entity';
-import { Clinic } from '../clinics/entities/clinic.entity';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
 import { UserRole } from '../../enums';
 import { OwnerCodeService } from '../owner-code/owner-code.service';
@@ -26,8 +25,6 @@ export class AuthService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
-    @InjectRepository(Clinic)
-    private clinicRepository: Repository<Clinic>,
     private jwtService: JwtService,
     private configService: ConfigService,
     private ownerCodeService: OwnerCodeService,
@@ -37,8 +34,8 @@ export class AuthService {
 
   /**
    * Register new user
-   * - Owner: requires owner code, creates clinic
-   * - Admin/Dokter: requires existing clinic, pending approval
+   * - Valid owner code: assign OWNER role, create clinic, set active
+   * - No/invalid owner code: assign PENDING role, requires approval
    */
   async register(dto: RegisterDto) {
     // Check if email already exists
@@ -59,50 +56,48 @@ export class AuthService {
       });
     }
 
-    // Validate owner code for owner role
-    if (dto.role === UserRole.OWNER) {
-      if (!dto.ownerCode) {
-        throw new BadRequestException({
-          success: false,
-          error: {
-            code: 'OWNER_CODE_REQUIRED',
-            message: 'Kode owner diperlukan untuk registrasi owner',
-          },
-        });
-      }
+    // Validate owner code
+    const isValidOwnerCode = await this.ownerCodeService.validate(
+      dto.ownerCode || '',
+    );
 
-      // TODO: Validate owner code against whitelist
-      // For now, accept any code
+    if (!isValidOwnerCode && dto.ownerCode) {
+      Logger.warn(
+        `Invalid owner code for user ${dto.email}. Role set to PENDING.`,
+        'AuthService',
+      );
     }
 
     // Hash password
     const passwordHash = await bcrypt.hash(dto.password!, 10);
 
-    // Create clinic for owner
-    let clinic: Clinic | null = null;
-    if (dto.role === UserRole.OWNER) {
-      clinic = this.clinicRepository.create({
-        name: `Klinik ${dto.name}`,
-        address: 'To be completed',
-        city: 'To be completed',
-        province: 'To be completed',
-        phone: '000000000',
-        setupComplete: false,
-      });
-      clinic = await this.clinicRepository.save(clinic);
-    }
+    // Determine user role and active status based on owner code validity
+    const userRole = isValidOwnerCode ? UserRole.OWNER : UserRole.PENDING;
+    const isActive = isValidOwnerCode;
 
-    // Create user
+    // Create user (clinicId will be set later when owner creates clinic)
     const user = this.userRepository.create({
       email: dto.email,
       passwordHash,
       name: dto.name,
-      role: dto.role === UserRole.OWNER ? UserRole.OWNER : UserRole.PENDING,
-      clinicId: clinic?.id || null,
-      isActive: dto.role === UserRole.OWNER, // Owner is active immediately
+      role: userRole,
+      clinicId: null,
+      isActive,
     });
 
     await this.userRepository.save(user);
+
+    // Mark owner code as used if valid
+    if (isValidOwnerCode && dto.ownerCode) {
+      try {
+        await this.ownerCodeService.markAsUsed(dto.ownerCode, user.id);
+      } catch (error) {
+        Logger.error(
+          `Failed to mark owner code as used: ${error instanceof Error ? error.message : String(error)}`,
+          'AuthService',
+        );
+      }
+    }
 
     // Send verification email
     try {
@@ -123,9 +118,9 @@ export class AuthService {
         role: user.role,
         isActive: user.isActive,
         message:
-          dto.role === UserRole.OWNER
-            ? 'Registrasi berhasil. Silakan verifikasi email untuk login.'
-            : 'Registrasi berhasil. Silakan verifikasi email dan menunggu persetujuan owner.',
+          userRole === UserRole.OWNER
+            ? 'Registrasi owner berhasil. Silakan verifikasi email untuk login.'
+            : 'Registrasi berhasil. Status role Anda pending, menunggu persetujuan owner.',
       },
     };
   }

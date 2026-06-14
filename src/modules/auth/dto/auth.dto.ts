@@ -4,10 +4,8 @@ import {
   IsNotEmpty,
   MinLength,
   MaxLength,
-  IsEnum,
   IsOptional,
 } from 'class-validator';
-import { UserRole } from '../../../enums';
 
 export class RegisterDto {
   @ApiProperty({ example: 'admin@clinic.com', description: 'Email address' })
@@ -29,17 +27,9 @@ export class RegisterDto {
   name: string | undefined;
 
   @ApiProperty({
-    example: 'owner',
-    enum: UserRole,
-    description: 'User role',
-  })
-  @IsEnum(UserRole)
-  @IsNotEmpty()
-  role: UserRole | undefined;
-
-  @ApiProperty({
     example: 'ABC123',
-    description: 'Owner code (required for owner role)',
+    description:
+      'Owner code (optional - if valid, user becomes owner; otherwise pending)',
     required: false,
   })
   @IsOptional()
