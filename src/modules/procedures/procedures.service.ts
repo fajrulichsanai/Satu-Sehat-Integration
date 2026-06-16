@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -71,6 +72,8 @@ const VALID_TOOTH_NUMBERS = new Set([
 
 @Injectable()
 export class ProceduresService {
+  private readonly logger = new Logger(ProceduresService.name);
+
   constructor(
     @InjectRepository(Procedure)
     private readonly procedureRepository: Repository<Procedure>,

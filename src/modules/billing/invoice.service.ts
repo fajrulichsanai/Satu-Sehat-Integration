@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Billing } from './entities/billing.entity';
@@ -6,6 +6,8 @@ import * as PdfPrinter from 'pdfmake';
 
 @Injectable()
 export class InvoiceService {
+  private readonly logger = new Logger(InvoiceService.name);
+
   constructor(
     @InjectRepository(Billing)
     private readonly billingRepository: Repository<Billing>,
@@ -15,14 +17,17 @@ export class InvoiceService {
     billingId: number,
     clinicId: number,
   ): Promise<Buffer> {
+    this.logger.log(`[CREATE] Generate invoice PDF | billingId=${billingId}, clinicId=${clinicId}`);
     const billing = await this.billingRepository.findOne({
       where: { id: billingId, clinicId },
       relations: { patient: true, items: true },
     });
-    if (!billing)
+    if (!billing) {
+      this.logger.warn(`[CREATE] Billing tidak ditemukan untuk generate PDF | billingId=${billingId}`);
       throw new NotFoundException(
         `Billing dengan ID ${billingId} tidak ditemukan`,
       );
+    }
 
     const fonts = {
       Roboto: {

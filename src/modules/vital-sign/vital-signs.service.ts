@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { VitalSign } from '../vital-sign/entities/vital-sign.entity';
@@ -83,6 +83,8 @@ const VITAL_SIGN_DEFS: VitalSignDef[] = [
 
 @Injectable()
 export class VitalSignsService {
+  private readonly logger = new Logger(VitalSignsService.name);
+
   constructor(
     @InjectRepository(VitalSign)
     private readonly vitalSignRepository: Repository<VitalSign>,

@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -21,6 +22,8 @@ import { DispenseMedicationsDto } from './dto/dispense.dto';
 
 @Injectable()
 export class DispenseService {
+  private readonly logger = new Logger(DispenseService.name);
+
   constructor(
     @InjectRepository(Dispense)
     private readonly dispenseRepository: Repository<Dispense>,
@@ -37,6 +40,7 @@ export class DispenseService {
     dto: DispenseMedicationsDto,
     userId: number,
   ) {
+    this.logger.log(`[CREATE] Melakukan dispense obat | encounterId=${encounterId}, clinicId=${clinicId}, items=${dto.items.length}`);
     const encounter = await this.encounterRepository.findOne({
       where: { id: encounterId, clinicId },
     });
@@ -134,6 +138,7 @@ export class DispenseService {
         });
       }
 
+      this.logger.log(`[CREATE] Dispense berhasil | encounterId=${encounterId}, itemsDispensed=${results.length}`);
       return { dispensedAt: now, items: results };
     });
   }

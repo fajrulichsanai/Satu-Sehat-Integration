@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -18,6 +19,8 @@ import { SatusehatClientService } from '../satusehat/satusehat-client.service';
 
 @Injectable()
 export class PatientsService {
+  private readonly logger = new Logger(PatientsService.name);
+
   constructor(
     @InjectRepository(Patient)
     private readonly patientRepository: Repository<Patient>,
@@ -31,6 +34,7 @@ export class PatientsService {
     clinicId: number,
     query: PatientQueryDto,
   ): Promise<PaginatedResult<Patient>> {
+    this.logger.log(`[GET-ALL] Mengambil daftar pasien | clinicId=${clinicId}, search=${query.search || '-'}`);
     const qb = this.patientRepository
       .createQueryBuilder('p')
       .where('p.clinicId = :clinicId', { clinicId });
@@ -57,10 +61,12 @@ export class PatientsService {
   }
 
   async findOne(id: number, clinicId: number): Promise<Patient> {
+    this.logger.log(`[GET] Mengambil data pasien | id=${id}, clinicId=${clinicId}`);
     const patient = await this.patientRepository.findOne({
       where: { id, clinicId },
     });
     if (!patient) {
+      this.logger.warn(`[GET] Pasien tidak ditemukan | id=${id}, clinicId=${clinicId}`);
       throw new NotFoundException(`Pasien dengan ID ${id} tidak ditemukan`);
     }
     return patient;
@@ -82,7 +88,9 @@ export class PatientsService {
   }
 
   async create(clinicId: number, dto: CreatePatientDto): Promise<Patient> {
+    this.logger.log(`[CREATE] Membuat pasien baru | clinicId=${clinicId}, name=${dto.name}, nik=${dto.nik || 'bayi'}`);
     if (!dto.isNewborn && !dto.nik) {
+      this.logger.warn(`[CREATE] NIK tidak diisi untuk pasien bukan bayi | clinicId=${clinicId}`);
       throw new BadRequestException(
         'NIK wajib diisi untuk pasien bukan bayi baru lahir',
       );
@@ -111,7 +119,9 @@ export class PatientsService {
       maritalStatus: dto.maritalStatus,
     });
 
-    return this.patientRepository.save(patient);
+    const saved = await this.patientRepository.save(patient);
+    this.logger.log(`[CREATE] Pasien berhasil dibuat | id=${saved.id}, noRm=${saved.noRm}, clinicId=${clinicId}`);
+    return saved;
   }
 
   async update(
@@ -119,6 +129,7 @@ export class PatientsService {
     clinicId: number,
     dto: UpdatePatientDto,
   ): Promise<Patient> {
+    this.logger.log(`[UPDATE] Memperbarui data pasien | id=${id}, clinicId=${clinicId}`);
     const patient = await this.findOne(id, clinicId);
 
     if (dto.nik && dto.nik !== patient.nik) {
@@ -142,7 +153,9 @@ export class PatientsService {
       maritalStatus: dto.maritalStatus ?? patient.maritalStatus,
     });
 
-    return this.patientRepository.save(patient);
+    const updated = await this.patientRepository.save(patient);
+    this.logger.log(`[UPDATE] Data pasien berhasil diperbarui | id=${id}, clinicId=${clinicId}`);
+    return updated;
   }
 
   private async checkDuplicateNik(
@@ -160,6 +173,7 @@ export class PatientsService {
 
     const existing = await qb.getOne();
     if (existing) {
+      this.logger.warn(`[CREATE] NIK duplikat ditemukan | nik=${nik}, clinicId=${clinicId}`);
       throw new ConflictException(
         `Pasien dengan NIK ${nik} sudah terdaftar di klinik ini`,
       );
@@ -167,8 +181,11 @@ export class PatientsService {
   }
 
   async searchSatusehat(nik: string, clinicId: number) {
-    if (!nik)
+    this.logger.log(`[SEARCH] Mencari pasien di SATUSEHAT | nik=${nik}, clinicId=${clinicId}`);
+    if (!nik) {
+      this.logger.warn(`[SEARCH] NIK kosong untuk pencarian SATUSEHAT | clinicId=${clinicId}`);
       throw new BadRequestException('NIK diperlukan untuk pencarian SATUSEHAT');
+    }
     return this.satusehatClient.searchPatientByNik(clinicId, nik);
   }
 

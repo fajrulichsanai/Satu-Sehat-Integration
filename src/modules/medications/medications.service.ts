@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -19,6 +20,8 @@ import {
 
 @Injectable()
 export class MedicationsService {
+  private readonly logger = new Logger(MedicationsService.name);
+
   constructor(
     @InjectRepository(Medication)
     private readonly medicationRepository: Repository<Medication>,

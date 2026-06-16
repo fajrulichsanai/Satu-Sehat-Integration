@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -14,6 +15,8 @@ import { CreateDiagnosisDto } from './dto/diagnosis.dto';
 
 @Injectable()
 export class DiagnosesService {
+  private readonly logger = new Logger(DiagnosesService.name);
+
   constructor(
     @InjectRepository(Diagnosis)
     private readonly diagnosisRepository: Repository<Diagnosis>,
@@ -22,6 +25,7 @@ export class DiagnosesService {
   ) {}
 
   async findAll(encounterId: number, clinicId: number) {
+    this.logger.log(`[GET-ALL] Mengambil daftar diagnosis | encounterId=${encounterId}, clinicId=${clinicId}`);
     await this.verifyEncounter(encounterId, clinicId);
     return this.diagnosisRepository.find({
       where: { encounterId },
@@ -35,6 +39,7 @@ export class DiagnosesService {
     dto: CreateDiagnosisDto,
     userId: number,
   ) {
+    this.logger.log(`[CREATE] Menambah diagnosis | encounterId=${encounterId}, clinicId=${clinicId}, icd10=${dto.icd10Code}`);
     const encounter = await this.verifyEncounter(encounterId, clinicId);
 
     if (encounter.status === EncounterStatus.FINISHED) {
@@ -68,7 +73,9 @@ export class DiagnosesService {
       createdBy: userId,
     });
 
-    return this.diagnosisRepository.save(diagnosis);
+    const saved = await this.diagnosisRepository.save(diagnosis);
+    this.logger.log(`[CREATE] Diagnosis berhasil ditambahkan | id=${saved.id}, encounterId=${encounterId}`);
+    return saved;
   }
 
   async remove(
@@ -76,6 +83,7 @@ export class DiagnosesService {
     diagnosisId: number,
     clinicId: number,
   ): Promise<void> {
+    this.logger.log(`[DELETE] Menghapus diagnosis | diagnosisId=${diagnosisId}, encounterId=${encounterId}`);
     const encounter = await this.verifyEncounter(encounterId, clinicId);
 
     if (encounter.status === EncounterStatus.FINISHED) {
@@ -94,6 +102,7 @@ export class DiagnosesService {
     }
 
     await this.diagnosisRepository.remove(diagnosis);
+    this.logger.log(`[DELETE] Diagnosis berhasil dihapus | diagnosisId=${diagnosisId}`);
   }
 
   private async verifyEncounter(

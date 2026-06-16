@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -15,6 +16,8 @@ import { ApproveRefundDto, CreateRefundRequestDto } from './dto/billing.dto';
 
 @Injectable()
 export class RefundsService {
+  private readonly logger = new Logger(RefundsService.name);
+
   constructor(
     @InjectRepository(RefundRequest)
     private readonly refundRepository: Repository<RefundRequest>,
@@ -28,6 +31,7 @@ export class RefundsService {
     dto: CreateRefundRequestDto,
     userId: number,
   ) {
+    this.logger.log(`[CREATE] Membuat permintaan refund | billingId=${billingId}, clinicId=${clinicId}, amount=${dto.amount}`);
     const billing = await this.billingRepository.findOne({
       where: { id: billingId, clinicId },
     });
@@ -67,7 +71,9 @@ export class RefundsService {
       status: RefundStatus.PENDING_APPROVAL,
       createdBy: userId,
     } as any);
-    return this.refundRepository.save(refund);
+    const saved = await this.refundRepository.save(refund);
+    // this.logger.log(`[CREATE] Permintaan refund berhasil dibuat | id=${saved.id}, billingId=${billingId}`);
+    return saved;
   }
 
   async processApproval(
@@ -77,6 +83,7 @@ export class RefundsService {
     dto: ApproveRefundDto,
     userId: number,
   ) {
+    this.logger.log(`[UPDATE] Proses approval refund | billingId=${billingId}, refundId=${refundId}, action=${dto.action}`);
     const billing = await this.billingRepository.findOne({
       where: { id: billingId, clinicId },
     });
@@ -109,6 +116,8 @@ export class RefundsService {
       await this.billingRepository.save(billing);
     }
 
-    return this.refundRepository.save(refund);
+    const result = await this.refundRepository.save(refund);
+    this.logger.log(`[UPDATE] Refund berhasil diproses | refundId=${refundId}, status=${result.status}`);
+    return result;
   }
 }

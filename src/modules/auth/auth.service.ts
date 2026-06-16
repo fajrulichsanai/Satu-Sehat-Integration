@@ -397,9 +397,11 @@ export class AuthService {
 
     await this.userRepository.update(user.id, {
       emailVerifiedAt: new Date(),
+      isActive: true,
       verificationToken: null as unknown as string,
     });
 
+    Logger.log(`[VERIFY] Email berhasil diverifikasi | userId=${user.id}`);
     return { success: true, data: { message: 'Email berhasil diverifikasi' } };
   }
 }

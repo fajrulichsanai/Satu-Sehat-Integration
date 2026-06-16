@@ -2,6 +2,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -17,6 +18,8 @@ import { CreatePrescriptionDto } from './dto/prescription.dto';
 
 @Injectable()
 export class PrescriptionsService {
+  private readonly logger = new Logger(PrescriptionsService.name);
+
   constructor(
     @InjectRepository(Prescription)
     private readonly prescriptionRepository: Repository<Prescription>,
