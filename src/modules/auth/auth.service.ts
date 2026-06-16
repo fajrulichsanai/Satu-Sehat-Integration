@@ -367,7 +367,7 @@ export class AuthService {
           <p>${verificationUrl}</p>
           <p>Link ini berlaku selama 24 jam.</p>
           <p>Jika Anda tidak mendaftar akun ini, abaikan email ini.</p>
-          <p>Salam,<br>Tim Satu Sehat</p>
+          <p>Salam,<br>Tim ApexRecord</p>
         `,
       });
       Logger.log(`Verification email sent to ${userEmail}`, 'AuthService');
