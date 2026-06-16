@@ -44,6 +44,25 @@ export class UpdateUserRoleDto {
   role: UserRole;
 }
 
+export class AssignUserRoleDto {
+  @ApiProperty({
+    example: 'dokter',
+    enum: [UserRole.OWNER, UserRole.ADMIN, UserRole.DOKTER],
+    description: 'Role yang akan di-assign (tidak bisa pending)',
+  })
+  @IsEnum(UserRole)
+  @IsNotEmpty()
+  role: UserRole;
+}
+
+export class RoleItemDto {
+  @ApiProperty({ example: 'admin' })
+  value: string;
+
+  @ApiProperty({ example: 'Admin' })
+  label: string;
+}
+
 export class UserResponseDto {
   @ApiProperty({ example: 1 })
   id: number;

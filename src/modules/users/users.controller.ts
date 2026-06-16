@@ -6,6 +6,8 @@ import {
   Patch,
   Param,
   Body,
+  Query,
+  Logger,
   UseGuards,
   ParseIntPipe,
 } from '@nestjs/common';
@@ -13,6 +15,7 @@ import {
   ApiTags,
   ApiOperation,
   ApiResponse,
+  ApiQuery,
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
@@ -25,6 +28,8 @@ import {
   UserListResponseDto,
   UserResponseDto,
   UpdateUserRoleDto,
+  AssignUserRoleDto,
+  RoleItemDto,
 } from './dto/user.dto';
 
 @ApiTags('users')
@@ -32,6 +37,8 @@ import {
 @UseGuards(JwtAuthGuard, RolesGuard, ClinicContextGuard)
 @ApiBearerAuth('JWT-auth')
 export class UsersController {
+  private readonly logger = new Logger(UsersController.name);
+
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
@@ -44,7 +51,44 @@ export class UsersController {
   })
   @ApiResponse({ status: 403, description: 'Forbidden - Owner only' })
   async findAll(@CurrentUser() user: any, @ClinicId() clinicId: number) {
-    return this.usersService.findAll(clinicId, user.role);
+    this.logger.log(`[GET /users] Request masuk | clinicId=${clinicId}, requestedBy=${user.userId}`);
+    const result = await this.usersService.findAll(clinicId, user.role);
+    this.logger.log(`[GET /users] Response dikirim | clinicId=${clinicId}`);
+    return result;
+  }
+
+  @Get('roles')
+  @Roles(UserRole.OWNER)
+  @ApiOperation({ summary: 'Get all available roles (excluding pending)' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of roles',
+    type: [RoleItemDto],
+  })
+  getRoles() {
+    this.logger.log('[GET /users/roles] Request masuk');
+    const result = this.usersService.getRoles();
+    this.logger.log('[GET /users/roles] Response dikirim');
+    return result;
+  }
+
+  @Get('pending/list')
+  @Roles(UserRole.OWNER)
+  @ApiOperation({ summary: 'Get all pending users in clinic (Owner only)' })
+  @ApiQuery({ name: 'email', required: false, description: 'Filter by email (partial match)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Pending users list',
+    type: UserListResponseDto,
+  })
+  async findPending(
+    @ClinicId() clinicId: number,
+    @Query('email') email?: string,
+  ) {
+    this.logger.log(`[GET /users/pending/list] Request masuk | clinicId=${clinicId}${email ? `, email=${email}` : ''}`);
+    const result = await this.usersService.findPending(clinicId, email);
+    this.logger.log(`[GET /users/pending/list] Response dikirim | clinicId=${clinicId}`);
+    return result;
   }
 
   @Get(':id')
@@ -60,7 +104,10 @@ export class UsersController {
     @Param('id', ParseIntPipe) id: number,
     @ClinicId() clinicId: number,
   ) {
-    return this.usersService.findOne(id, clinicId);
+    this.logger.log(`[GET /users/:id] Request masuk | userId=${id}, clinicId=${clinicId}`);
+    const result = await this.usersService.findOne(id, clinicId);
+    this.logger.log(`[GET /users/:id] Response dikirim | userId=${id}`);
+    return result;
   }
 
   @Post(':id/activate')
@@ -77,7 +124,10 @@ export class UsersController {
     @CurrentUser() user: any,
     @ClinicId() clinicId: number,
   ) {
-    return this.usersService.activate(id, clinicId, user.userId);
+    this.logger.log(`[POST /users/:id/activate] Request masuk | userId=${id}, clinicId=${clinicId}, requestedBy=${user.userId}`);
+    const result = await this.usersService.activate(id, clinicId, user.userId);
+    this.logger.log(`[POST /users/:id/activate] Response dikirim | userId=${id}`);
+    return result;
   }
 
   @Post(':id/deactivate')
@@ -92,7 +142,10 @@ export class UsersController {
     @CurrentUser() user: any,
     @ClinicId() clinicId: number,
   ) {
-    return this.usersService.deactivate(id, clinicId, user.userId);
+    this.logger.log(`[POST /users/:id/deactivate] Request masuk | userId=${id}, clinicId=${clinicId}, requestedBy=${user.userId}`);
+    const result = await this.usersService.deactivate(id, clinicId, user.userId);
+    this.logger.log(`[POST /users/:id/deactivate] Response dikirim | userId=${id}`);
+    return result;
   }
 
   @Delete(':id')
@@ -105,19 +158,10 @@ export class UsersController {
     @Param('id', ParseIntPipe) id: number,
     @ClinicId() clinicId: number,
   ) {
-    return this.usersService.remove(id, clinicId);
-  }
-
-  @Get('pending/list')
-  @Roles(UserRole.OWNER)
-  @ApiOperation({ summary: 'Get all pending users in clinic (Owner only)' })
-  @ApiResponse({
-    status: 200,
-    description: 'Pending users list',
-    type: UserListResponseDto,
-  })
-  async findPending(@ClinicId() clinicId: number) {
-    return this.usersService.findPending(clinicId);
+    this.logger.log(`[DELETE /users/:id] Request masuk | userId=${id}, clinicId=${clinicId}`);
+    const result = await this.usersService.remove(id, clinicId);
+    this.logger.log(`[DELETE /users/:id] Response dikirim | userId=${id}`);
+    return result;
   }
 
   @Patch(':id/role')
@@ -133,6 +177,27 @@ export class UsersController {
     @Body() dto: UpdateUserRoleDto,
     @ClinicId() clinicId: number,
   ) {
-    return this.usersService.updateRole(id, clinicId, dto.role);
+    this.logger.log(`[PATCH /users/:id/role] Request masuk | userId=${id}, clinicId=${clinicId}, newRole=${dto.role}`);
+    const result = await this.usersService.updateRole(id, clinicId, dto.role);
+    this.logger.log(`[PATCH /users/:id/role] Response dikirim | userId=${id}`);
+    return result;
+  }
+
+  @Patch(':id/assign-role')
+  @Roles(UserRole.OWNER)
+  @ApiOperation({ summary: 'Assign role to any active user (Owner only)' })
+  @ApiResponse({ status: 200, description: 'Role assigned successfully' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 400, description: 'Invalid role' })
+  async assignRole(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AssignUserRoleDto,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: any,
+  ) {
+    this.logger.log(`[PATCH /users/:id/assign-role] Request masuk | userId=${id}, clinicId=${clinicId}, newRole=${dto.role}, requestedBy=${user.userId}`);
+    const result = await this.usersService.assignRole(id, clinicId, dto.role, user.userId);
+    this.logger.log(`[PATCH /users/:id/assign-role] Response dikirim | userId=${id}`);
+    return result;
   }
 }
