@@ -1,0 +1,39 @@
+name: Deploy NestJS to VPS
+
+on:
+  push:
+    branches:
+      - development
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            set -e
+
+            echo "📁 Masuk ke direktori project..."
+            cd ~/dental-clinic-app/Satu-Sehat-Integration
+
+            echo "⬇️  Pull kode terbaru..."
+            git pull origin development
+
+            echo "📦 Install dependencies..."
+            npm install
+
+            echo "🔨 Build project..."
+            npm run build
+
+            echo "♻️  Restart PM2..."
+            pm2 restart dental-clinic
+
+            echo "✅ Deploy selesai!"
