@@ -19,7 +19,6 @@ async function bootstrap() {
     }),
   );
 
-  // Global Exception Filters (Task 1.6)
   app.useGlobalFilters(
     new AllExceptionsFilter(), // Catch-all filter (must be first)
     new HttpExceptionFilter(), // HTTP exception filter
