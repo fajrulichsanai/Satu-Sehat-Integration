@@ -21,6 +21,10 @@ jobs:
           script: |
             set -e
 
+            # Load NVM agar npm & node tersedia
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
             echo "📁 Masuk ke direktori project..."
             cd ~/dental-clinic-app/Satu-Sehat-Integration
 
