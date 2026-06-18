@@ -13,7 +13,6 @@ import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { UserRole } from '../../enums';
 import {
   UpdateClinicDto,
-  SatusehatConfigDto,
   ClinicResponseDto,
 } from './dto/clinic.dto';
 
@@ -50,26 +49,4 @@ export class ClinicsController {
     return this.clinicsService.update(clinicId, dto, user.userId);
   }
 
-  @Post('satusehat')
-  @Roles(UserRole.OWNER)
-  @ApiOperation({ summary: 'Configure SATUSEHAT integration (Owner only)' })
-  @ApiResponse({ status: 200, description: 'SATUSEHAT config saved' })
-  @ApiResponse({ status: 404, description: 'Clinic not found' })
-  async configureSatusehat(
-    @Body() dto: SatusehatConfigDto,
-    @CurrentUser() user: any,
-    @ClinicId() clinicId: number,
-  ) {
-    return this.clinicsService.configureSatusehat(clinicId, dto, user.userId);
-  }
-
-  @Post('satusehat/test')
-  @Roles(UserRole.OWNER)
-  @ApiOperation({ summary: 'Test SATUSEHAT connection (Owner only)' })
-  @ApiResponse({ status: 200, description: 'Connection test result' })
-  @ApiResponse({ status: 400, description: 'Config incomplete' })
-  @ApiResponse({ status: 404, description: 'Clinic not found' })
-  async testSatusehat(@ClinicId() clinicId: number) {
-    return this.clinicsService.testSatusehatConnection(clinicId);
-  }
 }

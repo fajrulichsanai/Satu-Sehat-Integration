@@ -4,9 +4,7 @@ import {
   IsEmail,
   IsOptional,
   MaxLength,
-  IsEnum,
 } from 'class-validator';
-import { SatusehatEnvironment } from '../../../enums';
 
 export class UpdateClinicDto {
   @ApiProperty({ example: 'Klinik Sehat Bersama' })
@@ -68,32 +66,6 @@ export class UpdateClinicDto {
   @IsOptional()
   @MaxLength(255)
   website?: string;
-}
-
-export class SatusehatConfigDto {
-  @ApiProperty({ example: 'ORG123456' })
-  @IsNotEmpty()
-  @MaxLength(100)
-  satusehatOrgId: string;
-
-  @ApiProperty({ example: 'client_id_from_satusehat' })
-  @IsNotEmpty()
-  @MaxLength(255)
-  satusehatClientId: string;
-
-  @ApiProperty({ example: 'client_secret_from_satusehat' })
-  @IsNotEmpty()
-  @MaxLength(255)
-  satusehatClientSecret: string;
-
-  @ApiProperty({
-    example: 'sandbox',
-    enum: SatusehatEnvironment,
-    description: 'SATUSEHAT environment',
-  })
-  @IsEnum(SatusehatEnvironment)
-  @IsNotEmpty()
-  satusehatEnvironment: SatusehatEnvironment;
 }
 
 export class ClinicResponseDto {

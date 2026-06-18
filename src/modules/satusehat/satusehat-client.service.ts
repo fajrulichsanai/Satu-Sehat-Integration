@@ -40,24 +40,9 @@ export class SatusehatClientService {
   }
 
   async getAccessToken(clinicId: number): Promise<string> {
-    const clinic = await this.clinicRepository.findOne({
-      where: { id: clinicId },
-    });
-    if (!clinic?.satusehatClientId || !clinic?.satusehatClientSecret) {
-      throw new ServiceUnavailableException(
-        'Konfigurasi SATUSEHAT belum lengkap',
-      );
-    }
-
-    // Return cached token if still valid (>30 min remaining)
-    if (clinic.satusehatToken && clinic.satusehatTokenExpiresAt) {
-      const expiresIn = clinic.satusehatTokenExpiresAt.getTime() - Date.now();
-      if (expiresIn > 30 * 60 * 1000) {
-        return clinic.satusehatToken;
-      }
-    }
-
-    return this.refreshToken(clinic);
+    throw new ServiceUnavailableException(
+      'SATUSEHAT integration has been deprecated and is no longer available',
+    );
   }
 
   async sendFhirResource(
@@ -66,99 +51,20 @@ export class SatusehatClientService {
     path: string,
     body: object,
   ): Promise<{ status: number; data: any }> {
-    const clinic = await this.clinicRepository.findOne({
-      where: { id: clinicId },
-    });
-    if (!clinic)
-      throw new ServiceUnavailableException('Klinik tidak ditemukan');
-
-    const token = await this.getAccessToken(clinicId);
-    const baseUrl = SATUSEHAT_BASE[clinic.satusehatEnvironment];
-
-    try {
-      const response = await fetch(`${baseUrl}/fhir-r4/v1/${path}`, {
-        method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-
-      const data = await response.json().catch(() => ({}));
-      return { status: response.status, data };
-    } catch (err) {
-      this.logger.error(`SATUSEHAT request failed: ${err.message}`);
-      throw new ServiceUnavailableException('Koneksi ke SATUSEHAT gagal');
-    }
+    throw new ServiceUnavailableException(
+      'SATUSEHAT integration has been deprecated and is no longer available',
+    );
   }
 
   async searchPatientByNik(clinicId: number, nik: string): Promise<any> {
-    const clinic = await this.clinicRepository.findOne({
-      where: { id: clinicId },
-    });
-    if (!clinic)
-      throw new ServiceUnavailableException('Klinik tidak ditemukan');
-
-    const token = await this.getAccessToken(clinicId);
-    const baseUrl = SATUSEHAT_BASE[clinic.satusehatEnvironment];
-
-    try {
-      const response = await fetch(
-        `${baseUrl}/fhir-r4/v1/Patient?identifier=https://fhir.kemkes.go.id/id/nik|${nik}`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      return response.json();
-    } catch (err) {
-      this.logger.error(`SATUSEHAT patient search failed: ${err.message}`);
-      throw new ServiceUnavailableException(
-        'Pencarian pasien di SATUSEHAT gagal',
-      );
-    }
+    throw new ServiceUnavailableException(
+      'SATUSEHAT integration has been deprecated and is no longer available',
+    );
   }
 
   private async refreshToken(clinic: Clinic): Promise<string> {
-    const authUrl = AUTH_URL[clinic.satusehatEnvironment];
-    let clientSecret = clinic.satusehatClientSecret;
-    try {
-      clientSecret = decrypt(clinic.satusehatClientSecret, this.encryptionKey);
-    } catch {
-      // Not encrypted (legacy), use as-is
-    }
-
-    const params = new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: clinic.satusehatClientId,
-      client_secret: clientSecret,
-    });
-
-    try {
-      const response = await fetch(`${authUrl}?grant_type=client_credentials`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params.toString(),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Auth failed: ${response.status}`);
-      }
-
-      const data: any = await response.json();
-      const expiresAt = new Date(
-        Date.now() + parseInt(data.expires_in || '3600') * 1000,
-      );
-
-      await this.clinicRepository.update(clinic.id, {
-        satusehatToken: data.access_token,
-        satusehatTokenExpiresAt: expiresAt,
-      });
-
-      return data.access_token;
-    } catch (err) {
-      this.logger.error(`Token refresh failed: ${err.message}`);
-      throw new ServiceUnavailableException(
-        'Gagal mendapatkan token SATUSEHAT',
-      );
-    }
+    throw new ServiceUnavailableException(
+      'SATUSEHAT integration has been deprecated and is no longer available',
+    );
   }
 }
