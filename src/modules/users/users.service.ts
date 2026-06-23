@@ -8,9 +8,17 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { User } from './entities/user.entity';
-import { UserRole } from '../../enums';
-import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
+import { UserRole, ROLE_LEVEL } from '../../enums';
+import { InviteUserDto, UpdateUserDto } from './dto/user.dto';
+
+interface CurrentUserPayload {
+  userId: number;
+  role: UserRole;
+  clinicId: number | null;
+}
 
 @Injectable()
 export class UsersService {
@@ -21,31 +29,66 @@ export class UsersService {
     private userRepository: Repository<User>,
   ) {}
 
-  async findAll(clinicId: number, userRole: string) {
-    this.logger.log(`[GET-ALL] Mengambil semua user | clinicId=${clinicId}, requestedByRole=${userRole}`);
-
-    const users = await this.userRepository.find({
-      where: { clinicId },
-      order: { createdAt: 'DESC' },
-    });
-
-    this.logger.log(`[GET-ALL] Berhasil mengambil ${users.length} user | clinicId=${clinicId}`);
-
-    return {
-      success: true,
-      data: users.map((user) => this.sanitizeUser(user)),
-    };
+  private isSuperAdmin(currentUser: CurrentUserPayload): boolean {
+    return currentUser.role === UserRole.SUPER_ADMIN;
   }
 
-  async findOne(id: number, clinicId: number) {
-    this.logger.log(`[GET-ONE] Mengambil data user | userId=${id}, clinicId=${clinicId}`);
+  /**
+   * Throws if currentUser may not manage targetUser:
+   * - non-SuperAdmin acting outside their own clinic
+   * - acting on someone at or above their own role level (peer/owner/super-admin)
+   */
+  private assertCanManage(currentUser: CurrentUserPayload, targetUser: User) {
+    if (this.isSuperAdmin(currentUser)) {
+      return;
+    }
 
-    const user = await this.userRepository.findOne({
-      where: { id, clinicId },
-    });
+    if (targetUser.clinicId !== currentUser.clinicId) {
+      throw new ForbiddenException({
+        success: false,
+        error: {
+          code: 'CROSS_CLINIC_FORBIDDEN',
+          message: 'Tidak bisa mengelola user dari klinik lain',
+        },
+      });
+    }
+
+    if (ROLE_LEVEL[targetUser.role] <= ROLE_LEVEL[currentUser.role]) {
+      throw new ForbiddenException({
+        success: false,
+        error: {
+          code: 'INSUFFICIENT_PERMISSIONS',
+          message: 'Tidak bisa mengelola user dengan role setara atau lebih tinggi',
+        },
+      });
+    }
+  }
+
+  /** Throws if currentUser may not assign newRole to anyone. */
+  private assertCanAssignRole(currentUser: CurrentUserPayload, newRole: UserRole) {
+    if (this.isSuperAdmin(currentUser)) {
+      return;
+    }
+
+    if (ROLE_LEVEL[newRole] <= ROLE_LEVEL[currentUser.role]) {
+      throw new ForbiddenException({
+        success: false,
+        error: {
+          code: 'INSUFFICIENT_PERMISSIONS',
+          message: 'Tidak bisa memberikan role setara atau lebih tinggi dari role sendiri',
+        },
+      });
+    }
+  }
+
+  private async findByIdOrThrow(id: number, currentUser: CurrentUserPayload): Promise<User> {
+    const where = this.isSuperAdmin(currentUser)
+      ? { id }
+      : { id, clinicId: currentUser.clinicId as number };
+
+    const user = await this.userRepository.findOne({ where });
 
     if (!user) {
-      this.logger.warn(`[GET-ONE] User tidak ditemukan | userId=${id}, clinicId=${clinicId}`);
       throw new NotFoundException({
         success: false,
         error: {
@@ -54,6 +97,33 @@ export class UsersService {
         },
       });
     }
+
+    return user;
+  }
+
+  async findAll(currentUser: CurrentUserPayload) {
+    this.logger.log(
+      `[GET-ALL] Mengambil semua user | clinicId=${currentUser.clinicId}, requestedByRole=${currentUser.role}`,
+    );
+
+    const users = await this.userRepository.find({
+      where: this.isSuperAdmin(currentUser) ? {} : { clinicId: currentUser.clinicId as number },
+      order: { createdAt: 'DESC' },
+    });
+
+    this.logger.log(`[GET-ALL] Berhasil mengambil ${users.length} user`);
+
+    return {
+      success: true,
+      data: users.map((user) => this.sanitizeUser(user)),
+    };
+  }
+
+  async findOne(id: number, currentUser: CurrentUserPayload) {
+    this.logger.log(`[GET-ONE] Mengambil data user | userId=${id}`);
+
+    const user = await this.findByIdOrThrow(id, currentUser);
+    this.assertCanManage(currentUser, user);
 
     this.logger.log(`[GET-ONE] Berhasil mengambil data user | userId=${id}, email=${user.email}`);
 
@@ -63,37 +133,20 @@ export class UsersService {
     };
   }
 
-  async activate(id: number, clinicId: number, activatedBy: number) {
-    this.logger.log(`[ACTIVATE] Memulai aktivasi user | userId=${id}, clinicId=${clinicId}, activatedBy=${activatedBy}`);
+  async activate(id: number, currentUser: CurrentUserPayload) {
+    this.logger.log(`[ACTIVATE] Memulai aktivasi user | userId=${id}, requestedBy=${currentUser.userId}`);
 
-    const user = await this.userRepository.findOne({
-      where: { id, clinicId },
-    });
-
-    if (!user) {
-      this.logger.warn(`[ACTIVATE] User tidak ditemukan | userId=${id}, clinicId=${clinicId}`);
-      throw new NotFoundException({
-        success: false,
-        error: {
-          code: 'USER_NOT_FOUND',
-          message: `User dengan ID ${id} tidak ditemukan`,
-        },
-      });
-    }
+    const user = await this.findByIdOrThrow(id, currentUser);
+    this.assertCanManage(currentUser, user);
 
     if (user.isActive) {
-      this.logger.warn(`[ACTIVATE] User sudah aktif, aktivasi dibatalkan | userId=${id}, email=${user.email}`);
       throw new ConflictException({
         success: false,
-        error: {
-          code: 'USER_ALREADY_ACTIVE',
-          message: 'User sudah aktif',
-        },
+        error: { code: 'USER_ALREADY_ACTIVE', message: 'User sudah aktif' },
       });
     }
 
     if (user.role !== UserRole.PENDING) {
-      this.logger.warn(`[ACTIVATE] User bukan pending, tidak bisa diaktivasi | userId=${id}, role=${user.role}`);
       throw new ConflictException({
         success: false,
         error: {
@@ -104,11 +157,11 @@ export class UsersService {
     }
 
     user.isActive = true;
-    user.updatedBy = activatedBy;
+    user.updatedBy = currentUser.userId;
 
     await this.userRepository.save(user);
 
-    this.logger.log(`[ACTIVATE] User berhasil diaktivasi | userId=${id}, email=${user.email}, activatedBy=${activatedBy}`);
+    this.logger.log(`[ACTIVATE] User berhasil diaktivasi | userId=${id}, email=${user.email}`);
 
     return {
       success: true,
@@ -123,52 +176,35 @@ export class UsersService {
     };
   }
 
-  async deactivate(id: number, clinicId: number, deactivatedBy: number) {
-    this.logger.log(`[DEACTIVATE] Memulai deaktivasi user | userId=${id}, clinicId=${clinicId}, deactivatedBy=${deactivatedBy}`);
+  async deactivate(id: number, currentUser: CurrentUserPayload) {
+    this.logger.log(`[DEACTIVATE] Memulai deaktivasi user | userId=${id}, requestedBy=${currentUser.userId}`);
 
-    const user = await this.userRepository.findOne({
-      where: { id, clinicId },
-    });
+    const user = await this.findByIdOrThrow(id, currentUser);
+    this.assertCanManage(currentUser, user);
 
-    if (!user) {
-      this.logger.warn(`[DEACTIVATE] User tidak ditemukan | userId=${id}, clinicId=${clinicId}`);
-      throw new NotFoundException({
-        success: false,
-        error: {
-          code: 'USER_NOT_FOUND',
-          message: `User dengan ID ${id} tidak ditemukan`,
-        },
-      });
-    }
-
-    if (user.role === UserRole.OWNER) {
-      this.logger.warn(`[DEACTIVATE] Percobaan deaktivasi owner ditolak | userId=${id}, email=${user.email}`);
+    if (user.role === UserRole.OWNER || user.role === UserRole.SUPER_ADMIN) {
       throw new ForbiddenException({
         success: false,
         error: {
           code: 'CANNOT_DEACTIVATE_OWNER',
-          message: 'Owner tidak bisa dinonaktifkan',
+          message: 'Owner/Super Admin tidak bisa dinonaktifkan',
         },
       });
     }
 
     if (!user.isActive) {
-      this.logger.warn(`[DEACTIVATE] User sudah tidak aktif | userId=${id}, email=${user.email}`);
       throw new ConflictException({
         success: false,
-        error: {
-          code: 'USER_ALREADY_INACTIVE',
-          message: 'User sudah tidak aktif',
-        },
+        error: { code: 'USER_ALREADY_INACTIVE', message: 'User sudah tidak aktif' },
       });
     }
 
     user.isActive = false;
-    user.updatedBy = deactivatedBy;
+    user.updatedBy = currentUser.userId;
 
     await this.userRepository.save(user);
 
-    this.logger.log(`[DEACTIVATE] User berhasil dinonaktifkan | userId=${id}, email=${user.email}, deactivatedBy=${deactivatedBy}`);
+    this.logger.log(`[DEACTIVATE] User berhasil dinonaktifkan | userId=${id}, email=${user.email}`);
 
     return {
       success: true,
@@ -182,68 +218,57 @@ export class UsersService {
     };
   }
 
-  async remove(id: number, clinicId: number) {
-    this.logger.log(`[DELETE] Memulai penghapusan user pending | userId=${id}, clinicId=${clinicId}`);
+  async remove(id: number, currentUser: CurrentUserPayload) {
+    this.logger.log(`[DELETE] Memulai penghapusan user | userId=${id}, requestedBy=${currentUser.userId}`);
 
-    const user = await this.userRepository.findOne({
-      where: { id, clinicId },
-    });
-
-    if (!user) {
-      this.logger.warn(`[DELETE] User tidak ditemukan | userId=${id}, clinicId=${clinicId}`);
-      throw new NotFoundException({
-        success: false,
-        error: {
-          code: 'USER_NOT_FOUND',
-          message: `User dengan ID ${id} tidak ditemukan`,
-        },
-      });
-    }
-
-    if (user.role !== UserRole.PENDING) {
-      this.logger.warn(`[DELETE] User bukan pending, tidak bisa dihapus | userId=${id}, role=${user.role}`);
+    if (id === currentUser.userId) {
       throw new ForbiddenException({
         success: false,
-        error: {
-          code: 'CANNOT_DELETE_ACTIVE_USER',
-          message:
-            'Hanya user pending yang bisa dihapus. Gunakan deactivate untuk user aktif.',
-        },
+        error: { code: 'CANNOT_DELETE_SELF', message: 'Tidak bisa menghapus akun sendiri' },
       });
     }
+
+    const user = await this.findByIdOrThrow(id, currentUser);
+    this.assertCanManage(currentUser, user);
 
     await this.userRepository.remove(user);
 
-    this.logger.log(`[DELETE] User pending berhasil dihapus | userId=${id}, email=${user.email}`);
+    this.logger.log(`[DELETE] User berhasil dihapus | userId=${id}, email=${user.email}`);
 
     return {
       success: true,
-      data: {
-        message: 'User pending berhasil ditolak/dihapus',
-      },
+      data: { message: 'User berhasil dihapus' },
     };
   }
 
-  getRoles() {
+  getRoles(currentUser: CurrentUserPayload) {
     this.logger.log('[GET-ROLES] Mengambil daftar role yang tersedia');
 
-    const roles = [
-      { value: UserRole.OWNER, label: 'Owner' },
-      { value: UserRole.ADMIN, label: 'Admin' },
-      { value: UserRole.DOKTER, label: 'Dokter' },
-    ];
-
-    this.logger.log(`[GET-ROLES] Berhasil mengembalikan ${roles.length} role`);
+    const roles = this.isSuperAdmin(currentUser)
+      ? [
+          { value: UserRole.SUPER_ADMIN, label: 'Super Admin' },
+          { value: UserRole.OWNER, label: 'Owner' },
+          { value: UserRole.ADMIN, label: 'Admin' },
+          { value: UserRole.DOKTER, label: 'Dokter' },
+        ]
+      : [
+          { value: UserRole.ADMIN, label: 'Admin' },
+          { value: UserRole.DOKTER, label: 'Dokter' },
+        ];
 
     return { success: true, data: roles };
   }
 
-  async findPending(clinicId: number, email?: string) {
+  async findPending(currentUser: CurrentUserPayload, email?: string) {
     this.logger.log(
-      `[GET-PENDING] Mengambil daftar user pending | clinicId=${clinicId}${email ? `, filterEmail=${email}` : ''}`,
+      `[GET-PENDING] Mengambil daftar user pending | clinicId=${currentUser.clinicId}${email ? `, filterEmail=${email}` : ''}`,
     );
 
     const where: any = { role: UserRole.PENDING };
+
+    if (!this.isSuperAdmin(currentUser)) {
+      where.clinicId = currentUser.clinicId;
+    }
 
     if (email) {
       where.email = email;
@@ -254,7 +279,7 @@ export class UsersService {
       order: { createdAt: 'DESC' },
     });
 
-    this.logger.log(`[GET-PENDING] Berhasil mengambil ${users.length} user pending | clinicId=${clinicId}`);
+    this.logger.log(`[GET-PENDING] Berhasil mengambil ${users.length} user pending`);
 
     return {
       success: true,
@@ -262,56 +287,34 @@ export class UsersService {
     };
   }
 
-  async assignRole(
-    id: number,
-    clinicId: number,
-    newRole: UserRole,
-    updatedBy: number,
-  ) {
-    this.logger.log(`[ASSIGN-ROLE] Memulai assign role | userId=${id}, clinicId=${clinicId}, newRole=${newRole}, updatedBy=${updatedBy}`);
+  async assignRole(id: number, newRole: UserRole, currentUser: CurrentUserPayload) {
+    this.logger.log(`[ASSIGN-ROLE] Memulai assign role | userId=${id}, newRole=${newRole}, requestedBy=${currentUser.userId}`);
 
     if (newRole === UserRole.PENDING) {
-      this.logger.warn(`[ASSIGN-ROLE] Role pending tidak valid untuk di-assign | userId=${id}`);
       throw new BadRequestException({
         success: false,
-        error: {
-          code: 'INVALID_ROLE',
-          message: 'Role tidak bisa di-assign ke pending',
-        },
+        error: { code: 'INVALID_ROLE', message: 'Role tidak bisa di-assign ke pending' },
       });
     }
 
-    const user = await this.userRepository.findOne({ where: { id, clinicId } });
+    const user = await this.findByIdOrThrow(id, currentUser);
+    this.assertCanManage(currentUser, user);
+    this.assertCanAssignRole(currentUser, newRole);
 
-    if (!user) {
-      this.logger.warn(`[ASSIGN-ROLE] User tidak ditemukan | userId=${id}, clinicId=${clinicId}`);
-      throw new NotFoundException({
-        success: false,
-        error: {
-          code: 'USER_NOT_FOUND',
-          message: `User dengan ID ${id} tidak ditemukan`,
-        },
-      });
-    }
-
-    if (user.role === UserRole.OWNER && newRole !== UserRole.OWNER) {
-      this.logger.warn(`[ASSIGN-ROLE] Percobaan ubah role owner ditolak | userId=${id}, email=${user.email}`);
+    if ((user.role === UserRole.OWNER || user.role === UserRole.SUPER_ADMIN) && newRole !== user.role) {
       throw new ForbiddenException({
         success: false,
-        error: {
-          code: 'CANNOT_CHANGE_OWNER_ROLE',
-          message: 'Role owner tidak bisa diubah',
-        },
+        error: { code: 'CANNOT_CHANGE_OWNER_ROLE', message: 'Role owner/super admin tidak bisa diubah' },
       });
     }
 
     const previousRole = user.role;
     user.role = newRole;
-    user.updatedBy = updatedBy;
+    user.updatedBy = currentUser.userId;
 
     await this.userRepository.save(user);
 
-    this.logger.log(`[ASSIGN-ROLE] Role berhasil di-assign | userId=${id}, email=${user.email}, ${previousRole} -> ${newRole}, updatedBy=${updatedBy}`);
+    this.logger.log(`[ASSIGN-ROLE] Role berhasil di-assign | userId=${id}, ${previousRole} -> ${newRole}`);
 
     return {
       success: true,
@@ -326,37 +329,14 @@ export class UsersService {
     };
   }
 
-  async updateRole(id: number, clinicId: number, newRole: UserRole) {
-    this.logger.log(`[UPDATE-ROLE] Memulai update role user pending | userId=${id}, clinicId=${clinicId}, newRole=${newRole}`);
+  async updateRole(id: number, newRole: UserRole, currentUser: CurrentUserPayload) {
+    this.logger.log(`[UPDATE-ROLE] Memulai update role user pending | userId=${id}, newRole=${newRole}`);
 
-    const user = await this.userRepository.findOne({
-      where: { id, clinicId },
-    });
-
-    if (!user) {
-      this.logger.warn(`[UPDATE-ROLE] User tidak ditemukan | userId=${id}, clinicId=${clinicId}`);
-      throw new NotFoundException({
-        success: false,
-        error: {
-          code: 'USER_NOT_FOUND',
-          message: `User dengan ID ${id} tidak ditemukan`,
-        },
-      });
-    }
-
-    if (user.role === UserRole.OWNER) {
-      this.logger.warn(`[UPDATE-ROLE] Percobaan ubah role owner ditolak | userId=${id}, email=${user.email}`);
-      throw new ForbiddenException({
-        success: false,
-        error: {
-          code: 'CANNOT_CHANGE_OWNER_ROLE',
-          message: 'Role owner tidak bisa diubah',
-        },
-      });
-    }
+    const user = await this.findByIdOrThrow(id, currentUser);
+    this.assertCanManage(currentUser, user);
+    this.assertCanAssignRole(currentUser, newRole);
 
     if (user.role !== UserRole.PENDING) {
-      this.logger.warn(`[UPDATE-ROLE] User bukan pending, update role dibatalkan | userId=${id}, role=${user.role}`);
       throw new ConflictException({
         success: false,
         error: {
@@ -366,23 +346,20 @@ export class UsersService {
       });
     }
 
-    if (![UserRole.ADMIN, UserRole.DOKTER].includes(newRole)) {
-      this.logger.warn(`[UPDATE-ROLE] Role tidak valid | userId=${id}, newRole=${newRole}`);
+    if (![UserRole.ADMIN, UserRole.DOKTER, UserRole.OWNER].includes(newRole)) {
       throw new BadRequestException({
         success: false,
-        error: {
-          code: 'INVALID_ROLE',
-          message: 'Role hanya bisa diubah ke admin atau dokter',
-        },
+        error: { code: 'INVALID_ROLE', message: 'Role hanya bisa diubah ke admin, dokter, atau owner' },
       });
     }
 
     user.role = newRole;
     user.isActive = true;
+    user.updatedBy = currentUser.userId;
 
     await this.userRepository.save(user);
 
-    this.logger.log(`[UPDATE-ROLE] Role user pending berhasil diupdate | userId=${id}, email=${user.email}, newRole=${newRole}, isActive=true`);
+    this.logger.log(`[UPDATE-ROLE] Role user pending berhasil diupdate | userId=${id}, newRole=${newRole}`);
 
     return {
       success: true,
@@ -394,6 +371,94 @@ export class UsersService {
         isActive: user.isActive,
         message: 'Role user berhasil diupdate',
       },
+    };
+  }
+
+  async invite(dto: InviteUserDto, currentUser: CurrentUserPayload) {
+    this.logger.log(`[INVITE] Membuat user baru | email=${dto.email}, role=${dto.role}, requestedBy=${currentUser.userId}`);
+
+    this.assertCanAssignRole(currentUser, dto.role);
+
+    let clinicId: number | null;
+    if (this.isSuperAdmin(currentUser)) {
+      if (dto.role !== UserRole.SUPER_ADMIN && !dto.clinicId) {
+        throw new BadRequestException({
+          success: false,
+          error: { code: 'CLINIC_ID_REQUIRED', message: 'clinicId wajib diisi untuk role selain super admin' },
+        });
+      }
+      clinicId = dto.role === UserRole.SUPER_ADMIN ? null : (dto.clinicId as number);
+    } else {
+      clinicId = currentUser.clinicId;
+    }
+
+    const existing = await this.userRepository.findOne({ where: { email: dto.email } });
+    if (existing) {
+      throw new ConflictException({
+        success: false,
+        error: { code: 'EMAIL_ALREADY_USED', message: 'Email sudah digunakan' },
+      });
+    }
+
+    const temporaryPassword = crypto.randomBytes(9).toString('base64').replace(/[/+=]/g, '');
+    const passwordHash = await bcrypt.hash(temporaryPassword, 10);
+
+    const user = this.userRepository.create({
+      email: dto.email,
+      name: dto.name,
+      role: dto.role,
+      clinicId,
+      passwordHash,
+      isActive: true,
+      emailVerifiedAt: new Date(),
+      createdBy: currentUser.userId,
+      updatedBy: currentUser.userId,
+    });
+
+    await this.userRepository.save(user);
+
+    this.logger.log(`[INVITE] User baru berhasil dibuat | userId=${user.id}, email=${user.email}`);
+
+    return {
+      success: true,
+      data: {
+        ...this.sanitizeUser(user),
+        temporaryPassword,
+        message: 'User berhasil dibuat. Bagikan password sementara ini kepada user.',
+      },
+    };
+  }
+
+  async update(id: number, dto: UpdateUserDto, currentUser: CurrentUserPayload) {
+    this.logger.log(`[UPDATE] Memulai update data user | userId=${id}, requestedBy=${currentUser.userId}`);
+
+    const user = await this.findByIdOrThrow(id, currentUser);
+    this.assertCanManage(currentUser, user);
+
+    if (dto.email && dto.email !== user.email) {
+      const existing = await this.userRepository.findOne({ where: { email: dto.email } });
+      if (existing) {
+        throw new ConflictException({
+          success: false,
+          error: { code: 'EMAIL_ALREADY_USED', message: 'Email sudah digunakan' },
+        });
+      }
+      user.email = dto.email;
+    }
+
+    if (dto.name) {
+      user.name = dto.name;
+    }
+
+    user.updatedBy = currentUser.userId;
+
+    await this.userRepository.save(user);
+
+    this.logger.log(`[UPDATE] User berhasil diupdate | userId=${id}`);
+
+    return {
+      success: true,
+      data: this.sanitizeUser(user),
     };
   }
 

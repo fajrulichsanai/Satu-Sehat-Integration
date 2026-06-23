@@ -6,6 +6,7 @@ import {
   SetMetadata,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { UserRole } from '../../../enums';
 
 export const SKIP_CLINIC_CHECK_KEY = 'skipClinicCheck';
 
@@ -48,6 +49,12 @@ export class ClinicContextGuard implements CanActivate {
           message: 'User tidak terautentikasi',
         },
       });
+    }
+
+    // SUPER_ADMIN has no clinicId (operates across all clinics) — pass through with null
+    if (user.role === UserRole.SUPER_ADMIN) {
+      request.clinicId = user.clinicId ?? null;
+      return true;
     }
 
     // Validate that user has clinicId (should be set during registration)

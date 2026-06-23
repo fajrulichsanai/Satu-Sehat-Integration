@@ -50,3 +50,19 @@ export class ClinicsController {
   }
 
 }
+
+@ApiTags('settings')
+@Controller('clinics')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@ApiBearerAuth('JWT-auth')
+export class ClinicsListController {
+  constructor(private readonly clinicsService: ClinicsService) {}
+
+  @Get()
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'List all clinics (Super Admin only)' })
+  @ApiResponse({ status: 200, description: 'Clinic list' })
+  async findAll() {
+    return this.clinicsService.findAllForSuperAdmin();
+  }
+}

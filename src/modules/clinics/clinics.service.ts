@@ -27,6 +27,19 @@ export class ClinicsService {
     );
   }
 
+  async findAllForSuperAdmin() {
+    this.logger.log('[GET-ALL] Mengambil semua klinik (Super Admin)');
+
+    const clinics = await this.clinicRepository.find({
+      order: { name: 'ASC' },
+    });
+
+    return {
+      success: true,
+      data: clinics,
+    };
+  }
+
   async findOne(clinicId: number) {
     this.logger.log(`[GET] Mengambil data klinik | clinicId=${clinicId}`);
 
