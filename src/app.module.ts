@@ -22,6 +22,7 @@ import { MasterDataModule } from './modules/master-data/master-data.module';
 import { SoapTemplatesModule } from './modules/soap-templates/soap-templates.module';
 import { IcdModule } from './modules/icd/icd.module';
 import { OwnerCodeModule } from './modules/owner-code/owner-code.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 
 @Module({
@@ -73,6 +74,7 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     SoapTemplatesModule,
     IcdModule,
     OwnerCodeModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [

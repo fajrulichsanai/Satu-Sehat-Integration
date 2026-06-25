@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseIntPipe,
   Post,
@@ -46,6 +49,16 @@ export class PatientsController {
     };
   }
 
+  @Get('search-satusehat')
+  @ApiOperation({ summary: 'Search patient by NIK via SATUSEHAT API' })
+  async searchSatusehat(
+    @Query('nik') nik: string,
+    @ClinicId() clinicId: number,
+  ) {
+    const data = await this.patientsService.searchSatusehat(nik, clinicId);
+    return { success: true, data };
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get patient detail' })
   async findOne(
@@ -81,13 +94,14 @@ export class PatientsController {
     return { success: true, data: encounters };
   }
 
-  @Get('search-satusehat')
-  @ApiOperation({ summary: 'Search patient by NIK via SATUSEHAT API' })
-  async searchSatusehat(
-    @Query('nik') nik: string,
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a patient' })
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
     @ClinicId() clinicId: number,
   ) {
-    const data = await this.patientsService.searchSatusehat(nik, clinicId);
-    return { success: true, data };
+    await this.patientsService.remove(id, clinicId);
+    return { success: true, message: 'Pasien berhasil dihapus' };
   }
 }

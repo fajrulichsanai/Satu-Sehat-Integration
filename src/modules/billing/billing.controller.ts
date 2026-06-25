@@ -50,7 +50,8 @@ export class BillingController {
     @ClinicId() clinicId: number,
     @Query() query: TarifQueryDto,
   ) {
-    return this.tarifsService.findAll(clinicId, query);
+    const result = await this.tarifsService.findAll(clinicId, query);
+    return { success: true, data: result };
   }
 
   @Post('settings/tarifs')
@@ -89,7 +90,8 @@ export class BillingController {
     @ClinicId() clinicId: number,
     @Query() query: BillingQueryDto,
   ) {
-    return this.billingsService.findAll(clinicId, query);
+    const data = await this.billingsService.findAll(clinicId, query);
+    return { success: true, data };
   }
 
   @Post('billings')

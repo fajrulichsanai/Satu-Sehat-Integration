@@ -32,7 +32,7 @@ export class QueuesController {
   @ApiOperation({ summary: 'List queues (default: today)' })
   async findAll(@ClinicId() clinicId: number, @Query() query: QueueQueryDto) {
     const result = await this.queuesService.findAll(clinicId, query);
-    return { success: true, ...result };
+    return { success: true, data: result };
   }
 
   @Post()

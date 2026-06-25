@@ -88,7 +88,7 @@ export class BillingsService {
     this.logger.log(`[GET] Mengambil detail billing | id=${id}, clinicId=${clinicId}`);
     const billing = await this.billingRepository.findOne({
       where: { id, clinicId },
-      relations: { patient: true, items: true },
+      relations: { patient: true, items: true, payments: true },
     });
     if (!billing) {
       this.logger.warn(`[GET] Billing tidak ditemukan | id=${id}, clinicId=${clinicId}`);

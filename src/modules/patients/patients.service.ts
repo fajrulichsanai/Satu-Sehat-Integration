@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { QueryFailedError } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Patient } from './entities/patient.entity';
@@ -178,6 +179,39 @@ export class PatientsService {
         `Pasien dengan NIK ${nik} sudah terdaftar di klinik ini`,
       );
     }
+  }
+
+  async remove(id: number, clinicId: number): Promise<void> {
+    this.logger.log(`[DELETE] Menghapus pasien | id=${id}, clinicId=${clinicId}`);
+    const patient = await this.findOne(id, clinicId);
+
+    const [{ total: encounterCount }] = await this.dataSource.query(
+      `SELECT COUNT(*) AS total FROM encounters WHERE patient_id = ?`,
+      [id],
+    );
+    const [{ total: billingCount }] = await this.dataSource.query(
+      `SELECT COUNT(*) AS total FROM billings WHERE patient_id = ?`,
+      [id],
+    );
+
+    if (parseInt(encounterCount, 10) > 0 || parseInt(billingCount, 10) > 0) {
+      this.logger.warn(`[DELETE] Pasien memiliki riwayat kunjungan/billing | id=${id}`);
+      throw new ConflictException(
+        'Pasien tidak dapat dihapus karena memiliki riwayat kunjungan atau transaksi. Hapus atau pindahkan data terkait terlebih dahulu.',
+      );
+    }
+
+    try {
+      await this.patientRepository.remove(patient);
+    } catch (err) {
+      if (err instanceof QueryFailedError) {
+        throw new ConflictException(
+          'Pasien tidak dapat dihapus karena masih memiliki data terkait.',
+        );
+      }
+      throw err;
+    }
+    this.logger.log(`[DELETE] Pasien berhasil dihapus | id=${id}, clinicId=${clinicId}`);
   }
 
   async searchSatusehat(nik: string, clinicId: number) {

@@ -34,7 +34,8 @@ export class EncountersController {
     @Query() query: EncounterListQueryDto,
     @CurrentUser() user: any,
   ) {
-    return this.encountersService.findAll(clinicId, query, user);
+    const result = await this.encountersService.findAll(clinicId, query, user);
+    return { success: true, data: result };
   }
 
   @Post()
