@@ -27,22 +27,10 @@ async function bootstrap() {
   // CORS Configuration (Task 1.9)
   // CORS Configuration
   app.enableCors({
-    origin: (origin, callback) => {
-      const allowedOrigins = [
-        'http://localhost:3001',
-        process.env.FRONTEND_URL,        // taruh di .env
-        process.env.APP_URL,             // kalau ada variable ini
-      ].filter(Boolean);
-
-      // Izinkan request tanpa origin (Postman, server-to-server)
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`CORS blocked: ${origin}`));
-      }
-    },
+    origin: [
+      'https://apexrecord.my.id',
+      process.env.FRONTEND_URL,
+    ].filter(Boolean),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
