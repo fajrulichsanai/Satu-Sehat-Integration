@@ -31,6 +31,15 @@ export class Practitioner extends BaseEntity {
   @Column({ length: 100, nullable: true })
   specialization: string;
 
+  @Column({ length: 20, nullable: true })
+  phone: string;
+
+  @Column({ length: 100, nullable: true })
+  email: string;
+
+  @Column({ name: 'sip_number', length: 50, nullable: true })
+  sipNumber: string;
+
   @Column({ name: 'satusehat_practitioner_id', length: 100, nullable: true })
   satusehatPractitionerId: string;
 

@@ -11,6 +11,7 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { User } from './entities/user.entity';
+import { Practitioner } from '../practitioners/entities/practitioner.entity';
 import { UserRole, ROLE_LEVEL } from '../../enums';
 import { InviteUserDto, UpdateUserDto } from './dto/user.dto';
 
@@ -27,7 +28,35 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(Practitioner)
+    private practitionerRepository: Repository<Practitioner>,
   ) {}
+
+  /**
+   * Memastikan user dengan role dokter memiliki baris practitioners terkait,
+   * supaya langsung muncul di dropdown dokter (kunjungan) tanpa input manual.
+   */
+  private async ensurePractitionerForUser(user: User) {
+    if (!user.clinicId) return;
+
+    const existing = await this.practitionerRepository.findOne({
+      where: { userId: user.id },
+    });
+    if (existing) return;
+
+    const practitioner = this.practitionerRepository.create({
+      userId: user.id,
+      clinicId: user.clinicId,
+      name: user.name,
+      email: user.email,
+      isActive: true,
+      createdBy: user.id,
+      updatedBy: user.id,
+    });
+
+    await this.practitionerRepository.save(practitioner);
+    this.logger.log(`[AUTO-PRACTITIONER] Practitioner dibuat otomatis | userId=${user.id}, clinicId=${user.clinicId}`);
+  }
 
   private isSuperAdmin(currentUser: CurrentUserPayload): boolean {
     return currentUser.role === UserRole.SUPER_ADMIN;
@@ -314,6 +343,10 @@ export class UsersService {
 
     await this.userRepository.save(user);
 
+    if (newRole === UserRole.DOKTER) {
+      await this.ensurePractitionerForUser(user);
+    }
+
     this.logger.log(`[ASSIGN-ROLE] Role berhasil di-assign | userId=${id}, ${previousRole} -> ${newRole}`);
 
     return {
@@ -358,6 +391,10 @@ export class UsersService {
     user.updatedBy = currentUser.userId;
 
     await this.userRepository.save(user);
+
+    if (newRole === UserRole.DOKTER) {
+      await this.ensurePractitionerForUser(user);
+    }
 
     this.logger.log(`[UPDATE-ROLE] Role user pending berhasil diupdate | userId=${id}, newRole=${newRole}`);
 
@@ -416,6 +453,10 @@ export class UsersService {
     });
 
     await this.userRepository.save(user);
+
+    if (dto.role === UserRole.DOKTER) {
+      await this.ensurePractitionerForUser(user);
+    }
 
     this.logger.log(`[INVITE] User baru berhasil dibuat | userId=${user.id}, email=${user.email}`);
 

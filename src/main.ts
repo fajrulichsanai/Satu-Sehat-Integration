@@ -28,7 +28,6 @@ async function bootstrap() {
   // CORS Configuration
   app.enableCors({
     origin: [
-      'https://apexrecord.my.id',
       process.env.FRONTEND_URL,
     ].filter(Boolean),
     credentials: true,
