@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ReportsService } from './reports.service';
 import {
+  DoctorFeeShareReportQueryDto,
   FinancialReportQueryDto,
   RetrySyncDto,
   SatusehatSyncReportQueryDto,
@@ -51,6 +52,17 @@ export class ReportsController {
     @Query() query: SatusehatSyncReportQueryDto,
   ) {
     return this.reportsService.getSatusehatSyncReport(clinicId, query);
+  }
+
+  @Get('doctor-fee-share')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Monthly doctor fee share report' })
+  async getDoctorFeeShare(
+    @ClinicId() clinicId: number,
+    @Query() query: DoctorFeeShareReportQueryDto,
+  ) {
+    return this.reportsService.getDoctorFeeShareReport(clinicId, query);
   }
 
   @Post('satusehat-sync/retry')

@@ -23,6 +23,8 @@ import { SoapTemplatesModule } from './modules/soap-templates/soap-templates.mod
 import { IcdModule } from './modules/icd/icd.module';
 import { OwnerCodeModule } from './modules/owner-code/owner-code.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { OperationalRecordsModule } from './modules/operational-records/operational-records.module';
+import { DoctorFeeModule } from './modules/doctor-fee/doctor-fee.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 
 @Module({
@@ -75,6 +77,8 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     IcdModule,
     OwnerCodeModule,
     DashboardModule,
+    OperationalRecordsModule,
+    DoctorFeeModule,
   ],
   controllers: [AppController],
   providers: [

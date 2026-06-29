@@ -10,11 +10,34 @@ import {
 } from '../satusehat/sync/entities/satusehat-sync-log.entity';
 import { UserRole } from '../../enums/user-role.enum';
 import {
+  DoctorFeeShareReportQueryDto,
   FinancialReportQueryDto,
   RetrySyncDto,
   SatusehatSyncReportQueryDto,
   VisitReportQueryDto,
 } from './dto/report.dto';
+import { BillingItem } from '../billing-item/entities/billing-item.entity';
+import {
+  DoctorFeeConfig,
+  FeeType,
+} from '../doctor-fee/entities/doctor-fee-config.entity';
+
+export interface DoctorFeeShareBreakdownItem {
+  tarifId: number;
+  tarifName: string;
+  count: number;
+  feeType: FeeType;
+  feeValue: number;
+  totalShare: number;
+}
+
+export interface DoctorFeeShareEntry {
+  practitionerId: number;
+  practitionerName: string;
+  breakdown: DoctorFeeShareBreakdownItem[];
+  totalTindakan: number;
+  totalShareFee: number;
+}
 
 @Injectable()
 export class ReportsService {
@@ -27,7 +50,87 @@ export class ReportsService {
     private readonly paymentRepo: Repository<Payment>,
     @InjectRepository(SatusehatSyncLog)
     private readonly syncLogRepo: Repository<SatusehatSyncLog>,
+    @InjectRepository(BillingItem)
+    private readonly billingItemRepo: Repository<BillingItem>,
+    @InjectRepository(DoctorFeeConfig)
+    private readonly doctorFeeConfigRepo: Repository<DoctorFeeConfig>,
   ) {}
+
+  async getDoctorFeeShareReport(
+    clinicId: number,
+    query: DoctorFeeShareReportQueryDto,
+  ) {
+    const rows = await this.billingItemRepo.query(
+      `SELECT
+         pr.id AS practitionerId,
+         pr.name AS practitionerName,
+         t.id AS tarifId,
+         t.name AS tarifName,
+         t.harga_jual AS hargaJual,
+         SUM(bi.quantity) AS count,
+         dfc.fee_type AS feeType,
+         dfc.fee_value AS feeValue
+       FROM billing_items bi
+       JOIN billings b ON bi.billing_id = b.id
+       JOIN encounters e ON b.encounter_id = e.id
+       JOIN practitioners pr ON e.practitioner_id = pr.id
+       JOIN tarifs t ON bi.tarif_id = t.id
+       LEFT JOIN doctor_fee_configs dfc
+         ON dfc.tarif_id = t.id AND dfc.clinic_id = b.clinic_id
+       WHERE b.clinic_id = ?
+         AND b.status != 'cancelled'
+         AND YEAR(b.created_at) = ?
+         AND MONTH(b.created_at) = ?
+       GROUP BY pr.id, pr.name, t.id, t.name, t.harga_jual, dfc.fee_type, dfc.fee_value
+       ORDER BY pr.id ASC`,
+      [clinicId, query.year, query.month],
+    );
+
+    const byPractitioner = new Map<number, DoctorFeeShareEntry>();
+
+    for (const row of rows as any[]) {
+      const count = parseInt(row.count, 10);
+      const hargaJual = parseFloat(row.hargaJual || 0);
+      const feeType: FeeType = row.feeType || FeeType.PERCENTAGE;
+      const feeValue = parseFloat(row.feeValue || 0);
+      const totalShare =
+        feeType === FeeType.FIXED
+          ? count * feeValue
+          : count * (hargaJual * (feeValue / 100));
+
+      const entry: DoctorFeeShareEntry = byPractitioner.get(
+        row.practitionerId,
+      ) ?? {
+        practitionerId: row.practitionerId,
+        practitionerName: row.practitionerName,
+        breakdown: [],
+        totalTindakan: 0,
+        totalShareFee: 0,
+      };
+
+      entry.breakdown.push({
+        tarifId: row.tarifId,
+        tarifName: row.tarifName,
+        count,
+        feeType,
+        feeValue,
+        totalShare,
+      });
+      entry.totalTindakan += count;
+      entry.totalShareFee += totalShare;
+
+      byPractitioner.set(row.practitionerId, entry);
+    }
+
+    const data = Array.from(byPractitioner.values())
+      .map((entry) => ({
+        ...entry,
+        breakdown: entry.breakdown.sort((a, b) => b.totalShare - a.totalShare),
+      }))
+      .sort((a, b) => b.totalShareFee - a.totalShareFee);
+
+    return { success: true, data };
+  }
 
   async getVisitReport(
     clinicId: number,
