@@ -25,6 +25,11 @@ export class CreateTarifDto {
   @IsString()
   kodeIcd9?: string | null;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  deskripsi?: string | null;
+
   @ApiPropertyOptional({ default: 0 })
   @IsOptional()
   @IsNumber()
@@ -58,6 +63,11 @@ export class UpdateTarifDto {
   @IsOptional()
   @IsString()
   kodeIcd9?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  deskripsi?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

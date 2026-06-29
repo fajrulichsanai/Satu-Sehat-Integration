@@ -17,6 +17,9 @@ export class Tarif extends BaseEntity {
   @Column({ name: 'kode_icd9', length: 10, nullable: true })
   kodeIcd9: string;
 
+  @Column('text', { nullable: true })
+  deskripsi: string;
+
   @Column('bigint', { name: 'harga_pokok', default: 0 })
   hargaPokok: number;
 

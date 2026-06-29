@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -54,6 +55,16 @@ export class BillingController {
     return { success: true, data: result };
   }
 
+  @Get('settings/tarifs/:id')
+  @ApiOperation({ summary: 'Get tarif detail (settings)' })
+  async findOneTarif(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+  ) {
+    const data = await this.tarifsService.findOne(id, clinicId);
+    return { success: true, data };
+  }
+
   @Post('settings/tarifs')
   @ApiOperation({ summary: 'Create tarif' })
   async createTarif(
@@ -80,6 +91,17 @@ export class BillingController {
       user.userId,
     );
     return { success: true, data };
+  }
+
+  @Delete('settings/tarifs/:id')
+  @ApiOperation({ summary: 'Delete (deactivate) tarif' })
+  async deleteTarif(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: any,
+  ) {
+    await this.tarifsService.remove(id, clinicId, user.userId);
+    return { success: true };
   }
 
   // ── Billings ──────────────────────────────────────────────────────────────
