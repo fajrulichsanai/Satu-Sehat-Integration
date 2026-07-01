@@ -198,6 +198,41 @@ export class CreatePatientDto {
   @IsString()
   catatanAlergi?: string;
 
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  riwayatHipertensi?: boolean;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  riwayatDiabetes?: boolean;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  riwayatParuParu?: boolean;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  riwayatSyaraf?: boolean;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  riwayatSistemikLainnya?: boolean;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  alergiObat?: boolean;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  alergiMakanan?: boolean;
+
   // Preferensi & Membership
   @ApiPropertyOptional({ enum: PreferensiKontak })
   @IsOptional()

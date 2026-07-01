@@ -151,6 +151,27 @@ export class Patient extends BaseEntity {
   @Column('text', { name: 'catatan_alergi', nullable: true })
   catatanAlergi: string;
 
+  @Column({ name: 'riwayat_hipertensi', default: false })
+  riwayatHipertensi: boolean;
+
+  @Column({ name: 'riwayat_diabetes', default: false })
+  riwayatDiabetes: boolean;
+
+  @Column({ name: 'riwayat_paru_paru', default: false })
+  riwayatParuParu: boolean;
+
+  @Column({ name: 'riwayat_syaraf', default: false })
+  riwayatSyaraf: boolean;
+
+  @Column({ name: 'riwayat_sistemik_lainnya', default: false })
+  riwayatSistemikLainnya: boolean;
+
+  @Column({ name: 'alergi_obat', default: false })
+  alergiObat: boolean;
+
+  @Column({ name: 'alergi_makanan', default: false })
+  alergiMakanan: boolean;
+
   // Preferensi & Membership
   @Column({
     name: 'preferensi_kontak',

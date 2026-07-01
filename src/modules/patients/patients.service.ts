@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Patient } from './entities/patient.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import {
@@ -111,54 +111,84 @@ export class PatientsService {
       await this.checkDuplicateNik(dto.nik, clinicId);
     }
 
-    const noRm = await this.generateNoRm(clinicId);
+    const saved = await this.createWithNoRmRetry(clinicId, dto);
 
-    const patient = this.patientRepository.create({
-      clinicId,
-      noRm,
-      nik: dto.nik,
-      nikIbu: dto.nikIbu,
-      namaWali: dto.namaWali,
-      hubunganWali: dto.hubunganWali,
-      birthOrder: dto.birthOrder,
-      name: dto.name,
-      birthDate: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
-      gender: dto.gender,
-      phone: dto.phone,
-      email: dto.email,
-      pekerjaan: dto.pekerjaan,
-      address: dto.address,
-      kelurahan: dto.kelurahan,
-      kecamatan: dto.kecamatan,
-      city: dto.city,
-      province: dto.province,
-      postalCode: dto.postalCode,
-      maritalStatus: dto.maritalStatus,
-      sumberInformasi: dto.sumberInformasi,
-      detailSumber: dto.detailSumber,
-      kodeReferral: dto.kodeReferral,
-      referrerPatientId: dto.referrerPatientId,
-      golonganDarah: dto.golonganDarah,
-      rhesus: dto.rhesus,
-      punyaAlergi: dto.punyaAlergi ?? false,
-      catatanAlergi: dto.catatanAlergi,
-      preferensiKontak: dto.preferensiKontak,
-      preferensiJamKontak: dto.preferensiJamKontak,
-      catatanPreferensi: dto.catatanPreferensi,
-      isMember: dto.isMember ?? false,
-      memberId: dto.memberId,
-      consentMarketing: dto.consentMarketing ?? false,
-      consentTanggal: dto.consentTanggal
-        ? new Date(dto.consentTanggal)
-        : undefined,
-      consentVersion: dto.consentVersion,
-    });
-
-    const saved = await this.patientRepository.save(patient);
     this.logger.log(
       `[CREATE] Pasien berhasil dibuat | id=${saved.id}, noRm=${saved.noRm}, clinicId=${clinicId}`,
     );
     return saved;
+  }
+
+  private async createWithNoRmRetry(
+    clinicId: number,
+    dto: CreatePatientDto,
+    attempt = 1,
+  ): Promise<Patient> {
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const noRm = await this.generateNoRm(manager, clinicId);
+        const patient = manager.create(Patient, {
+          clinicId,
+          noRm,
+          nik: dto.nik,
+          nikIbu: dto.nikIbu,
+          namaWali: dto.namaWali,
+          hubunganWali: dto.hubunganWali,
+          birthOrder: dto.birthOrder,
+          name: dto.name,
+          birthDate: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
+          gender: dto.gender,
+          phone: dto.phone,
+          email: dto.email,
+          pekerjaan: dto.pekerjaan,
+          address: dto.address,
+          kelurahan: dto.kelurahan,
+          kecamatan: dto.kecamatan,
+          city: dto.city,
+          province: dto.province,
+          postalCode: dto.postalCode,
+          maritalStatus: dto.maritalStatus,
+          sumberInformasi: dto.sumberInformasi,
+          detailSumber: dto.detailSumber,
+          kodeReferral: dto.kodeReferral,
+          referrerPatientId: dto.referrerPatientId,
+          golonganDarah: dto.golonganDarah,
+          rhesus: dto.rhesus,
+          punyaAlergi: dto.punyaAlergi ?? false,
+          catatanAlergi: dto.catatanAlergi,
+          riwayatHipertensi: dto.riwayatHipertensi ?? false,
+          riwayatDiabetes: dto.riwayatDiabetes ?? false,
+          riwayatParuParu: dto.riwayatParuParu ?? false,
+          riwayatSyaraf: dto.riwayatSyaraf ?? false,
+          riwayatSistemikLainnya: dto.riwayatSistemikLainnya ?? false,
+          alergiObat: dto.alergiObat ?? false,
+          alergiMakanan: dto.alergiMakanan ?? false,
+          preferensiKontak: dto.preferensiKontak,
+          preferensiJamKontak: dto.preferensiJamKontak,
+          catatanPreferensi: dto.catatanPreferensi,
+          isMember: dto.isMember ?? false,
+          memberId: dto.memberId,
+          consentMarketing: dto.consentMarketing ?? false,
+          consentTanggal: dto.consentTanggal
+            ? new Date(dto.consentTanggal)
+            : undefined,
+          consentVersion: dto.consentVersion,
+        });
+
+        return manager.save(patient);
+      });
+    } catch (err) {
+      const isDuplicateNoRm =
+        err instanceof QueryFailedError &&
+        String((err as { code?: string }).code) === 'ER_DUP_ENTRY' &&
+        String((err as { sqlMessage?: string }).sqlMessage || '').includes(
+          'no_rm',
+        );
+      if (isDuplicateNoRm && attempt < 5) {
+        return this.createWithNoRmRetry(clinicId, dto, attempt + 1);
+      }
+      throw err;
+    }
   }
 
   async update(
@@ -204,6 +234,14 @@ export class PatientsService {
       rhesus: dto.rhesus ?? patient.rhesus,
       punyaAlergi: dto.punyaAlergi ?? patient.punyaAlergi,
       catatanAlergi: dto.catatanAlergi ?? patient.catatanAlergi,
+      riwayatHipertensi: dto.riwayatHipertensi ?? patient.riwayatHipertensi,
+      riwayatDiabetes: dto.riwayatDiabetes ?? patient.riwayatDiabetes,
+      riwayatParuParu: dto.riwayatParuParu ?? patient.riwayatParuParu,
+      riwayatSyaraf: dto.riwayatSyaraf ?? patient.riwayatSyaraf,
+      riwayatSistemikLainnya:
+        dto.riwayatSistemikLainnya ?? patient.riwayatSistemikLainnya,
+      alergiObat: dto.alergiObat ?? patient.alergiObat,
+      alergiMakanan: dto.alergiMakanan ?? patient.alergiMakanan,
       preferensiKontak: dto.preferensiKontak ?? patient.preferensiKontak,
       preferensiJamKontak:
         dto.preferensiJamKontak ?? patient.preferensiJamKontak,
@@ -300,16 +338,29 @@ export class PatientsService {
     return this.satusehatClient.searchPatientByNik(clinicId, nik);
   }
 
-  private async generateNoRm(clinicId: number): Promise<string> {
-    return this.dataSource.transaction(async (manager) => {
-      const result = await manager.query(
-        `SELECT COUNT(*) AS total FROM patients WHERE clinic_id = ?`,
-        [clinicId],
-      );
-      const sequence = parseInt(result[0].total, 10) + 1;
-      const clinicPad = String(clinicId).padStart(3, '0');
-      const seqPad = String(sequence).padStart(6, '0');
-      return `RM-${clinicPad}-${seqPad}`;
-    });
+  private async generateNoRm(
+    manager: EntityManager,
+    clinicId: number,
+  ): Promise<string> {
+    const now = new Date();
+    const datePrefix =
+      String(now.getDate()).padStart(2, '0') +
+      String(now.getMonth() + 1).padStart(2, '0') +
+      String(now.getFullYear());
+
+    const result = await manager.query<Array<{ no_rm: string }>>(
+      `SELECT no_rm FROM patients
+       WHERE clinic_id = ? AND no_rm LIKE ?
+       ORDER BY no_rm DESC
+       LIMIT 1
+       FOR UPDATE`,
+      [clinicId, `${datePrefix}%`],
+    );
+
+    const lastSeq = result.length
+      ? parseInt(result[0].no_rm.slice(datePrefix.length), 10)
+      : 0;
+    const seqPad = String(lastSeq + 1).padStart(4, '0');
+    return `${datePrefix}${seqPad}`;
   }
 }
