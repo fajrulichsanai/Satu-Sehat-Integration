@@ -408,4 +408,103 @@ export class AuthService {
     Logger.log(`[VERIFY] Email berhasil diverifikasi | userId=${user.id}`);
     return { success: true, data: { message: 'Email berhasil diverifikasi' } };
   }
+
+  /**
+   * Request password reset — always responds with a generic success message
+   * to avoid leaking whether an email is registered.
+   */
+  async forgotPassword(email: string) {
+    const user = await this.userRepository.findOne({ where: { email } });
+
+    if (user) {
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+      await this.userRepository.update(user.id, {
+        resetPasswordToken: token,
+        resetPasswordExpiresAt: expiresAt,
+      });
+
+      try {
+        await this.sendResetPasswordEmail(user.email, token);
+      } catch (error) {
+        Logger.error(
+          `Failed to send reset password email to ${user.email}: ${error instanceof Error ? error.message : String(error)}`,
+          'AuthService',
+        );
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        message:
+          'Jika email terdaftar, tautan reset password telah dikirim ke email Anda.',
+      },
+    };
+  }
+
+  /**
+   * Send reset password token via Resend
+   */
+  async sendResetPasswordEmail(userEmail: string, token: string): Promise<void> {
+    const appUrl = this.configService.get<string>(
+      'APP_URL',
+      'http://localhost:3000',
+    );
+    const resetUrl = `${appUrl}/reset-password?token=${token}`;
+
+    await this.resend.emails.send({
+      from: 'noreply@send.finarch.my.id',
+      to: userEmail,
+      subject: 'Reset Password Anda - Satu Sehat',
+      html: `
+        <h2>Reset Password</h2>
+        <p>Halo,</p>
+        <p>Kami menerima permintaan untuk mereset password akun Anda. Silakan klik tombol di bawah ini untuk membuat password baru:</p>
+        <a href="${resetUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">
+          Reset Password
+        </a>
+        <p>Atau salin dan buka link berikut di browser Anda:</p>
+        <p>${resetUrl}</p>
+        <p>Link ini berlaku selama 1 jam.</p>
+        <p>Jika Anda tidak meminta reset password, abaikan email ini.</p>
+        <p>Salam,<br>Tim ApexRecord</p>
+      `,
+    });
+    Logger.log(`Reset password email sent to ${userEmail}`, 'AuthService');
+  }
+
+  /**
+   * Reset password using token
+   */
+  async resetPassword(token: string, newPassword: string) {
+    if (!token) throw new BadRequestException('Token reset tidak boleh kosong');
+
+    const user = await this.userRepository.findOne({
+      where: { resetPasswordToken: token },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Token reset tidak valid atau sudah digunakan');
+    }
+
+    if (
+      !user.resetPasswordExpiresAt ||
+      user.resetPasswordExpiresAt.getTime() < Date.now()
+    ) {
+      throw new BadRequestException('Token reset telah kadaluarsa');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    await this.userRepository.update(user.id, {
+      passwordHash,
+      resetPasswordToken: null as unknown as string,
+      resetPasswordExpiresAt: null as unknown as Date,
+    });
+
+    Logger.log(`[RESET] Password berhasil direset | userId=${user.id}`);
+    return { success: true, data: { message: 'Password berhasil direset' } };
+  }
 }

@@ -36,6 +36,12 @@ export class User extends BaseEntity {
   @Column({ name: 'verification_token', length: 100, nullable: true })
   verificationToken: string;
 
+  @Column({ name: 'reset_password_token', length: 100, nullable: true })
+  resetPasswordToken: string;
+
+  @Column({ name: 'reset_password_expires_at', nullable: true })
+  resetPasswordExpiresAt: Date;
+
   @Column({ name: 'last_login_at', nullable: true })
   lastLoginAt: Date;
 

@@ -108,6 +108,24 @@ export class RefreshTokenDto {
   refreshToken: string | undefined;
 }
 
+export class ForgotPasswordDto {
+  @ApiProperty({ example: 'admin@clinic.com' })
+  @IsEmail()
+  @IsNotEmpty()
+  email: string | undefined;
+}
+
+export class ResetPasswordDto {
+  @ApiProperty({ example: 'a1b2c3...' })
+  @IsNotEmpty()
+  token: string | undefined;
+
+  @ApiProperty({ example: 'NewSecurePass123!' })
+  @IsNotEmpty()
+  @MinLength(8)
+  password: string | undefined;
+}
+
 export class ActivationStatusResponseDto {
   @ApiProperty({ example: true })
   isActive: boolean | undefined;
