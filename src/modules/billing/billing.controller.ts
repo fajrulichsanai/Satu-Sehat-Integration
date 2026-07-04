@@ -15,14 +15,11 @@ import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { BillingsService } from './billings.service';
 import { PaymentsService } from '../payments/payments.service';
-import { RefundsService } from './refunds.service';
 import { TarifsService } from './tarifs.service';
 import {
-  ApproveRefundDto,
   BillingQueryDto,
   CreateBillingDto,
   CreatePaymentDto,
-  CreateRefundRequestDto,
 } from './dto/billing.dto';
 import { CreateTarifDto, TarifQueryDto, UpdateTarifDto } from './dto/tarif.dto';
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
@@ -38,7 +35,6 @@ export class BillingController {
   constructor(
     private readonly billingsService: BillingsService,
     private readonly paymentsService: PaymentsService,
-    private readonly refundsService: RefundsService,
     private readonly tarifsService: TarifsService,
     private readonly invoiceService: InvoiceService,
   ) {}
@@ -156,25 +152,6 @@ export class BillingController {
     return { success: true, data };
   }
 
-  // ── Refunds ───────────────────────────────────────────────────────────────
-
-  @Post('billings/:id/refund-request')
-  @ApiOperation({ summary: 'Submit refund request' })
-  async createRefund(
-    @Param('id', ParseIntPipe) id: number,
-    @ClinicId() clinicId: number,
-    @Body() dto: CreateRefundRequestDto,
-    @CurrentUser() user: any,
-  ) {
-    const data = await this.refundsService.createRequest(
-      id,
-      clinicId,
-      dto,
-      user.userId,
-    );
-    return { success: true, data };
-  }
-
   @Get('billings/:id/invoice')
   @ApiOperation({ summary: 'Download invoice as PDF' })
   async downloadInvoice(
@@ -192,24 +169,5 @@ export class BillingController {
       `attachment; filename="invoice-${id}.pdf"`,
     );
     res.end(pdfBuffer);
-  }
-
-  @Post('billings/:id/refund-request/:refundId/approve')
-  @ApiOperation({ summary: 'Approve or reject refund request' })
-  async approveRefund(
-    @Param('id', ParseIntPipe) id: number,
-    @Param('refundId', ParseIntPipe) refundId: number,
-    @ClinicId() clinicId: number,
-    @Body() dto: ApproveRefundDto,
-    @CurrentUser() user: any,
-  ) {
-    const data = await this.refundsService.processApproval(
-      id,
-      refundId,
-      clinicId,
-      dto,
-      user.userId,
-    );
-    return { success: true, data };
   }
 }

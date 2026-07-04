@@ -14,7 +14,6 @@ import { PatientsModule } from './modules/patients/patients.module';
 import { QueuesModule } from './modules/queues/queues.module';
 import { PublicModule } from './modules/public/public.module';
 import { EncountersModule } from './modules/encounters/encounters.module';
-import { MedicationsModule } from './modules/medications/medications.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SatusehatModule } from './modules/satusehat/satusehat.module';
@@ -68,7 +67,6 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     QueuesModule,
     PublicModule,
     EncountersModule,
-    MedicationsModule,
     BillingModule,
     ReportsModule,
     SatusehatModule,

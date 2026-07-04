@@ -4,15 +4,11 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Encounter } from './entities/encounter.entity';
 import { Queue } from '../queues/entities/queue.entity';
-import { Anamnesis } from '../anamnesis/entities/anamnesis.entity';
-import { VitalSign } from '../vital-sign/entities/vital-sign.entity';
-import { Diagnosis } from '../diagnoses/entities/diagnosis.entity';
 import { EncounterStatus, ServiceType } from '../../enums';
 import { QueueStatus } from '../../enums/queue-status.enum';
 import { UserRole } from '../../enums/user-role.enum';
@@ -31,12 +27,6 @@ export class EncountersService {
     private readonly encounterRepository: Repository<Encounter>,
     @InjectRepository(Queue)
     private readonly queueRepository: Repository<Queue>,
-    @InjectRepository(Anamnesis)
-    private readonly anamnesisRepository: Repository<Anamnesis>,
-    @InjectRepository(VitalSign)
-    private readonly vitalSignRepository: Repository<VitalSign>,
-    @InjectRepository(Diagnosis)
-    private readonly diagnosisRepository: Repository<Diagnosis>,
   ) {}
 
   async findAll(clinicId: number, query: EncounterListQueryDto, user: any) {
@@ -213,10 +203,6 @@ export class EncountersService {
       throw new BadRequestException('Alasan pembatalan wajib diisi');
     }
 
-    if (dto.status === EncounterStatus.FINISHED) {
-      await this.validateFinished(id);
-    }
-
     const now = new Date();
     encounter.status = dto.status;
     encounter.updatedBy = user.userId;
@@ -264,33 +250,6 @@ export class EncountersService {
       throw new BadRequestException(
         `Transisi status dari '${from}' ke '${to}' tidak diizinkan`,
       );
-    }
-  }
-
-  private async validateFinished(encounterId: number): Promise<void> {
-    const missing: string[] = [];
-
-    const anamnesis = await this.anamnesisRepository.findOne({
-      where: { encounterId },
-    });
-    if (!anamnesis) missing.push('anamnesis');
-
-    const vitalCount = await this.vitalSignRepository.count({
-      where: { encounterId },
-    });
-    if (vitalCount === 0) missing.push('vitalSigns');
-
-    const diagnosisCount = await this.diagnosisRepository.count({
-      where: { encounterId },
-    });
-    if (diagnosisCount === 0) missing.push('diagnosis');
-
-    if (missing.length > 0) {
-      throw new UnprocessableEntityException({
-        code: 'INCOMPLETE_DOCUMENTATION',
-        missing,
-        message: 'Data klinis belum lengkap untuk menyelesaikan kunjungan',
-      });
     }
   }
 

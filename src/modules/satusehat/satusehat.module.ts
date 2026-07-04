@@ -3,11 +3,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import { Patient } from '../patients/entities/patient.entity';
-import { Diagnosis } from '../diagnoses/entities/diagnosis.entity';
-import { Procedure } from '../procedures/entities/procedure.entity';
-import { VitalSign } from '../vital-sign/entities/vital-sign.entity';
-import { Prescription } from '../prescription/entities/prescription.entity';
-import { Allergy } from '../allergy/entities/allergy.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { SatusehatSyncLog } from './sync/entities/satusehat-sync-log.entity';
 import { SatusehatController } from './satusehat.controller';
@@ -20,17 +15,7 @@ import { SyncQueueService } from './sync/sync-queue.service';
 @Module({
   imports: [
     ConfigModule,
-    TypeOrmModule.forFeature([
-      Encounter,
-      Patient,
-      Diagnosis,
-      Procedure,
-      VitalSign,
-      Prescription,
-      Allergy,
-      Clinic,
-      SatusehatSyncLog,
-    ]),
+    TypeOrmModule.forFeature([Encounter, Patient, Clinic, SatusehatSyncLog]),
   ],
   controllers: [SatusehatController],
   providers: [

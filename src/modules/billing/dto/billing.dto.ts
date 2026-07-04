@@ -128,26 +128,3 @@ export class CreatePaymentDto {
   @IsString()
   note?: string;
 }
-
-export class CreateRefundRequestDto {
-  @ApiProperty()
-  @IsNumber()
-  @Min(0.01)
-  amount: number | undefined;
-
-  @ApiProperty()
-  @IsString()
-  @IsNotEmpty()
-  reason: string | undefined;
-}
-
-export class ApproveRefundDto {
-  @ApiProperty({ enum: ['approved', 'rejected'] })
-  @IsEnum(['approved', 'rejected'])
-  action: 'approved' | 'rejected' | undefined;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  approvalNote?: string;
-}
