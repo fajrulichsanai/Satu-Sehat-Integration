@@ -19,8 +19,8 @@ export class Encounter extends BaseEntity {
   @Column({ name: 'practitioner_id' })
   practitionerId: number;
 
-  @Column({ name: 'location_id' })
-  locationId: number;
+  @Column({ name: 'location_id', nullable: true })
+  locationId?: number;
 
   @Column({ name: 'queue_id', nullable: true })
   queueId: number;

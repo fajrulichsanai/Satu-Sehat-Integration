@@ -21,10 +21,11 @@ export class CreateEncounterDto {
   @Min(1)
   practitionerId: number;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsInt()
   @Min(1)
-  locationId: number;
+  locationId?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
