@@ -94,7 +94,8 @@ export class SyncOrchestratorService {
   ): Promise<{ success: boolean; satusehatId?: string; error?: string }> {
     return {
       success: false,
-      error: 'SATUSEHAT integration has been deprecated and is no longer available',
+      error:
+        'SATUSEHAT integration has been deprecated and is no longer available',
     };
   }
 

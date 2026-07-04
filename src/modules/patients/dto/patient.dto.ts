@@ -164,11 +164,6 @@ export class CreatePatientDto {
   @MaxLength(200)
   detailSumber?: string;
 
-  @ApiPropertyOptional({ example: 'REF12345' })
-  @IsOptional()
-  @MaxLength(50)
-  kodeReferral?: string;
-
   @ApiPropertyOptional({ example: 10 })
   @IsOptional()
   @IsInt()
@@ -233,7 +228,7 @@ export class CreatePatientDto {
   @IsBoolean()
   alergiMakanan?: boolean;
 
-  // Preferensi & Membership
+  // Preferensi
   @ApiPropertyOptional({ enum: PreferensiKontak })
   @IsOptional()
   @IsEnum(PreferensiKontak)
@@ -248,17 +243,6 @@ export class CreatePatientDto {
   @IsOptional()
   @IsString()
   catatanPreferensi?: string;
-
-  @ApiPropertyOptional({ example: false })
-  @IsOptional()
-  @IsBoolean()
-  isMember?: boolean;
-
-  @ApiPropertyOptional({ example: 'MBR-0001' })
-  @ValidateIf((dto: CreatePatientDto) => dto.isMember === true)
-  @IsNotEmpty({ message: 'Member ID wajib diisi jika pasien adalah member' })
-  @MaxLength(50)
-  memberId?: string;
 
   // Persetujuan
   @ApiPropertyOptional({ example: true })

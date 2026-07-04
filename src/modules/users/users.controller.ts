@@ -44,7 +44,9 @@ export class UsersController {
 
   @Get()
   @Roles(UserRole.OWNER, UserRole.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Get all users (Owner: own clinic, Super Admin: all)' })
+  @ApiOperation({
+    summary: 'Get all users (Owner: own clinic, Super Admin: all)',
+  })
   @ApiResponse({
     status: 200,
     description: 'User list',
@@ -60,7 +62,9 @@ export class UsersController {
 
   @Get('roles')
   @Roles(UserRole.OWNER, UserRole.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Get all available roles assignable by the current user' })
+  @ApiOperation({
+    summary: 'Get all available roles assignable by the current user',
+  })
   @ApiResponse({
     status: 200,
     description: 'List of roles',
@@ -75,18 +79,23 @@ export class UsersController {
 
   @Get('pending/list')
   @Roles(UserRole.OWNER, UserRole.SUPER_ADMIN)
-  @ApiOperation({ summary: 'Get all pending users (Owner: own clinic, Super Admin: all)' })
-  @ApiQuery({ name: 'email', required: false, description: 'Filter by email (partial match)' })
+  @ApiOperation({
+    summary: 'Get all pending users (Owner: own clinic, Super Admin: all)',
+  })
+  @ApiQuery({
+    name: 'email',
+    required: false,
+    description: 'Filter by email (partial match)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Pending users list',
     type: UserListResponseDto,
   })
-  async findPending(
-    @CurrentUser() user: any,
-    @Query('email') email?: string,
-  ) {
-    this.logger.log(`[GET /users/pending/list] Request masuk${email ? ` | email=${email}` : ''}`);
+  async findPending(@CurrentUser() user: any, @Query('email') email?: string) {
+    this.logger.log(
+      `[GET /users/pending/list] Request masuk${email ? ` | email=${email}` : ''}`,
+    );
     const result = await this.usersService.findPending(user, email);
     this.logger.log(`[GET /users/pending/list] Response dikirim`);
     return result;
@@ -118,9 +127,13 @@ export class UsersController {
   @ApiResponse({ status: 409, description: 'Email already used' })
   @ApiResponse({ status: 403, description: 'Cannot assign this role' })
   async invite(@Body() dto: InviteUserDto, @CurrentUser() user: any) {
-    this.logger.log(`[POST /users/invite] Request masuk | email=${dto.email}, role=${dto.role}, requestedBy=${user.userId}`);
+    this.logger.log(
+      `[POST /users/invite] Request masuk | email=${dto.email}, role=${dto.role}, requestedBy=${user.userId}`,
+    );
     const result = await this.usersService.invite(dto, user);
-    this.logger.log(`[POST /users/invite] Response dikirim | email=${dto.email}`);
+    this.logger.log(
+      `[POST /users/invite] Response dikirim | email=${dto.email}`,
+    );
     return result;
   }
 
@@ -135,7 +148,9 @@ export class UsersController {
     @Body() dto: UpdateUserDto,
     @CurrentUser() user: any,
   ) {
-    this.logger.log(`[PATCH /users/:id] Request masuk | userId=${id}, requestedBy=${user.userId}`);
+    this.logger.log(
+      `[PATCH /users/:id] Request masuk | userId=${id}, requestedBy=${user.userId}`,
+    );
     const result = await this.usersService.update(id, dto, user);
     this.logger.log(`[PATCH /users/:id] Response dikirim | userId=${id}`);
     return result;
@@ -154,9 +169,13 @@ export class UsersController {
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: any,
   ) {
-    this.logger.log(`[POST /users/:id/activate] Request masuk | userId=${id}, requestedBy=${user.userId}`);
+    this.logger.log(
+      `[POST /users/:id/activate] Request masuk | userId=${id}, requestedBy=${user.userId}`,
+    );
     const result = await this.usersService.activate(id, user);
-    this.logger.log(`[POST /users/:id/activate] Response dikirim | userId=${id}`);
+    this.logger.log(
+      `[POST /users/:id/activate] Response dikirim | userId=${id}`,
+    );
     return result;
   }
 
@@ -171,9 +190,13 @@ export class UsersController {
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: any,
   ) {
-    this.logger.log(`[POST /users/:id/deactivate] Request masuk | userId=${id}, requestedBy=${user.userId}`);
+    this.logger.log(
+      `[POST /users/:id/deactivate] Request masuk | userId=${id}, requestedBy=${user.userId}`,
+    );
     const result = await this.usersService.deactivate(id, user);
-    this.logger.log(`[POST /users/:id/deactivate] Response dikirim | userId=${id}`);
+    this.logger.log(
+      `[POST /users/:id/deactivate] Response dikirim | userId=${id}`,
+    );
     return result;
   }
 
@@ -187,7 +210,9 @@ export class UsersController {
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: any,
   ) {
-    this.logger.log(`[DELETE /users/:id] Request masuk | userId=${id}, requestedBy=${user.userId}`);
+    this.logger.log(
+      `[DELETE /users/:id] Request masuk | userId=${id}, requestedBy=${user.userId}`,
+    );
     const result = await this.usersService.remove(id, user);
     this.logger.log(`[DELETE /users/:id] Response dikirim | userId=${id}`);
     return result;
@@ -206,7 +231,9 @@ export class UsersController {
     @Body() dto: UpdateUserRoleDto,
     @CurrentUser() user: any,
   ) {
-    this.logger.log(`[PATCH /users/:id/role] Request masuk | userId=${id}, newRole=${dto.role}`);
+    this.logger.log(
+      `[PATCH /users/:id/role] Request masuk | userId=${id}, newRole=${dto.role}`,
+    );
     const result = await this.usersService.updateRole(id, dto.role, user);
     this.logger.log(`[PATCH /users/:id/role] Response dikirim | userId=${id}`);
     return result;
@@ -223,9 +250,13 @@ export class UsersController {
     @Body() dto: AssignUserRoleDto,
     @CurrentUser() user: any,
   ) {
-    this.logger.log(`[PATCH /users/:id/assign-role] Request masuk | userId=${id}, newRole=${dto.role}, requestedBy=${user.userId}`);
+    this.logger.log(
+      `[PATCH /users/:id/assign-role] Request masuk | userId=${id}, newRole=${dto.role}, requestedBy=${user.userId}`,
+    );
     const result = await this.usersService.assignRole(id, dto.role, user);
-    this.logger.log(`[PATCH /users/:id/assign-role] Response dikirim | userId=${id}`);
+    this.logger.log(
+      `[PATCH /users/:id/assign-role] Response dikirim | userId=${id}`,
+    );
     return result;
   }
 }

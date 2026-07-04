@@ -1,10 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsNotEmpty,
-  IsEmail,
-  IsOptional,
-  MaxLength,
-} from 'class-validator';
+import { IsNotEmpty, IsEmail, IsOptional, MaxLength } from 'class-validator';
 
 export class UpdateClinicDto {
   @ApiProperty({ example: 'Klinik Sehat Bersama' })

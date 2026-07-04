@@ -58,7 +58,9 @@ export class ClinicsService {
       });
     }
 
-    this.logger.log(`[GET] Data klinik berhasil diambil | clinicId=${clinicId}, name=${clinic.name}`);
+    this.logger.log(
+      `[GET] Data klinik berhasil diambil | clinicId=${clinicId}, name=${clinic.name}`,
+    );
 
     return {
       success: true,
@@ -67,14 +69,18 @@ export class ClinicsService {
   }
 
   async update(clinicId: number, dto: UpdateClinicDto, updatedBy: number) {
-    this.logger.log(`[UPDATE] Memulai update profil klinik | clinicId=${clinicId}, updatedBy=${updatedBy}`);
+    this.logger.log(
+      `[UPDATE] Memulai update profil klinik | clinicId=${clinicId}, updatedBy=${updatedBy}`,
+    );
 
     const clinic = await this.clinicRepository.findOne({
       where: { id: clinicId },
     });
 
     if (!clinic) {
-      this.logger.warn(`[UPDATE] Klinik tidak ditemukan | clinicId=${clinicId}`);
+      this.logger.warn(
+        `[UPDATE] Klinik tidak ditemukan | clinicId=${clinicId}`,
+      );
       throw new NotFoundException({
         success: false,
         error: {
@@ -84,7 +90,9 @@ export class ClinicsService {
       });
     }
 
-    this.logger.log(`[UPDATE] Klinik ditemukan, mengaplikasikan perubahan | clinicId=${clinicId}`);
+    this.logger.log(
+      `[UPDATE] Klinik ditemukan, mengaplikasikan perubahan | clinicId=${clinicId}`,
+    );
     Object.assign(clinic, dto);
     clinic.updatedBy = updatedBy;
 
@@ -96,13 +104,19 @@ export class ClinicsService {
       clinic.phone
     ) {
       clinic.setupComplete = true;
-      this.logger.log(`[UPDATE] Setup klinik ditandai complete | clinicId=${clinicId}`);
+      this.logger.log(
+        `[UPDATE] Setup klinik ditandai complete | clinicId=${clinicId}`,
+      );
     }
 
-    this.logger.log(`[UPDATE] Menyimpan perubahan ke database | clinicId=${clinicId}`);
+    this.logger.log(
+      `[UPDATE] Menyimpan perubahan ke database | clinicId=${clinicId}`,
+    );
     await this.clinicRepository.save(clinic);
 
-    this.logger.log(`[UPDATE] Profil klinik berhasil diperbarui | clinicId=${clinicId}`);
+    this.logger.log(
+      `[UPDATE] Profil klinik berhasil diperbarui | clinicId=${clinicId}`,
+    );
 
     return {
       success: true,
@@ -110,5 +124,4 @@ export class ClinicsService {
       message: 'Profil klinik berhasil diperbarui',
     };
   }
-
 }

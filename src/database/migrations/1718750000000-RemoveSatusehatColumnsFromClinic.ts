@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class RemoveSatusehatColumnsFromClinic1718750000000
-  implements MigrationInterface
-{
+export class RemoveSatusehatColumnsFromClinic1718750000000 implements MigrationInterface {
   async up(queryRunner: QueryRunner): Promise<void> {
     // Drop all 13 Satu Sehat columns from clinics table
     const columnsToDrop = [
@@ -22,9 +20,7 @@ export class RemoveSatusehatColumnsFromClinic1718750000000
     ];
 
     for (const columnName of columnsToDrop) {
-      await queryRunner.query(
-        `ALTER TABLE clinics DROP COLUMN ${columnName}`,
-      );
+      await queryRunner.query(`ALTER TABLE clinics DROP COLUMN ${columnName}`);
     }
   }
 

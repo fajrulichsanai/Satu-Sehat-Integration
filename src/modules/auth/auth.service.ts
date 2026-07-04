@@ -70,7 +70,11 @@ export class AuthService {
             code: 'INVALID_OWNER_CODE',
             message: 'Owner code tidak valid',
             details: [
-              { field: 'ownerCode', message: 'Owner code yang Anda masukkan tidak valid atau sudah digunakan' },
+              {
+                field: 'ownerCode',
+                message:
+                  'Owner code yang Anda masukkan tidak valid atau sudah digunakan',
+              },
             ],
           },
         });

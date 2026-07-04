@@ -36,7 +36,9 @@ describe('UsersService', () => {
   describe('findOne', () => {
     it('should throw NotFoundException if user not found', async () => {
       mockRepo.findOne.mockResolvedValue(null);
-      await expect(service.findOne(999, owner)).rejects.toThrow(NotFoundException);
+      await expect(service.findOne(999, owner)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 

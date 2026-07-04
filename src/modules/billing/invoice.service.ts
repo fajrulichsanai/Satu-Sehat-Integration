@@ -17,13 +17,17 @@ export class InvoiceService {
     billingId: number,
     clinicId: number,
   ): Promise<Buffer> {
-    this.logger.log(`[CREATE] Generate invoice PDF | billingId=${billingId}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[CREATE] Generate invoice PDF | billingId=${billingId}, clinicId=${clinicId}`,
+    );
     const billing = await this.billingRepository.findOne({
       where: { id: billingId, clinicId },
       relations: { patient: true, items: true },
     });
     if (!billing) {
-      this.logger.warn(`[CREATE] Billing tidak ditemukan untuk generate PDF | billingId=${billingId}`);
+      this.logger.warn(
+        `[CREATE] Billing tidak ditemukan untuk generate PDF | billingId=${billingId}`,
+      );
       throw new NotFoundException(
         `Billing dengan ID ${billingId} tidak ditemukan`,
       );

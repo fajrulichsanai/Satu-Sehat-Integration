@@ -40,7 +40,9 @@ export class EncountersService {
   ) {}
 
   async findAll(clinicId: number, query: EncounterListQueryDto, user: any) {
-    this.logger.log(`[GET-ALL] Mengambil daftar encounter | clinicId=${clinicId}, date=${query.date || 'today'}`);
+    this.logger.log(
+      `[GET-ALL] Mengambil daftar encounter | clinicId=${clinicId}, date=${query.date || 'today'}`,
+    );
     const qb = this.encounterRepository
       .createQueryBuilder('e')
       .leftJoinAndSelect('e.patient', 'patient')
@@ -95,7 +97,9 @@ export class EncountersService {
   }
 
   async findOne(id: number, clinicId: number, user?: any): Promise<Encounter> {
-    this.logger.log(`[GET] Mengambil detail encounter | id=${id}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[GET] Mengambil detail encounter | id=${id}, clinicId=${clinicId}`,
+    );
     const encounter = await this.encounterRepository.findOne({
       where: { id, clinicId },
       relations: {
@@ -106,7 +110,9 @@ export class EncountersService {
       },
     });
     if (!encounter) {
-      this.logger.warn(`[GET] Encounter tidak ditemukan | id=${id}, clinicId=${clinicId}`);
+      this.logger.warn(
+        `[GET] Encounter tidak ditemukan | id=${id}, clinicId=${clinicId}`,
+      );
       throw new NotFoundException(`Encounter dengan ID ${id} tidak ditemukan`);
     }
 
@@ -128,7 +134,9 @@ export class EncountersService {
     dto: CreateEncounterDto,
     userId: number,
   ): Promise<Encounter> {
-    this.logger.log(`[CREATE] Membuat encounter baru | clinicId=${clinicId}, patientId=${dto.patientId}, practitionerId=${dto.practitionerId}`);
+    this.logger.log(
+      `[CREATE] Membuat encounter baru | clinicId=${clinicId}, patientId=${dto.patientId}, practitionerId=${dto.practitionerId}`,
+    );
     if (dto.queueId) {
       const queue = await this.queueRepository.findOne({
         where: { id: dto.queueId, clinicId },
@@ -157,7 +165,9 @@ export class EncountersService {
     });
 
     const saved = await this.encounterRepository.save(encounter);
-    this.logger.log(`[CREATE] Encounter berhasil dibuat | id=${saved.id}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[CREATE] Encounter berhasil dibuat | id=${saved.id}, clinicId=${clinicId}`,
+    );
 
     if (dto.queueId) {
       await this.queueRepository.update(dto.queueId, {
@@ -174,12 +184,16 @@ export class EncountersService {
     dto: UpdateEncounterStatusDto,
     user: any,
   ): Promise<Encounter> {
-    this.logger.log(`[STATUS-UPDATE] Memperbarui status encounter | id=${id}, clinicId=${clinicId}, newStatus=${dto.status}`);
+    this.logger.log(
+      `[STATUS-UPDATE] Memperbarui status encounter | id=${id}, clinicId=${clinicId}, newStatus=${dto.status}`,
+    );
     const encounter = await this.encounterRepository.findOne({
       where: { id, clinicId },
     });
     if (!encounter) {
-      this.logger.warn(`[STATUS-UPDATE] Encounter tidak ditemukan | id=${id}, clinicId=${clinicId}`);
+      this.logger.warn(
+        `[STATUS-UPDATE] Encounter tidak ditemukan | id=${id}, clinicId=${clinicId}`,
+      );
       throw new NotFoundException(`Encounter dengan ID ${id} tidak ditemukan`);
     }
 
@@ -226,7 +240,9 @@ export class EncountersService {
     }
 
     const result = await this.encounterRepository.save(encounter);
-    this.logger.log(`[STATUS-UPDATE] Status encounter berhasil diperbarui | id=${id}, status=${dto.status}`);
+    this.logger.log(
+      `[STATUS-UPDATE] Status encounter berhasil diperbarui | id=${id}, status=${dto.status}`,
+    );
     return result;
   }
 

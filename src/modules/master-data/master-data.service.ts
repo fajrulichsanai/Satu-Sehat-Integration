@@ -1,4 +1,8 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SatusehatGlobalOauthService } from '../satusehat/satusehat-global-oauth.service';
 import { SatusehatEnvironment } from '../../enums/satusehat-environment.enum';
@@ -11,10 +15,8 @@ import {
 } from './dto/master-data.dto';
 
 const SATUSEHAT_BASE: Record<SatusehatEnvironment, string> = {
-  [SatusehatEnvironment.SANDBOX]:
-    'https://api-satusehat-stg.dto.kemkes.go.id',
-  [SatusehatEnvironment.PRODUCTION]:
-    'https://api-satusehat.kemkes.go.id',
+  [SatusehatEnvironment.SANDBOX]: 'https://api-satusehat-stg.dto.kemkes.go.id',
+  [SatusehatEnvironment.PRODUCTION]: 'https://api-satusehat.kemkes.go.id',
 };
 
 @Injectable()
@@ -26,13 +28,19 @@ export class MasterDataService {
     private readonly oauthService: SatusehatGlobalOauthService,
     private readonly configService: ConfigService,
   ) {
-    const env = this.configService.get<string>('SATUSEHAT_ENVIRONMENT', 'sandbox');
-    this.environment = env === 'production'
-      ? SatusehatEnvironment.PRODUCTION
-      : SatusehatEnvironment.SANDBOX;
+    const env = this.configService.get<string>(
+      'SATUSEHAT_ENVIRONMENT',
+      'sandbox',
+    );
+    this.environment =
+      env === 'production'
+        ? SatusehatEnvironment.PRODUCTION
+        : SatusehatEnvironment.SANDBOX;
   }
 
-  async getProvinces(codes?: string): Promise<MasterDataResponseDto<ProvinceDto>> {
+  async getProvinces(
+    codes?: string,
+  ): Promise<MasterDataResponseDto<ProvinceDto>> {
     const params = codes ? `?codes=${codes}` : '';
     return this.fetchMasterData(`provinces${params}`);
   }

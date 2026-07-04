@@ -49,7 +49,9 @@ export class QueuesService {
     clinicId: number,
     query: QueueQueryDto,
   ): Promise<PaginatedResult<Queue>> {
-    this.logger.log(`[GET-ALL] Mengambil daftar antrian | clinicId=${clinicId}, date=${query.date || 'today'}`);
+    this.logger.log(
+      `[GET-ALL] Mengambil daftar antrian | clinicId=${clinicId}, date=${query.date || 'today'}`,
+    );
     const targetDate = query.date ? new Date(query.date) : new Date();
     const start = startOfDay(targetDate);
     const end = endOfDay(targetDate);
@@ -79,20 +81,26 @@ export class QueuesService {
   }
 
   async findOne(id: number, clinicId: number): Promise<Queue> {
-    this.logger.log(`[GET] Mengambil detail antrian | id=${id}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[GET] Mengambil detail antrian | id=${id}, clinicId=${clinicId}`,
+    );
     const queue = await this.queueRepository.findOne({
       where: { id, clinicId },
       relations: { practitioner: true },
     });
     if (!queue) {
-      this.logger.warn(`[GET] Antrian tidak ditemukan | id=${id}, clinicId=${clinicId}`);
+      this.logger.warn(
+        `[GET] Antrian tidak ditemukan | id=${id}, clinicId=${clinicId}`,
+      );
       throw new NotFoundException(`Antrian dengan ID ${id} tidak ditemukan`);
     }
     return queue;
   }
 
   async create(clinicId: number, dto: CreateQueueDto): Promise<Queue> {
-    this.logger.log(`[CREATE] Membuat antrian baru | clinicId=${clinicId}, patientId=${dto.patientId}, date=${dto.appointmentDate}`);
+    this.logger.log(
+      `[CREATE] Membuat antrian baru | clinicId=${clinicId}, patientId=${dto.patientId}, date=${dto.appointmentDate}`,
+    );
     const tanggal = new Date(dto.appointmentDate);
     const nomorAntrian = await this.generateQueueNumber(clinicId, tanggal);
 
@@ -116,7 +124,9 @@ export class QueuesService {
     });
 
     const saved = await this.queueRepository.save(queue);
-    this.logger.log(`[CREATE] Antrian berhasil dibuat | id=${saved.id}, nomorAntrian=${saved.nomorAntrian}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[CREATE] Antrian berhasil dibuat | id=${saved.id}, nomorAntrian=${saved.nomorAntrian}, clinicId=${clinicId}`,
+    );
     return saved;
   }
 
@@ -125,12 +135,16 @@ export class QueuesService {
     clinicId: number,
     dto: UpdateQueueStatusDto,
   ): Promise<Queue> {
-    this.logger.log(`[STATUS-UPDATE] Memperbarui status antrian | id=${id}, clinicId=${clinicId}, newStatus=${dto.status}`);
+    this.logger.log(
+      `[STATUS-UPDATE] Memperbarui status antrian | id=${id}, clinicId=${clinicId}, newStatus=${dto.status}`,
+    );
     const queue = await this.findOne(id, clinicId);
 
     const allowed = STATUS_TRANSITIONS[queue.status] ?? [];
     if (!allowed.includes(dto.status)) {
-      this.logger.warn(`[STATUS-UPDATE] Transisi status tidak diizinkan | id=${id}, from=${queue.status}, to=${dto.status}`);
+      this.logger.warn(
+        `[STATUS-UPDATE] Transisi status tidak diizinkan | id=${id}, from=${queue.status}, to=${dto.status}`,
+      );
       throw new BadRequestException(
         `Tidak bisa mengubah status dari ${queue.status} ke ${dto.status}. ` +
           `Status yang diperbolehkan: ${allowed.join(', ') || 'tidak ada'}`,
@@ -146,7 +160,9 @@ export class QueuesService {
     }
 
     const updated = await this.queueRepository.save(queue);
-    this.logger.log(`[STATUS-UPDATE] Status antrian berhasil diperbarui | id=${id}, status=${dto.status}`);
+    this.logger.log(
+      `[STATUS-UPDATE] Status antrian berhasil diperbarui | id=${id}, status=${dto.status}`,
+    );
     return updated;
   }
 

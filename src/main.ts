@@ -27,9 +27,7 @@ async function bootstrap() {
   // CORS Configuration (Task 1.9)
   // CORS Configuration
   app.enableCors({
-    origin: [
-      process.env.FRONTEND_URL,
-    ].filter(Boolean),
+    origin: [process.env.FRONTEND_URL].filter(Boolean),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],

@@ -29,9 +29,7 @@ export class AuthController {
   @ApiResponse({ status: 409, description: 'Email already exists' })
   @ApiResponse({ status: 400, description: 'Validation error' })
   async register(@Body() dto: RegisterDto) {
-    console.log(
-      `Received registration request for email: ${dto.email}`,
-    );
+    console.log(`Received registration request for email: ${dto.email}`);
     return this.authService.register(dto);
   }
 

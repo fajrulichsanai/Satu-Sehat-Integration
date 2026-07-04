@@ -27,7 +27,9 @@ export async function seedSuperAdmin(dataSource: DataSource): Promise<void> {
     [email, passwordHash, 'Super Admin', UserRole.SUPER_ADMIN],
   );
 
-  console.log(`Seeded super admin: ${email} (change the password after first login)`);
+  console.log(
+    `Seeded super admin: ${email} (change the password after first login)`,
+  );
 
   await queryRunner.release();
 }

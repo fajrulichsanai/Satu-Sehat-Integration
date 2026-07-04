@@ -31,7 +31,9 @@ export class RefundsService {
     dto: CreateRefundRequestDto,
     userId: number,
   ) {
-    this.logger.log(`[CREATE] Membuat permintaan refund | billingId=${billingId}, clinicId=${clinicId}, amount=${dto.amount}`);
+    this.logger.log(
+      `[CREATE] Membuat permintaan refund | billingId=${billingId}, clinicId=${clinicId}, amount=${dto.amount}`,
+    );
     const billing = await this.billingRepository.findOne({
       where: { id: billingId, clinicId },
     });
@@ -83,7 +85,9 @@ export class RefundsService {
     dto: ApproveRefundDto,
     userId: number,
   ) {
-    this.logger.log(`[UPDATE] Proses approval refund | billingId=${billingId}, refundId=${refundId}, action=${dto.action}`);
+    this.logger.log(
+      `[UPDATE] Proses approval refund | billingId=${billingId}, refundId=${refundId}, action=${dto.action}`,
+    );
     const billing = await this.billingRepository.findOne({
       where: { id: billingId, clinicId },
     });
@@ -117,7 +121,9 @@ export class RefundsService {
     }
 
     const result = await this.refundRepository.save(refund);
-    this.logger.log(`[UPDATE] Refund berhasil diproses | refundId=${refundId}, status=${result.status}`);
+    this.logger.log(
+      `[UPDATE] Refund berhasil diproses | refundId=${refundId}, status=${result.status}`,
+    );
     return result;
   }
 }

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddRiwayatPenyakitToPatients1782900000000
-  implements MigrationInterface
-{
+export class AddRiwayatPenyakitToPatients1782900000000 implements MigrationInterface {
   async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
       'ALTER TABLE `patients` ADD `riwayat_hipertensi` TINYINT NOT NULL DEFAULT 0',
@@ -28,14 +26,24 @@ export class AddRiwayatPenyakitToPatients1782900000000
   }
 
   async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query('ALTER TABLE `patients` DROP COLUMN `alergi_makanan`');
+    await queryRunner.query(
+      'ALTER TABLE `patients` DROP COLUMN `alergi_makanan`',
+    );
     await queryRunner.query('ALTER TABLE `patients` DROP COLUMN `alergi_obat`');
     await queryRunner.query(
       'ALTER TABLE `patients` DROP COLUMN `riwayat_sistemik_lainnya`',
     );
-    await queryRunner.query('ALTER TABLE `patients` DROP COLUMN `riwayat_syaraf`');
-    await queryRunner.query('ALTER TABLE `patients` DROP COLUMN `riwayat_paru_paru`');
-    await queryRunner.query('ALTER TABLE `patients` DROP COLUMN `riwayat_diabetes`');
-    await queryRunner.query('ALTER TABLE `patients` DROP COLUMN `riwayat_hipertensi`');
+    await queryRunner.query(
+      'ALTER TABLE `patients` DROP COLUMN `riwayat_syaraf`',
+    );
+    await queryRunner.query(
+      'ALTER TABLE `patients` DROP COLUMN `riwayat_paru_paru`',
+    );
+    await queryRunner.query(
+      'ALTER TABLE `patients` DROP COLUMN `riwayat_diabetes`',
+    );
+    await queryRunner.query(
+      'ALTER TABLE `patients` DROP COLUMN `riwayat_hipertensi`',
+    );
   }
 }

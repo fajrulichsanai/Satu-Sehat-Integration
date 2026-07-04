@@ -40,6 +40,12 @@ import { SyncQueueService } from './sync/sync-queue.service';
     SyncOrchestratorService,
     SyncQueueService,
   ],
-  exports: [SatusehatClientService, SatusehatGlobalOauthService, SatusehatFhirService, SyncOrchestratorService, SyncQueueService],
+  exports: [
+    SatusehatClientService,
+    SatusehatGlobalOauthService,
+    SatusehatFhirService,
+    SyncOrchestratorService,
+    SyncQueueService,
+  ],
 })
 export class SatusehatModule {}

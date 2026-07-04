@@ -91,9 +91,6 @@ export class Patient extends BaseEntity {
   })
   maritalStatus: MaritalStatus;
 
-  @Column({ name: 'ihs_number', length: 50, nullable: true })
-  ihsNumber: string;
-
   @Column({ name: 'satusehat_patient_id', length: 100, nullable: true })
   satusehatPatientId: string;
 
@@ -122,9 +119,6 @@ export class Patient extends BaseEntity {
 
   @Column({ name: 'detail_sumber', length: 200, nullable: true })
   detailSumber: string;
-
-  @Column({ name: 'kode_referral', length: 50, nullable: true })
-  kodeReferral: string;
 
   @Column({ name: 'referrer_patient_id', nullable: true })
   referrerPatientId: number;
@@ -172,7 +166,7 @@ export class Patient extends BaseEntity {
   @Column({ name: 'alergi_makanan', default: false })
   alergiMakanan: boolean;
 
-  // Preferensi & Membership
+  // Preferensi
   @Column({
     name: 'preferensi_kontak',
     type: 'enum',
@@ -192,12 +186,6 @@ export class Patient extends BaseEntity {
   @Column('text', { name: 'catatan_preferensi', nullable: true })
   catatanPreferensi: string;
 
-  @Column({ name: 'is_member', default: false })
-  isMember: boolean;
-
-  @Column({ name: 'member_id', length: 50, nullable: true })
-  memberId: string;
-
   // Persetujuan
   @Column({ name: 'consent_marketing', default: false })
   consentMarketing: boolean;
@@ -207,9 +195,6 @@ export class Patient extends BaseEntity {
 
   @Column({ name: 'consent_version', length: 20, nullable: true })
   consentVersion: string;
-
-  @Column({ name: 'status_aktif', default: true })
-  statusAktif: boolean;
 
   // Relations
   @ManyToOne(() => Clinic, { onDelete: 'CASCADE' })

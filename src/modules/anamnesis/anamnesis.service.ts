@@ -23,7 +23,9 @@ export class AnamnesisService {
   ) {}
 
   async findByEncounter(encounterId: number, clinicId: number) {
-    this.logger.log(`[GET] Mengambil anamnesis | encounterId=${encounterId}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[GET] Mengambil anamnesis | encounterId=${encounterId}, clinicId=${clinicId}`,
+    );
     await this.verifyEncounter(encounterId, clinicId);
 
     const anamnesis = await this.anamnesisRepository.findOne({
@@ -45,7 +47,9 @@ export class AnamnesisService {
     dto: UpsertAnamnesisDto,
     userId: number,
   ) {
-    this.logger.log(`[CREATE] Upsert anamnesis | encounterId=${encounterId}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[CREATE] Upsert anamnesis | encounterId=${encounterId}, clinicId=${clinicId}`,
+    );
     await this.verifyEncounter(encounterId, clinicId);
 
     let anamnesis = await this.anamnesisRepository.findOne({
@@ -104,7 +108,9 @@ export class AnamnesisService {
       }
     }
 
-    this.logger.log(`[CREATE] Anamnesis berhasil disimpan | encounterId=${encounterId}`);
+    this.logger.log(
+      `[CREATE] Anamnesis berhasil disimpan | encounterId=${encounterId}`,
+    );
     return { savedAt: new Date() };
   }
 
@@ -116,7 +122,9 @@ export class AnamnesisService {
       where: { id: encounterId, clinicId },
     });
     if (!encounter) {
-      this.logger.warn(`[GET] Encounter tidak ditemukan | encounterId=${encounterId}, clinicId=${clinicId}`);
+      this.logger.warn(
+        `[GET] Encounter tidak ditemukan | encounterId=${encounterId}, clinicId=${clinicId}`,
+      );
       throw new NotFoundException(
         `Encounter dengan ID ${encounterId} tidak ditemukan`,
       );

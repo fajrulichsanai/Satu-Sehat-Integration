@@ -55,7 +55,9 @@ export class UsersService {
     });
 
     await this.practitionerRepository.save(practitioner);
-    this.logger.log(`[AUTO-PRACTITIONER] Practitioner dibuat otomatis | userId=${user.id}, clinicId=${user.clinicId}`);
+    this.logger.log(
+      `[AUTO-PRACTITIONER] Practitioner dibuat otomatis | userId=${user.id}, clinicId=${user.clinicId}`,
+    );
   }
 
   private isSuperAdmin(currentUser: CurrentUserPayload): boolean {
@@ -87,14 +89,18 @@ export class UsersService {
         success: false,
         error: {
           code: 'INSUFFICIENT_PERMISSIONS',
-          message: 'Tidak bisa mengelola user dengan role setara atau lebih tinggi',
+          message:
+            'Tidak bisa mengelola user dengan role setara atau lebih tinggi',
         },
       });
     }
   }
 
   /** Throws if currentUser may not assign newRole to anyone. */
-  private assertCanAssignRole(currentUser: CurrentUserPayload, newRole: UserRole) {
+  private assertCanAssignRole(
+    currentUser: CurrentUserPayload,
+    newRole: UserRole,
+  ) {
     if (this.isSuperAdmin(currentUser)) {
       return;
     }
@@ -104,13 +110,17 @@ export class UsersService {
         success: false,
         error: {
           code: 'INSUFFICIENT_PERMISSIONS',
-          message: 'Tidak bisa memberikan role setara atau lebih tinggi dari role sendiri',
+          message:
+            'Tidak bisa memberikan role setara atau lebih tinggi dari role sendiri',
         },
       });
     }
   }
 
-  private async findByIdOrThrow(id: number, currentUser: CurrentUserPayload): Promise<User> {
+  private async findByIdOrThrow(
+    id: number,
+    currentUser: CurrentUserPayload,
+  ): Promise<User> {
     const where = this.isSuperAdmin(currentUser)
       ? { id }
       : { id, clinicId: currentUser.clinicId as number };
@@ -136,7 +146,9 @@ export class UsersService {
     );
 
     const users = await this.userRepository.find({
-      where: this.isSuperAdmin(currentUser) ? {} : { clinicId: currentUser.clinicId as number },
+      where: this.isSuperAdmin(currentUser)
+        ? {}
+        : { clinicId: currentUser.clinicId as number },
       order: { createdAt: 'DESC' },
     });
 
@@ -154,7 +166,9 @@ export class UsersService {
     const user = await this.findByIdOrThrow(id, currentUser);
     this.assertCanManage(currentUser, user);
 
-    this.logger.log(`[GET-ONE] Berhasil mengambil data user | userId=${id}, email=${user.email}`);
+    this.logger.log(
+      `[GET-ONE] Berhasil mengambil data user | userId=${id}, email=${user.email}`,
+    );
 
     return {
       success: true,
@@ -163,7 +177,9 @@ export class UsersService {
   }
 
   async activate(id: number, currentUser: CurrentUserPayload) {
-    this.logger.log(`[ACTIVATE] Memulai aktivasi user | userId=${id}, requestedBy=${currentUser.userId}`);
+    this.logger.log(
+      `[ACTIVATE] Memulai aktivasi user | userId=${id}, requestedBy=${currentUser.userId}`,
+    );
 
     const user = await this.findByIdOrThrow(id, currentUser);
     this.assertCanManage(currentUser, user);
@@ -190,7 +206,9 @@ export class UsersService {
 
     await this.userRepository.save(user);
 
-    this.logger.log(`[ACTIVATE] User berhasil diaktivasi | userId=${id}, email=${user.email}`);
+    this.logger.log(
+      `[ACTIVATE] User berhasil diaktivasi | userId=${id}, email=${user.email}`,
+    );
 
     return {
       success: true,
@@ -206,7 +224,9 @@ export class UsersService {
   }
 
   async deactivate(id: number, currentUser: CurrentUserPayload) {
-    this.logger.log(`[DEACTIVATE] Memulai deaktivasi user | userId=${id}, requestedBy=${currentUser.userId}`);
+    this.logger.log(
+      `[DEACTIVATE] Memulai deaktivasi user | userId=${id}, requestedBy=${currentUser.userId}`,
+    );
 
     const user = await this.findByIdOrThrow(id, currentUser);
     this.assertCanManage(currentUser, user);
@@ -224,7 +244,10 @@ export class UsersService {
     if (!user.isActive) {
       throw new ConflictException({
         success: false,
-        error: { code: 'USER_ALREADY_INACTIVE', message: 'User sudah tidak aktif' },
+        error: {
+          code: 'USER_ALREADY_INACTIVE',
+          message: 'User sudah tidak aktif',
+        },
       });
     }
 
@@ -233,7 +256,9 @@ export class UsersService {
 
     await this.userRepository.save(user);
 
-    this.logger.log(`[DEACTIVATE] User berhasil dinonaktifkan | userId=${id}, email=${user.email}`);
+    this.logger.log(
+      `[DEACTIVATE] User berhasil dinonaktifkan | userId=${id}, email=${user.email}`,
+    );
 
     return {
       success: true,
@@ -248,12 +273,17 @@ export class UsersService {
   }
 
   async remove(id: number, currentUser: CurrentUserPayload) {
-    this.logger.log(`[DELETE] Memulai penghapusan user | userId=${id}, requestedBy=${currentUser.userId}`);
+    this.logger.log(
+      `[DELETE] Memulai penghapusan user | userId=${id}, requestedBy=${currentUser.userId}`,
+    );
 
     if (id === currentUser.userId) {
       throw new ForbiddenException({
         success: false,
-        error: { code: 'CANNOT_DELETE_SELF', message: 'Tidak bisa menghapus akun sendiri' },
+        error: {
+          code: 'CANNOT_DELETE_SELF',
+          message: 'Tidak bisa menghapus akun sendiri',
+        },
       });
     }
 
@@ -262,7 +292,9 @@ export class UsersService {
 
     await this.userRepository.remove(user);
 
-    this.logger.log(`[DELETE] User berhasil dihapus | userId=${id}, email=${user.email}`);
+    this.logger.log(
+      `[DELETE] User berhasil dihapus | userId=${id}, email=${user.email}`,
+    );
 
     return {
       success: true,
@@ -308,7 +340,9 @@ export class UsersService {
       order: { createdAt: 'DESC' },
     });
 
-    this.logger.log(`[GET-PENDING] Berhasil mengambil ${users.length} user pending`);
+    this.logger.log(
+      `[GET-PENDING] Berhasil mengambil ${users.length} user pending`,
+    );
 
     return {
       success: true,
@@ -316,13 +350,22 @@ export class UsersService {
     };
   }
 
-  async assignRole(id: number, newRole: UserRole, currentUser: CurrentUserPayload) {
-    this.logger.log(`[ASSIGN-ROLE] Memulai assign role | userId=${id}, newRole=${newRole}, requestedBy=${currentUser.userId}`);
+  async assignRole(
+    id: number,
+    newRole: UserRole,
+    currentUser: CurrentUserPayload,
+  ) {
+    this.logger.log(
+      `[ASSIGN-ROLE] Memulai assign role | userId=${id}, newRole=${newRole}, requestedBy=${currentUser.userId}`,
+    );
 
     if (newRole === UserRole.PENDING) {
       throw new BadRequestException({
         success: false,
-        error: { code: 'INVALID_ROLE', message: 'Role tidak bisa di-assign ke pending' },
+        error: {
+          code: 'INVALID_ROLE',
+          message: 'Role tidak bisa di-assign ke pending',
+        },
       });
     }
 
@@ -330,10 +373,16 @@ export class UsersService {
     this.assertCanManage(currentUser, user);
     this.assertCanAssignRole(currentUser, newRole);
 
-    if ((user.role === UserRole.OWNER || user.role === UserRole.SUPER_ADMIN) && newRole !== user.role) {
+    if (
+      (user.role === UserRole.OWNER || user.role === UserRole.SUPER_ADMIN) &&
+      newRole !== user.role
+    ) {
       throw new ForbiddenException({
         success: false,
-        error: { code: 'CANNOT_CHANGE_OWNER_ROLE', message: 'Role owner/super admin tidak bisa diubah' },
+        error: {
+          code: 'CANNOT_CHANGE_OWNER_ROLE',
+          message: 'Role owner/super admin tidak bisa diubah',
+        },
       });
     }
 
@@ -347,7 +396,9 @@ export class UsersService {
       await this.ensurePractitionerForUser(user);
     }
 
-    this.logger.log(`[ASSIGN-ROLE] Role berhasil di-assign | userId=${id}, ${previousRole} -> ${newRole}`);
+    this.logger.log(
+      `[ASSIGN-ROLE] Role berhasil di-assign | userId=${id}, ${previousRole} -> ${newRole}`,
+    );
 
     return {
       success: true,
@@ -362,8 +413,14 @@ export class UsersService {
     };
   }
 
-  async updateRole(id: number, newRole: UserRole, currentUser: CurrentUserPayload) {
-    this.logger.log(`[UPDATE-ROLE] Memulai update role user pending | userId=${id}, newRole=${newRole}`);
+  async updateRole(
+    id: number,
+    newRole: UserRole,
+    currentUser: CurrentUserPayload,
+  ) {
+    this.logger.log(
+      `[UPDATE-ROLE] Memulai update role user pending | userId=${id}, newRole=${newRole}`,
+    );
 
     const user = await this.findByIdOrThrow(id, currentUser);
     this.assertCanManage(currentUser, user);
@@ -374,7 +431,8 @@ export class UsersService {
         success: false,
         error: {
           code: 'INVALID_USER_STATUS',
-          message: 'Hanya user dengan status pending yang bisa diupdate rolenya',
+          message:
+            'Hanya user dengan status pending yang bisa diupdate rolenya',
         },
       });
     }
@@ -382,7 +440,10 @@ export class UsersService {
     if (![UserRole.ADMIN, UserRole.DOKTER, UserRole.OWNER].includes(newRole)) {
       throw new BadRequestException({
         success: false,
-        error: { code: 'INVALID_ROLE', message: 'Role hanya bisa diubah ke admin, dokter, atau owner' },
+        error: {
+          code: 'INVALID_ROLE',
+          message: 'Role hanya bisa diubah ke admin, dokter, atau owner',
+        },
       });
     }
 
@@ -396,7 +457,9 @@ export class UsersService {
       await this.ensurePractitionerForUser(user);
     }
 
-    this.logger.log(`[UPDATE-ROLE] Role user pending berhasil diupdate | userId=${id}, newRole=${newRole}`);
+    this.logger.log(
+      `[UPDATE-ROLE] Role user pending berhasil diupdate | userId=${id}, newRole=${newRole}`,
+    );
 
     return {
       success: true,
@@ -412,7 +475,9 @@ export class UsersService {
   }
 
   async invite(dto: InviteUserDto, currentUser: CurrentUserPayload) {
-    this.logger.log(`[INVITE] Membuat user baru | email=${dto.email}, role=${dto.role}, requestedBy=${currentUser.userId}`);
+    this.logger.log(
+      `[INVITE] Membuat user baru | email=${dto.email}, role=${dto.role}, requestedBy=${currentUser.userId}`,
+    );
 
     this.assertCanAssignRole(currentUser, dto.role);
 
@@ -421,15 +486,21 @@ export class UsersService {
       if (dto.role !== UserRole.SUPER_ADMIN && !dto.clinicId) {
         throw new BadRequestException({
           success: false,
-          error: { code: 'CLINIC_ID_REQUIRED', message: 'clinicId wajib diisi untuk role selain super admin' },
+          error: {
+            code: 'CLINIC_ID_REQUIRED',
+            message: 'clinicId wajib diisi untuk role selain super admin',
+          },
         });
       }
-      clinicId = dto.role === UserRole.SUPER_ADMIN ? null : (dto.clinicId as number);
+      clinicId =
+        dto.role === UserRole.SUPER_ADMIN ? null : (dto.clinicId as number);
     } else {
       clinicId = currentUser.clinicId;
     }
 
-    const existing = await this.userRepository.findOne({ where: { email: dto.email } });
+    const existing = await this.userRepository.findOne({
+      where: { email: dto.email },
+    });
     if (existing) {
       throw new ConflictException({
         success: false,
@@ -437,7 +508,10 @@ export class UsersService {
       });
     }
 
-    const temporaryPassword = crypto.randomBytes(9).toString('base64').replace(/[/+=]/g, '');
+    const temporaryPassword = crypto
+      .randomBytes(9)
+      .toString('base64')
+      .replace(/[/+=]/g, '');
     const passwordHash = await bcrypt.hash(temporaryPassword, 10);
 
     const user = this.userRepository.create({
@@ -458,30 +532,44 @@ export class UsersService {
       await this.ensurePractitionerForUser(user);
     }
 
-    this.logger.log(`[INVITE] User baru berhasil dibuat | userId=${user.id}, email=${user.email}`);
+    this.logger.log(
+      `[INVITE] User baru berhasil dibuat | userId=${user.id}, email=${user.email}`,
+    );
 
     return {
       success: true,
       data: {
         ...this.sanitizeUser(user),
         temporaryPassword,
-        message: 'User berhasil dibuat. Bagikan password sementara ini kepada user.',
+        message:
+          'User berhasil dibuat. Bagikan password sementara ini kepada user.',
       },
     };
   }
 
-  async update(id: number, dto: UpdateUserDto, currentUser: CurrentUserPayload) {
-    this.logger.log(`[UPDATE] Memulai update data user | userId=${id}, requestedBy=${currentUser.userId}`);
+  async update(
+    id: number,
+    dto: UpdateUserDto,
+    currentUser: CurrentUserPayload,
+  ) {
+    this.logger.log(
+      `[UPDATE] Memulai update data user | userId=${id}, requestedBy=${currentUser.userId}`,
+    );
 
     const user = await this.findByIdOrThrow(id, currentUser);
     this.assertCanManage(currentUser, user);
 
     if (dto.email && dto.email !== user.email) {
-      const existing = await this.userRepository.findOne({ where: { email: dto.email } });
+      const existing = await this.userRepository.findOne({
+        where: { email: dto.email },
+      });
       if (existing) {
         throw new ConflictException({
           success: false,
-          error: { code: 'EMAIL_ALREADY_USED', message: 'Email sudah digunakan' },
+          error: {
+            code: 'EMAIL_ALREADY_USED',
+            message: 'Email sudah digunakan',
+          },
         });
       }
       user.email = dto.email;

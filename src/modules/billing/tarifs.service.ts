@@ -14,7 +14,9 @@ export class TarifsService {
   ) {}
 
   async findAll(clinicId: number, query: TarifQueryDto) {
-    this.logger.log(`[GET-ALL] Mengambil daftar tarif | clinicId=${clinicId}, search=${query.search || '-'}`);
+    this.logger.log(
+      `[GET-ALL] Mengambil daftar tarif | clinicId=${clinicId}, search=${query.search || '-'}`,
+    );
     const qb = this.tarifRepository
       .createQueryBuilder('t')
       .where('t.clinicId = :clinicId AND t.isActive = true', { clinicId });
@@ -40,12 +42,16 @@ export class TarifsService {
   }
 
   async findOne(id: number, clinicId: number): Promise<Tarif> {
-    this.logger.log(`[GET] Mengambil detail tarif | id=${id}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[GET] Mengambil detail tarif | id=${id}, clinicId=${clinicId}`,
+    );
     const tarif = await this.tarifRepository.findOne({
       where: { id, clinicId },
     });
     if (!tarif) {
-      this.logger.warn(`[GET] Tarif tidak ditemukan | id=${id}, clinicId=${clinicId}`);
+      this.logger.warn(
+        `[GET] Tarif tidak ditemukan | id=${id}, clinicId=${clinicId}`,
+      );
       throw new NotFoundException(`Tarif dengan ID ${id} tidak ditemukan`);
     }
     return tarif;
@@ -56,7 +62,9 @@ export class TarifsService {
     dto: CreateTarifDto,
     userId: number,
   ): Promise<Tarif> {
-    this.logger.log(`[CREATE] Membuat tarif baru | clinicId=${clinicId}, name=${dto.name}`);
+    this.logger.log(
+      `[CREATE] Membuat tarif baru | clinicId=${clinicId}, name=${dto.name}`,
+    );
     const tarif = this.tarifRepository.create({
       clinicId,
       name: dto.name!,
@@ -77,7 +85,9 @@ export class TarifsService {
     dto: UpdateTarifDto,
     userId: number,
   ): Promise<Tarif> {
-    this.logger.log(`[UPDATE] Memperbarui tarif | id=${id}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[UPDATE] Memperbarui tarif | id=${id}, clinicId=${clinicId}`,
+    );
     const tarif = await this.findOne(id, clinicId);
     Object.assign(tarif, {
       name: dto.name ?? tarif.name,
@@ -94,7 +104,9 @@ export class TarifsService {
   }
 
   async remove(id: number, clinicId: number, userId: number): Promise<void> {
-    this.logger.log(`[DELETE] Menghapus tarif | id=${id}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[DELETE] Menghapus tarif | id=${id}, clinicId=${clinicId}`,
+    );
     const tarif = await this.findOne(id, clinicId);
     tarif.isActive = false;
     tarif.updatedBy = userId;

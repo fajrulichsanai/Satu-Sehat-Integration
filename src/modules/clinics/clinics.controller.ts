@@ -11,10 +11,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { UserRole } from '../../enums';
-import {
-  UpdateClinicDto,
-  ClinicResponseDto,
-} from './dto/clinic.dto';
+import { UpdateClinicDto, ClinicResponseDto } from './dto/clinic.dto';
 
 @ApiTags('settings')
 @Controller('settings/clinic')
@@ -48,7 +45,6 @@ export class ClinicsController {
   ) {
     return this.clinicsService.update(clinicId, dto, user.userId);
   }
-
 }
 
 @ApiTags('settings')

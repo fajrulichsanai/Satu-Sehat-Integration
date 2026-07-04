@@ -150,7 +150,6 @@ export class PatientsService {
           maritalStatus: dto.maritalStatus,
           sumberInformasi: dto.sumberInformasi,
           detailSumber: dto.detailSumber,
-          kodeReferral: dto.kodeReferral,
           referrerPatientId: dto.referrerPatientId,
           golonganDarah: dto.golonganDarah,
           rhesus: dto.rhesus,
@@ -166,8 +165,6 @@ export class PatientsService {
           preferensiKontak: dto.preferensiKontak,
           preferensiJamKontak: dto.preferensiJamKontak,
           catatanPreferensi: dto.catatanPreferensi,
-          isMember: dto.isMember ?? false,
-          memberId: dto.memberId,
           consentMarketing: dto.consentMarketing ?? false,
           consentTanggal: dto.consentTanggal
             ? new Date(dto.consentTanggal)
@@ -228,7 +225,6 @@ export class PatientsService {
       maritalStatus: dto.maritalStatus ?? patient.maritalStatus,
       sumberInformasi: dto.sumberInformasi ?? patient.sumberInformasi,
       detailSumber: dto.detailSumber ?? patient.detailSumber,
-      kodeReferral: dto.kodeReferral ?? patient.kodeReferral,
       referrerPatientId: dto.referrerPatientId ?? patient.referrerPatientId,
       golonganDarah: dto.golonganDarah ?? patient.golonganDarah,
       rhesus: dto.rhesus ?? patient.rhesus,
@@ -246,8 +242,6 @@ export class PatientsService {
       preferensiJamKontak:
         dto.preferensiJamKontak ?? patient.preferensiJamKontak,
       catatanPreferensi: dto.catatanPreferensi ?? patient.catatanPreferensi,
-      isMember: dto.isMember ?? patient.isMember,
-      memberId: dto.memberId ?? patient.memberId,
       consentMarketing: dto.consentMarketing ?? patient.consentMarketing,
       consentTanggal: dto.consentTanggal
         ? new Date(dto.consentTanggal)

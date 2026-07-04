@@ -38,7 +38,9 @@ export class BillingsService {
   ) {}
 
   async findAll(clinicId: number, query: BillingQueryDto) {
-    this.logger.log(`[GET-ALL] Mengambil daftar billing | clinicId=${clinicId}, status=${query.status || 'all'}`);
+    this.logger.log(
+      `[GET-ALL] Mengambil daftar billing | clinicId=${clinicId}, status=${query.status || 'all'}`,
+    );
     const qb = this.billingRepository
       .createQueryBuilder('b')
       .leftJoinAndSelect('b.patient', 'patient')
@@ -85,20 +87,26 @@ export class BillingsService {
   }
 
   async findOne(id: number, clinicId: number) {
-    this.logger.log(`[GET] Mengambil detail billing | id=${id}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[GET] Mengambil detail billing | id=${id}, clinicId=${clinicId}`,
+    );
     const billing = await this.billingRepository.findOne({
       where: { id, clinicId },
       relations: { patient: true, items: true, payments: true },
     });
     if (!billing) {
-      this.logger.warn(`[GET] Billing tidak ditemukan | id=${id}, clinicId=${clinicId}`);
+      this.logger.warn(
+        `[GET] Billing tidak ditemukan | id=${id}, clinicId=${clinicId}`,
+      );
       throw new NotFoundException(`Billing dengan ID ${id} tidak ditemukan`);
     }
     return billing;
   }
 
   async create(clinicId: number, dto: CreateBillingDto, userId: number) {
-    this.logger.log(`[CREATE] Membuat billing baru | clinicId=${clinicId}, encounterId=${dto.encounterId}`);
+    this.logger.log(
+      `[CREATE] Membuat billing baru | clinicId=${clinicId}, encounterId=${dto.encounterId}`,
+    );
     const encounter = await this.encounterRepository.findOne({
       where: { id: dto.encounterId, clinicId },
     });
@@ -213,7 +221,9 @@ export class BillingsService {
         })),
       );
 
-      this.logger.log(`[CREATE] Billing berhasil dibuat | id=${billing.id}, invoiceNumber=${billing.invoiceNumber}, clinicId=${clinicId}`);
+      this.logger.log(
+        `[CREATE] Billing berhasil dibuat | id=${billing.id}, invoiceNumber=${billing.invoiceNumber}, clinicId=${clinicId}`,
+      );
       return billing;
     });
   }

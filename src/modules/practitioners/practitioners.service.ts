@@ -27,7 +27,9 @@ export class PractitionersService {
    * Get all practitioners in clinic
    */
   async findAll(clinicId: number) {
-    this.logger.log(`[GET-ALL] Mengambil daftar practitioner | clinicId=${clinicId}`);
+    this.logger.log(
+      `[GET-ALL] Mengambil daftar practitioner | clinicId=${clinicId}`,
+    );
     const practitioners = await this.practitionerRepository.find({
       where: { clinicId },
       order: { createdAt: 'DESC' },
@@ -43,13 +45,17 @@ export class PractitionersService {
    * Get practitioner by ID
    */
   async findOne(id: number, clinicId: number) {
-    this.logger.log(`[GET] Mengambil data practitioner | id=${id}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[GET] Mengambil data practitioner | id=${id}, clinicId=${clinicId}`,
+    );
     const practitioner = await this.practitionerRepository.findOne({
       where: { id, clinicId },
     });
 
     if (!practitioner) {
-      this.logger.warn(`[GET] Practitioner tidak ditemukan | id=${id}, clinicId=${clinicId}`);
+      this.logger.warn(
+        `[GET] Practitioner tidak ditemukan | id=${id}, clinicId=${clinicId}`,
+      );
       throw new NotFoundException({
         success: false,
         error: {
@@ -73,14 +79,18 @@ export class PractitionersService {
     clinicId: number,
     createdBy: number,
   ) {
-    this.logger.log(`[CREATE] Mendaftarkan practitioner baru | clinicId=${clinicId}, nik=${dto.nik}, name=${dto.name}`);
+    this.logger.log(
+      `[CREATE] Mendaftarkan practitioner baru | clinicId=${clinicId}, nik=${dto.nik}, name=${dto.name}`,
+    );
     // Check if NIK already exists in this clinic
     const existing = await this.practitionerRepository.findOne({
       where: { nik: dto.nik, clinicId },
     });
 
     if (existing) {
-      this.logger.warn(`[CREATE] NIK practitioner sudah terdaftar | nik=${dto.nik}, clinicId=${clinicId}`);
+      this.logger.warn(
+        `[CREATE] NIK practitioner sudah terdaftar | nik=${dto.nik}, clinicId=${clinicId}`,
+      );
       throw new ConflictException({
         success: false,
         error: {
@@ -98,7 +108,9 @@ export class PractitionersService {
     });
 
     await this.practitionerRepository.save(practitioner);
-    this.logger.log(`[CREATE] Practitioner berhasil didaftarkan | id=${practitioner.id}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[CREATE] Practitioner berhasil didaftarkan | id=${practitioner.id}, clinicId=${clinicId}`,
+    );
 
     return {
       success: true,
@@ -116,13 +128,17 @@ export class PractitionersService {
     clinicId: number,
     updatedBy: number,
   ) {
-    this.logger.log(`[UPDATE] Memperbarui data practitioner | id=${id}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[UPDATE] Memperbarui data practitioner | id=${id}, clinicId=${clinicId}`,
+    );
     const practitioner = await this.practitionerRepository.findOne({
       where: { id, clinicId },
     });
 
     if (!practitioner) {
-      this.logger.warn(`[UPDATE] Practitioner tidak ditemukan | id=${id}, clinicId=${clinicId}`);
+      this.logger.warn(
+        `[UPDATE] Practitioner tidak ditemukan | id=${id}, clinicId=${clinicId}`,
+      );
       throw new NotFoundException({
         success: false,
         error: {
@@ -136,7 +152,9 @@ export class PractitionersService {
     practitioner.updatedBy = updatedBy;
 
     await this.practitionerRepository.save(practitioner);
-    this.logger.log(`[UPDATE] Data practitioner berhasil diperbarui | id=${id}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[UPDATE] Data practitioner berhasil diperbarui | id=${id}, clinicId=${clinicId}`,
+    );
 
     return {
       success: true,
@@ -149,13 +167,17 @@ export class PractitionersService {
    * Delete practitioner
    */
   async remove(id: number, clinicId: number) {
-    this.logger.log(`[DELETE] Menghapus practitioner | id=${id}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[DELETE] Menghapus practitioner | id=${id}, clinicId=${clinicId}`,
+    );
     const practitioner = await this.practitionerRepository.findOne({
       where: { id, clinicId },
     });
 
     if (!practitioner) {
-      this.logger.warn(`[DELETE] Practitioner tidak ditemukan | id=${id}, clinicId=${clinicId}`);
+      this.logger.warn(
+        `[DELETE] Practitioner tidak ditemukan | id=${id}, clinicId=${clinicId}`,
+      );
       throw new NotFoundException({
         success: false,
         error: {
@@ -169,7 +191,9 @@ export class PractitionersService {
     // For now, allow deletion
 
     await this.practitionerRepository.remove(practitioner);
-    this.logger.log(`[DELETE] Practitioner berhasil dihapus | id=${id}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[DELETE] Practitioner berhasil dihapus | id=${id}, clinicId=${clinicId}`,
+    );
 
     return {
       success: true,
