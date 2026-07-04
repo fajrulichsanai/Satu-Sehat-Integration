@@ -342,25 +342,19 @@ export class PatientsService {
     manager: EntityManager,
     clinicId: number,
   ): Promise<string> {
-    const now = new Date();
-    const datePrefix =
-      String(now.getDate()).padStart(2, '0') +
-      String(now.getMonth() + 1).padStart(2, '0') +
-      String(now.getFullYear());
-
+    // Nomor RM sequential per klinik (tidak reset harian/tahunan), format 6 digit: 000001, 000002, dst.
+    // Hanya mempertimbangkan no_rm bergaya baru (murni digit, <=6 karakter) agar tidak
+    // tercampur dengan format lama (tanggal+urut) yang mungkin masih ada di data historis.
     const result = await manager.query<Array<{ no_rm: string }>>(
       `SELECT no_rm FROM patients
-       WHERE clinic_id = ? AND no_rm LIKE ?
-       ORDER BY no_rm DESC
+       WHERE clinic_id = ? AND no_rm REGEXP '^[0-9]{1,6}$'
+       ORDER BY CAST(no_rm AS UNSIGNED) DESC
        LIMIT 1
        FOR UPDATE`,
-      [clinicId, `${datePrefix}%`],
+      [clinicId],
     );
 
-    const lastSeq = result.length
-      ? parseInt(result[0].no_rm.slice(datePrefix.length), 10)
-      : 0;
-    const seqPad = String(lastSeq + 1).padStart(4, '0');
-    return `${datePrefix}${seqPad}`;
+    const lastSeq = result.length ? parseInt(result[0].no_rm, 10) : 0;
+    return String(lastSeq + 1).padStart(6, '0');
   }
 }
