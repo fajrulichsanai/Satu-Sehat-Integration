@@ -13,3 +13,5 @@ export * from './hubungan-wali.enum';
 export * from './sumber-informasi.enum';
 export * from './preferensi-kontak.enum';
 export * from './preferensi-jam-kontak.enum';
+export * from './reservation-status.enum';
+export * from './reservation-source.enum';

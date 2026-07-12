@@ -1,0 +1,110 @@
+{
+  "info": {
+    "name": "ApexRecord - Reservasi Public API (Landing Page)",
+    "_postman_id": "apexrecord-reservasi-public-api-v1",
+    "description": "Kumpulan endpoint publik (tanpa autentikasi) untuk fitur Reservasi, khusus dikonsumsi oleh website landing page klinik.\n\n## Setup\n1. Set variable `baseUrl` ke URL server backend (default: http://localhost:3001)\n2. Set variable `clinicId` sesuai ID klinik Anda (lihat di dashboard ApexRecord > Info Klinik)\n3. Semua endpoint di sini bersifat publik (no auth) dan dibatasi rate limit 10 request / 60 detik per IP\n\n## Alur booking dari landing page\n1. (Opsional) `Get Clinic Info` — tampilkan info klinik di halaman booking\n2. `Get Available Slots` — tampilkan jam yang masih tersedia untuk tanggal & dokter/lokasi pilihan\n3. `Create Reservation` — kirim form reservasi pasien, simpan `token` yang dikembalikan\n4. `Check Reservation Status` — gunakan `token` untuk menampilkan status reservasi ke pasien (menunggu konfirmasi / terkonfirmasi / dibatalkan / selesai) tanpa perlu login\n\nSetelah reservasi dibuat, status awalnya selalu `pending` sampai staf klinik mengkonfirmasi dari dashboard ApexRecord.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001",
+      "type": "string"
+    },
+    {
+      "key": "clinicId",
+      "value": "1",
+      "type": "string",
+      "description": "ID klinik tujuan reservasi"
+    },
+    {
+      "key": "reservationToken",
+      "value": "",
+      "type": "string",
+      "description": "Token yang didapat dari response Create Reservation, dipakai untuk cek status"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Get Clinic Public Info",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "GET",
+        "description": "Ambil info publik klinik (nama, alamat, jam operasional) untuk ditampilkan di halaman booking.",
+        "url": {
+          "raw": "{{baseUrl}}/public/clinic-info?clinicId={{clinicId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["public", "clinic-info"],
+          "query": [{ "key": "clinicId", "value": "{{clinicId}}" }]
+        }
+      }
+    },
+    {
+      "name": "2. Get Available Slots",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "GET",
+        "description": "Ambil daftar jam yang masih tersedia untuk tanggal (dan opsional dokter/lokasi) tertentu, dipakai untuk mengisi pilihan jam di form reservasi.",
+        "url": {
+          "raw": "{{baseUrl}}/public/available-slots?clinicId={{clinicId}}&date=2026-07-15&locationId=1&practitionerId=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["public", "available-slots"],
+          "query": [
+            { "key": "clinicId", "value": "{{clinicId}}" },
+            { "key": "date", "value": "2026-07-15" },
+            { "key": "locationId", "value": "1", "description": "opsional" },
+            { "key": "practitionerId", "value": "1", "description": "opsional" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "3. Create Reservation",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200 || pm.response.code === 201) {",
+              "  const body = pm.response.json();",
+              "  if (body?.data?.token) {",
+              "    pm.collectionVariables.set('reservationToken', body.data.token);",
+              "  }",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "description": "Buat reservasi baru dari landing page. Field `clinicId` wajib diisi (ID klinik tujuan). `patientId` boleh dikosongkan untuk pasien baru — cukup isi `patientName` dan `patientPhone`. Reservasi akan tersimpan dengan status `pending` menunggu konfirmasi staf klinik. Token pada response dipakai pasien untuk cek status booking-nya.",
+        "url": {
+          "raw": "{{baseUrl}}/public/reservations",
+          "host": ["{{baseUrl}}"],
+          "path": ["public", "reservations"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"clinicId\": {{clinicId}},\n  \"patientName\": \"Budi Santoso\",\n  \"patientPhone\": \"08123456789\",\n  \"patientNik\": \"3171234567890001\",\n  \"locationId\": 1,\n  \"practitionerId\": 1,\n  \"serviceType\": \"outpatient\",\n  \"reservationDate\": \"2026-07-15\",\n  \"jamSlot\": \"09:00\",\n  \"notes\": \"Kontrol rutin, mohon jadwalkan pagi hari\"\n}"
+        }
+      }
+    },
+    {
+      "name": "4. Check Reservation Status",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "GET",
+        "description": "Cek status reservasi menggunakan token yang didapat saat Create Reservation. Berguna untuk halaman \"cek status booking saya\" di landing page.",
+        "url": {
+          "raw": "{{baseUrl}}/public/reservations/status?token={{reservationToken}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["public", "reservations", "status"],
+          "query": [{ "key": "token", "value": "{{reservationToken}}" }]
+        }
+      }
+    }
+  ]
+}

@@ -12,6 +12,7 @@ import { PractitionersModule } from './modules/practitioners/practitioners.modul
 import { LocationsModule } from './modules/locations/locations.module';
 import { PatientsModule } from './modules/patients/patients.module';
 import { QueuesModule } from './modules/queues/queues.module';
+import { ReservationsModule } from './modules/reservations/reservations.module';
 import { PublicModule } from './modules/public/public.module';
 import { EncountersModule } from './modules/encounters/encounters.module';
 import { BillingModule } from './modules/billing/billing.module';
@@ -65,6 +66,7 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     LocationsModule,
     PatientsModule,
     QueuesModule,
+    ReservationsModule,
     PublicModule,
     EncountersModule,
     BillingModule,

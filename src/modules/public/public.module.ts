@@ -7,12 +7,14 @@ import { PublicController } from './public.controller';
 import { PublicService } from './public.service';
 import { QueuesModule } from '../queues/queues.module';
 import { PatientsModule } from '../patients/patients.module';
+import { ReservationsModule } from '../reservations/reservations.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Clinic, Patient, Queue]),
     QueuesModule,
     PatientsModule,
+    ReservationsModule,
   ],
   controllers: [PublicController],
   providers: [PublicService],

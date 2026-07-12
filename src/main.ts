@@ -24,10 +24,19 @@ async function bootstrap() {
     new HttpExceptionFilter(), // HTTP exception filter
   );
 
-  // CORS Configuration (Task 1.9)
   // CORS Configuration
+  // FRONTEND_URL = dashboard ApexRecord, LANDING_PAGE_URL = website publik (booking reservasi)
+  // Keduanya boleh berisi beberapa origin dipisah koma.
+  const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    process.env.LANDING_PAGE_URL,
+  ]
+    .filter(Boolean)
+    .flatMap((v) => v!.split(',').map((s) => s.trim()))
+    .filter(Boolean);
+
   app.enableCors({
-    origin: [process.env.FRONTEND_URL].filter(Boolean),
+    origin: allowedOrigins.length > 0 ? allowedOrigins : true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -56,6 +65,10 @@ async function bootstrap() {
     .addTag('settings', 'Clinic Settings & Configuration')
     .addTag('patients', 'Patient Management')
     .addTag('queues', 'Queue Management')
+    .addTag(
+      'reservations',
+      'Reservation Management (Dashboard + Public Booking)',
+    )
     .addTag('public', 'Public Endpoints (No Auth)')
     .addTag('encounters', 'Clinical Encounters')
     .addTag('diagnoses', 'Diagnosis Management')

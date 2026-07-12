@@ -16,6 +16,11 @@ import {
 } from './dto/public.dto';
 import { QueuesService } from '../queues/queues.service';
 import { PatientsService } from '../patients/patients.service';
+import { ReservationsService } from '../reservations/reservations.service';
+import {
+  PublicCreateReservationDto,
+  PublicReservationStatusQueryDto,
+} from '../reservations/dto/reservation.dto';
 import { startOfDay, endOfDay } from '../../common/utils/date.util';
 
 @Injectable()
@@ -29,6 +34,7 @@ export class PublicService {
     private readonly queueRepository: Repository<Queue>,
     private readonly queuesService: QueuesService,
     private readonly patientsService: PatientsService,
+    private readonly reservationsService: ReservationsService,
   ) {}
 
   async getClinicInfo(clinicId: number) {
@@ -125,5 +131,20 @@ export class PublicService {
       patientName: queue.patientName,
       estimatedWaitMinutes: waitingAhead * 15,
     };
+  }
+
+  async createReservation(dto: PublicCreateReservationDto) {
+    const reservation = await this.reservationsService.createPublic(dto);
+    return {
+      token: reservation.token,
+      reservationDate: reservation.reservationDate,
+      jamSlot: reservation.jamSlot,
+      patientName: reservation.patientName,
+      status: reservation.status,
+    };
+  }
+
+  async getReservationStatus(query: PublicReservationStatusQueryDto) {
+    return this.reservationsService.getStatusByToken(query.token);
   }
 }

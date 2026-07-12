@@ -14,6 +14,10 @@ import {
   BookingDto,
   QueueStatusQueryDto,
 } from './dto/public.dto';
+import {
+  PublicCreateReservationDto,
+  PublicReservationStatusQueryDto,
+} from '../reservations/dto/reservation.dto';
 import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('public')
@@ -48,6 +52,25 @@ export class PublicController {
   @ApiOperation({ summary: 'Check queue status by token' })
   async getQueueStatus(@Query() query: QueueStatusQueryDto) {
     const data = await this.publicService.getQueueStatus(query);
+    return { success: true, data };
+  }
+
+  @Post('reservations')
+  @ApiOperation({ summary: 'Create reservation from landing page' })
+  async createReservation(@Body() dto: PublicCreateReservationDto) {
+    const data = await this.publicService.createReservation(dto);
+    return {
+      success: true,
+      message:
+        'Reservasi berhasil dibuat, silakan tunggu konfirmasi dari klinik',
+      data,
+    };
+  }
+
+  @Get('reservations/status')
+  @ApiOperation({ summary: 'Check reservation status by token' })
+  async getReservationStatus(@Query() query: PublicReservationStatusQueryDto) {
+    const data = await this.publicService.getReservationStatus(query);
     return { success: true, data };
   }
 }

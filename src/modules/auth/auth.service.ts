@@ -447,7 +447,10 @@ export class AuthService {
   /**
    * Send reset password token via Resend
    */
-  async sendResetPasswordEmail(userEmail: string, token: string): Promise<void> {
+  async sendResetPasswordEmail(
+    userEmail: string,
+    token: string,
+  ): Promise<void> {
     const appUrl = this.configService.get<string>(
       'APP_URL',
       'http://localhost:3000',
@@ -486,7 +489,9 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new NotFoundException('Token reset tidak valid atau sudah digunakan');
+      throw new NotFoundException(
+        'Token reset tidak valid atau sudah digunakan',
+      );
     }
 
     if (
