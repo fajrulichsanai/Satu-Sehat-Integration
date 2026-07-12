@@ -31,9 +31,6 @@ export class Reservation extends BaseEntity {
   @Column({ name: 'practitioner_id', nullable: true })
   practitionerId: number;
 
-  @Column({ name: 'location_id', nullable: true })
-  locationId: number;
-
   @Column({
     name: 'service_type',
     type: 'enum',

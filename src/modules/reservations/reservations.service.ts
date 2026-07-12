@@ -61,11 +61,6 @@ export class ReservationsService {
     if (query.status) {
       qb.andWhere('r.status = :status', { status: query.status });
     }
-    if (query.locationId) {
-      qb.andWhere('r.locationId = :locationId', {
-        locationId: query.locationId,
-      });
-    }
     if (query.practitionerId) {
       qb.andWhere('r.practitionerId = :practitionerId', {
         practitionerId: query.practitionerId,
@@ -117,7 +112,6 @@ export class ReservationsService {
       patientPhone: dto.patientPhone,
       patientNik: dto.patientNik,
       practitionerId: dto.practitionerId,
-      locationId: dto.locationId,
       serviceType: dto.serviceType,
       reservationDate: new Date(dto.reservationDate),
       jamSlot: dto.jamSlot,

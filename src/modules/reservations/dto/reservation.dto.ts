@@ -41,12 +41,6 @@ export class CreateReservationDto {
   @IsInt()
   practitionerId?: number;
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  locationId?: number;
-
   @ApiPropertyOptional({ enum: ServiceType })
   @IsOptional()
   @IsEnum(ServiceType)
@@ -107,12 +101,6 @@ export class ReservationQueryDto extends PaginationDto {
   @Type(() => Number)
   @IsInt()
   practitionerId?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  locationId?: number;
 
   @ApiPropertyOptional({
     description: 'Cari berdasarkan nama atau nomor telepon pasien',
