@@ -29,8 +29,7 @@ async function bootstrap() {
   // Keduanya boleh berisi beberapa origin dipisah koma.
   const allowedOrigins = [
     process.env.FRONTEND_URL,
-    process.env.LANDING_PAGE_URL,
-    'https://zanakdentalcare.web.app',
+    process.env.LANDING_PAGE_URL
   ]
     .filter(Boolean)
     .flatMap((v) => v!.split(',').map((s) => s.trim()))
