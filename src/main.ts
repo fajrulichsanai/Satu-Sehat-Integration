@@ -30,6 +30,7 @@ async function bootstrap() {
   const allowedOrigins = [
     process.env.FRONTEND_URL,
     process.env.LANDING_PAGE_URL,
+    'https://zanakdentalcare.web.app',
   ]
     .filter(Boolean)
     .flatMap((v) => v!.split(',').map((s) => s.trim()))

@@ -88,7 +88,7 @@
         },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"clinicId\": {{clinicId}},\n  \"patientName\": \"Budi Santoso\",\n  \"patientPhone\": \"08123456789\",\n  \"patientNik\": \"3171234567890001\",\n  \"locationId\": 1,\n  \"practitionerId\": 1,\n  \"serviceType\": \"outpatient\",\n  \"reservationDate\": \"2026-07-15\",\n  \"jamSlot\": \"09:00\",\n  \"notes\": \"Kontrol rutin, mohon jadwalkan pagi hari\"\n}"
+          "raw": "{\n  \"clinicId\": {{clinicId}},\n  \"patientName\": \"Budi Santoso\",\n  \"patientPhone\": \"08123456789\",\n  \"patientNik\": \"3171234567890001\",\n  \"practitionerId\": 1,\n  \"serviceType\": \"outpatient\",\n  \"reservationDate\": \"2026-07-15\",\n  \"jamSlot\": \"09:00\",\n  \"notes\": \"Kontrol rutin, mohon jadwalkan pagi hari\"\n}"
         }
       }
     },
