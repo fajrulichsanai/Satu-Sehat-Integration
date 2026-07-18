@@ -11,7 +11,6 @@ import { ClinicsModule } from './modules/clinics/clinics.module';
 import { PractitionersModule } from './modules/practitioners/practitioners.module';
 import { LocationsModule } from './modules/locations/locations.module';
 import { PatientsModule } from './modules/patients/patients.module';
-import { QueuesModule } from './modules/queues/queues.module';
 import { ReservationsModule } from './modules/reservations/reservations.module';
 import { PublicModule } from './modules/public/public.module';
 import { EncountersModule } from './modules/encounters/encounters.module';
@@ -65,7 +64,6 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     PractitionersModule,
     LocationsModule,
     PatientsModule,
-    QueuesModule,
     ReservationsModule,
     PublicModule,
     EncountersModule,

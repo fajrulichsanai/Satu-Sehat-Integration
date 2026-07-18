@@ -14,6 +14,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ReservationsService } from './reservations.service';
 import {
   CreateReservationDto,
+  LinkPatientDto,
   ReservationQueryDto,
   UpdateReservationStatusDto,
 } from './dto/reservation.dto';
@@ -68,6 +69,21 @@ export class ReservationsController {
     return {
       success: true,
       message: 'Status reservasi berhasil diperbarui',
+      data,
+    };
+  }
+
+  @Patch(':id/patient')
+  @ApiOperation({ summary: 'Hubungkan pasien yang baru didaftarkan ke reservasi' })
+  async linkPatient(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: LinkPatientDto,
+  ) {
+    const data = await this.reservationsService.linkPatient(id, clinicId, dto);
+    return {
+      success: true,
+      message: 'Pasien berhasil dihubungkan ke reservasi',
       data,
     };
   }

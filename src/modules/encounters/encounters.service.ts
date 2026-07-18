@@ -8,9 +8,9 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Encounter } from './entities/encounter.entity';
-import { Queue } from '../queues/entities/queue.entity';
+import { Reservation } from '../reservations/entities/reservation.entity';
 import { EncounterStatus, ServiceType } from '../../enums';
-import { QueueStatus } from '../../enums/queue-status.enum';
+import { ReservationStatus } from '../../enums/reservation-status.enum';
 import { UserRole } from '../../enums/user-role.enum';
 import {
   CreateEncounterDto,
@@ -25,8 +25,8 @@ export class EncountersService {
   constructor(
     @InjectRepository(Encounter)
     private readonly encounterRepository: Repository<Encounter>,
-    @InjectRepository(Queue)
-    private readonly queueRepository: Repository<Queue>,
+    @InjectRepository(Reservation)
+    private readonly reservationRepository: Repository<Reservation>,
   ) {}
 
   async findAll(clinicId: number, query: EncounterListQueryDto, user: any) {
@@ -96,7 +96,7 @@ export class EncountersService {
         patient: true,
         practitioner: true,
         location: true,
-        queue: true,
+        reservation: true,
       },
     });
     if (!encounter) {
@@ -127,17 +127,19 @@ export class EncountersService {
     this.logger.log(
       `[CREATE] Membuat encounter baru | clinicId=${clinicId}, patientId=${dto.patientId}, practitionerId=${dto.practitionerId}`,
     );
-    if (dto.queueId) {
-      const queue = await this.queueRepository.findOne({
-        where: { id: dto.queueId, clinicId },
+    if (dto.reservationId) {
+      const reservation = await this.reservationRepository.findOne({
+        where: { id: dto.reservationId, clinicId },
       });
-      if (!queue) {
+      if (!reservation) {
         throw new NotFoundException(
-          `Antrian dengan ID ${dto.queueId} tidak ditemukan`,
+          `Reservasi dengan ID ${dto.reservationId} tidak ditemukan`,
         );
       }
-      if (queue.status !== QueueStatus.WAITING) {
-        throw new BadRequestException('Antrian tidak dalam status waiting');
+      if (reservation.status !== ReservationStatus.CONFIRMED) {
+        throw new BadRequestException(
+          'Reservasi harus berstatus confirmed sebelum check-in',
+        );
       }
     }
 
@@ -146,7 +148,7 @@ export class EncountersService {
       patientId: dto.patientId,
       practitionerId: dto.practitionerId,
       locationId: dto.locationId,
-      queueId: dto.queueId,
+      reservationId: dto.reservationId,
       serviceType: dto.serviceType || ServiceType.OUTPATIENT,
       chiefComplaint: dto.chiefComplaint,
       status: EncounterStatus.ARRIVED,
@@ -159,9 +161,9 @@ export class EncountersService {
       `[CREATE] Encounter berhasil dibuat | id=${saved.id}, clinicId=${clinicId}`,
     );
 
-    if (dto.queueId) {
-      await this.queueRepository.update(dto.queueId, {
-        status: QueueStatus.CALLED,
+    if (dto.reservationId) {
+      await this.reservationRepository.update(dto.reservationId, {
+        status: ReservationStatus.COMPLETED,
       });
     }
 
@@ -211,18 +213,8 @@ export class EncountersService {
       encounter.inProgressTime = now;
     } else if (dto.status === EncounterStatus.FINISHED) {
       encounter.finishedTime = now;
-      if (encounter.queueId) {
-        await this.queueRepository.update(encounter.queueId, {
-          status: QueueStatus.DONE,
-        });
-      }
     } else if (dto.status === EncounterStatus.CANCELLED) {
       encounter.cancelledReason = dto.reason as string;
-      if (encounter.queueId) {
-        await this.queueRepository.update(encounter.queueId, {
-          status: QueueStatus.CANCELLED,
-        });
-      }
     }
 
     const result = await this.encounterRepository.save(encounter);

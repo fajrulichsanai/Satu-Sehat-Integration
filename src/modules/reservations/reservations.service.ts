@@ -11,6 +11,7 @@ import { Clinic } from '../clinics/entities/clinic.entity';
 import { ReservationSource, ReservationStatus } from '../../enums';
 import {
   CreateReservationDto,
+  LinkPatientDto,
   PublicCreateReservationDto,
   ReservationQueryDto,
   UpdateReservationStatusDto,
@@ -171,6 +172,34 @@ export class ReservationsService {
     const updated = await this.reservationRepository.save(reservation);
     this.logger.log(
       `[STATUS-UPDATE] Status reservasi berhasil diperbarui | id=${id}, status=${dto.status}`,
+    );
+    return updated;
+  }
+
+  async linkPatient(
+    id: number,
+    clinicId: number,
+    dto: LinkPatientDto,
+  ): Promise<Reservation> {
+    this.logger.log(
+      `[LINK-PATIENT] Menghubungkan pasien ke reservasi | id=${id}, clinicId=${clinicId}, patientId=${dto.patientId}`,
+    );
+    const reservation = await this.findOne(id, clinicId);
+
+    if (
+      ![ReservationStatus.PENDING, ReservationStatus.CONFIRMED].includes(
+        reservation.status,
+      )
+    ) {
+      throw new BadRequestException(
+        `Tidak bisa menghubungkan pasien ke reservasi berstatus ${reservation.status}`,
+      );
+    }
+
+    reservation.patientId = dto.patientId;
+    const updated = await this.reservationRepository.save(reservation);
+    this.logger.log(
+      `[LINK-PATIENT] Pasien berhasil dihubungkan | id=${id}, patientId=${dto.patientId}`,
     );
     return updated;
   }

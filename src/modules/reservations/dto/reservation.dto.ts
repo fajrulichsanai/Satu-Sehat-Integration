@@ -110,6 +110,14 @@ export class ReservationQueryDto extends PaginationDto {
   search?: string;
 }
 
+export class LinkPatientDto {
+  @ApiProperty({ description: 'ID pasien yang baru didaftarkan' })
+  @Type(() => Number)
+  @IsInt()
+  @IsNotEmpty()
+  patientId: number;
+}
+
 export class PublicReservationStatusQueryDto {
   @ApiProperty({ example: 'AB12CD34' })
   @IsNotEmpty()

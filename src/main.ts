@@ -65,7 +65,6 @@ async function bootstrap() {
     .addTag('users', 'User Management')
     .addTag('settings', 'Clinic Settings & Configuration')
     .addTag('patients', 'Patient Management')
-    .addTag('queues', 'Queue Management')
     .addTag(
       'reservations',
       'Reservation Management (Dashboard + Public Booking)',

@@ -5,7 +5,7 @@ import { Clinic } from '../../clinics/entities/clinic.entity';
 import { Patient } from '../../patients/entities/patient.entity';
 import { Practitioner } from '../../practitioners/entities/practitioner.entity';
 import { Location } from '../../location/entities/location.entity';
-import { Queue } from '../../queues/entities/queue.entity';
+import { Reservation } from '../../reservations/entities/reservation.entity';
 
 @Entity('encounters')
 @Index(['practitionerId', 'arrivedTime'])
@@ -22,8 +22,8 @@ export class Encounter extends BaseEntity {
   @Column({ name: 'location_id', nullable: true })
   locationId?: number;
 
-  @Column({ name: 'queue_id', nullable: true })
-  queueId: number;
+  @Column({ name: 'reservation_id', nullable: true })
+  reservationId: number;
 
   @Column({
     name: 'service_type',
@@ -89,7 +89,7 @@ export class Encounter extends BaseEntity {
   @JoinColumn({ name: 'location_id' })
   location: Location;
 
-  @ManyToOne(() => Queue, { onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'queue_id' })
-  queue: Queue;
+  @ManyToOne(() => Reservation, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'reservation_id' })
+  reservation: Reservation;
 }

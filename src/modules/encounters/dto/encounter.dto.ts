@@ -27,11 +27,13 @@ export class CreateEncounterDto {
   @Min(1)
   locationId?: number;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    description: 'ID reservasi yang di-check-in menjadi kunjungan ini',
+  })
   @IsOptional()
   @IsInt()
   @Min(1)
-  queueId?: number;
+  reservationId?: number;
 
   @ApiPropertyOptional({ enum: ServiceType })
   @IsOptional()

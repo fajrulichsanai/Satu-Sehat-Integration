@@ -39,7 +39,7 @@ export class EncountersController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create encounter (from queue or walk-in)' })
+  @ApiOperation({ summary: 'Create encounter (from reservation check-in or walk-in)' })
   async create(
     @ClinicId() clinicId: number,
     @Body() dto: CreateEncounterDto,
