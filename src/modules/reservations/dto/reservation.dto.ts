@@ -124,3 +124,28 @@ export class PublicReservationStatusQueryDto {
   @IsString()
   token: string;
 }
+
+export class PublicAvailableSlotsQueryDto {
+  @ApiProperty()
+  @Type(() => Number)
+  @IsInt()
+  @IsNotEmpty()
+  clinicId: number;
+
+  @ApiProperty({ example: '2026-07-15' })
+  @IsDateString()
+  @IsNotEmpty()
+  date: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  locationId?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  practitionerId?: number;
+}

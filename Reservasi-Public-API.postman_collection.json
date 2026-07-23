@@ -44,7 +44,7 @@
       "request": {
         "auth": { "type": "noauth" },
         "method": "GET",
-        "description": "Ambil daftar jam yang masih tersedia untuk tanggal (dan opsional dokter/lokasi) tertentu, dipakai untuk mengisi pilihan jam di form reservasi.",
+        "description": "Ambil daftar jam yang masih tersedia untuk tanggal (dan opsional dokter/lokasi) tertentu, dipakai untuk mengisi pilihan jam di form reservasi.\n\nSlot dihasilkan dari jam operasional klinik (`operationalHours`) pada hari yang sesuai dengan `date`, dipecah per 30 menit, lalu dikurangi jam yang sudah dibooking (reservasi dengan status selain `cancelled`) pada tanggal (dan `practitionerId`, jika diisi) tersebut.\n\n`locationId` saat ini bersifat opsional dan belum memengaruhi hasil filter (reservasi belum terikat ke lokasi tertentu).\n\nResponse:\n```json\n{\n  \"success\": true,\n  \"data\": {\n    \"date\": \"2026-07-15\",\n    \"isOpen\": true,\n    \"slots\": [\"08:00\", \"08:30\", \"09:30\", \"...\"]\n  }\n}\n```\nJika klinik tutup pada hari tersebut, `isOpen` bernilai `false` dan `slots` kosong.",
         "url": {
           "raw": "{{baseUrl}}/public/available-slots?clinicId={{clinicId}}&date=2026-07-15&locationId=1&practitionerId=1",
           "host": ["{{baseUrl}}"],
@@ -52,7 +52,7 @@
           "query": [
             { "key": "clinicId", "value": "{{clinicId}}" },
             { "key": "date", "value": "2026-07-15" },
-            { "key": "locationId", "value": "1", "description": "opsional" },
+            { "key": "locationId", "value": "1", "description": "opsional, belum memengaruhi hasil" },
             { "key": "practitionerId", "value": "1", "description": "opsional" }
           ]
         }

@@ -10,6 +10,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { PublicService } from './public.service';
 import {
+  PublicAvailableSlotsQueryDto,
   PublicCreateReservationDto,
   PublicReservationStatusQueryDto,
 } from '../reservations/dto/reservation.dto';
@@ -26,6 +27,13 @@ export class PublicController {
   @ApiOperation({ summary: 'Get clinic public info' })
   async getClinicInfo(@Query('clinicId', ParseIntPipe) clinicId: number) {
     const data = await this.publicService.getClinicInfo(clinicId);
+    return { success: true, data };
+  }
+
+  @Get('available-slots')
+  @ApiOperation({ summary: 'Get available reservation slots' })
+  async getAvailableSlots(@Query() query: PublicAvailableSlotsQueryDto) {
+    const data = await this.publicService.getAvailableSlots(query);
     return { success: true, data };
   }
 

@@ -44,6 +44,29 @@ export class ReservationsService {
     private readonly clinicRepository: Repository<Clinic>,
   ) {}
 
+  async getBookedSlots(
+    clinicId: number,
+    date: string,
+    practitionerId?: number,
+  ): Promise<string[]> {
+    const qb = this.reservationRepository
+      .createQueryBuilder('r')
+      .select('r.jamSlot', 'jamSlot')
+      .where('r.clinicId = :clinicId', { clinicId })
+      .andWhere('r.reservationDate = :date', { date })
+      .andWhere('r.status != :cancelled', {
+        cancelled: ReservationStatus.CANCELLED,
+      })
+      .andWhere('r.jamSlot IS NOT NULL');
+
+    if (practitionerId) {
+      qb.andWhere('r.practitionerId = :practitionerId', { practitionerId });
+    }
+
+    const rows = await qb.getRawMany<{ jamSlot: string }>();
+    return rows.map((row) => row.jamSlot.slice(0, 5));
+  }
+
   async findAll(
     clinicId: number,
     query: ReservationQueryDto,

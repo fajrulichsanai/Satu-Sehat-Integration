@@ -597,6 +597,7 @@
           "request": {
             "auth": { "type": "noauth" },
             "method": "GET",
+            "description": "Response: { success, data: { date, isOpen, slots: string[] } }. Slot dihasilkan dari operationalHours klinik per 30 menit, dikurangi jam yang sudah dibooking. locationId opsional dan belum memengaruhi filter.",
             "url": {
               "raw": "{{baseUrl}}/public/available-slots?clinicId=1&date=2026-06-13&locationId=1&practitionerId=1",
               "host": ["{{baseUrl}}"],
