@@ -290,6 +290,13 @@ export class UsersService {
     const user = await this.findByIdOrThrow(id, currentUser);
     this.assertCanManage(currentUser, user);
 
+    if (user.role === UserRole.DOKTER) {
+      await this.practitionerRepository.delete({ userId: user.id });
+      this.logger.log(
+        `[DELETE] Practitioner terkait ikut dihapus | userId=${id}`,
+      );
+    }
+
     await this.userRepository.remove(user);
 
     this.logger.log(
@@ -508,10 +515,7 @@ export class UsersService {
       });
     }
 
-    const temporaryPassword = crypto
-      .randomBytes(9)
-      .toString('base64')
-      .replace(/[/+=]/g, '');
+    const temporaryPassword = '123asd';
     const passwordHash = await bcrypt.hash(temporaryPassword, 10);
 
     const user = this.userRepository.create({
