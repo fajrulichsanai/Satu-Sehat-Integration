@@ -74,6 +74,12 @@ export class CreateBillingDto {
   @IsEnum(DiscountType)
   totalDiscountType?: DiscountType;
 
+  @ApiPropertyOptional({ default: 0, description: 'Biaya tambahan (nominal)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  additionalFee?: number;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

@@ -193,7 +193,8 @@ export class BillingsService {
             ? (subtotal * dto.totalDiscount) / 100
             : dto.totalDiscount;
       }
-      const grandTotal = subtotal - totalDiscountNominal;
+      const additionalFee = dto.additionalFee && dto.additionalFee > 0 ? dto.additionalFee : 0;
+      const grandTotal = subtotal - totalDiscountNominal + additionalFee;
 
       const billing = await this.saveBillingWithInvoiceNumber(manager, {
         clinicId,
@@ -201,6 +202,7 @@ export class BillingsService {
         patientId: encounter.patientId,
         subtotal,
         totalDiscount: totalDiscountNominal,
+        additionalFee,
         grandTotal,
         paidAmount: 0,
         outstandingAmount: grandTotal,

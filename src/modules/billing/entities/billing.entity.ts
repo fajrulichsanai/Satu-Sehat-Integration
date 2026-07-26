@@ -49,6 +49,14 @@ export class Billing extends BaseEntity {
   })
   totalDiscount: number;
 
+  @Column('decimal', {
+    name: 'additional_fee',
+    precision: 10,
+    scale: 2,
+    default: 0,
+  })
+  additionalFee: number;
+
   @Column('decimal', { name: 'grand_total', precision: 10, scale: 2 })
   grandTotal: number;
 
