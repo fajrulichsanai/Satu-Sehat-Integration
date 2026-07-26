@@ -195,13 +195,10 @@ export class BillingsService {
       }
       const grandTotal = subtotal - totalDiscountNominal;
 
-      const invoiceNumber = await this.generateInvoiceNumber(manager, clinicId);
-
-      const billing = await manager.save(Billing, {
+      const billing = await this.saveBillingWithInvoiceNumber(manager, clinicId, {
         clinicId,
         encounterId: dto.encounterId,
         patientId: encounter.patientId,
-        invoiceNumber,
         subtotal,
         totalDiscount: totalDiscountNominal,
         grandTotal,
@@ -234,10 +231,36 @@ export class BillingsService {
   ): Promise<string> {
     const year = new Date().getFullYear();
     const result = await manager.query(
-      `SELECT COUNT(*) AS total FROM billings WHERE clinic_id = ? AND YEAR(created_at) = ?`,
+      `SELECT COUNT(*) AS total FROM billings WHERE clinic_id = ? AND YEAR(created_at) = ? FOR UPDATE`,
       [clinicId, year],
     );
     const seq = parseInt(result[0].total, 10) + 1;
     return `INV-${year}-${String(seq).padStart(5, '0')}`;
+  }
+
+  private async saveBillingWithInvoiceNumber(
+    manager: any,
+    clinicId: number,
+    billingData: Omit<Partial<Billing>, 'invoiceNumber'>,
+  ): Promise<Billing> {
+    const maxAttempts = 5;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const invoiceNumber = await this.generateInvoiceNumber(manager, clinicId);
+      try {
+        return await manager.save(Billing, { ...billingData, invoiceNumber });
+      } catch (error: any) {
+        const isDuplicateInvoiceNumber =
+          error?.code === 'ER_DUP_ENTRY' &&
+          typeof error?.sqlMessage === 'string' &&
+          error.sqlMessage.includes(invoiceNumber);
+        if (!isDuplicateInvoiceNumber || attempt === maxAttempts) {
+          throw error;
+        }
+        this.logger.warn(
+          `[CREATE] Invoice number ${invoiceNumber} bentrok, mencoba ulang (attempt ${attempt})`,
+        );
+      }
+    }
+    throw new Error('Gagal menghasilkan nomor invoice yang unik.');
   }
 }
