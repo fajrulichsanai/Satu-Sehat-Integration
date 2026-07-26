@@ -353,7 +353,7 @@ export class AuthService {
       'APP_URL',
       'http://localhost:3000',
     );
-    const verificationUrl = `${appUrl}/auth/verify-email?token=${token}`;
+    const verificationUrl = `${appUrl}/verify-email?token=${token}`;
 
     try {
       await this.resend.emails.send({
