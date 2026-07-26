@@ -195,7 +195,7 @@ export class BillingsService {
       }
       const grandTotal = subtotal - totalDiscountNominal;
 
-      const billing = await this.saveBillingWithInvoiceNumber(manager, clinicId, {
+      const billing = await this.saveBillingWithInvoiceNumber(manager, {
         clinicId,
         encounterId: dto.encounterId,
         patientId: encounter.patientId,
@@ -225,27 +225,25 @@ export class BillingsService {
     });
   }
 
-  private async generateInvoiceNumber(
-    manager: any,
-    clinicId: number,
-  ): Promise<string> {
-    const year = new Date().getFullYear();
-    const result = await manager.query(
-      `SELECT COUNT(*) AS total FROM billings WHERE clinic_id = ? AND YEAR(created_at) = ? FOR UPDATE`,
-      [clinicId, year],
-    );
-    const seq = parseInt(result[0].total, 10) + 1;
-    return `INV-${year}-${String(seq).padStart(5, '0')}`;
+  private generateInvoiceNumber(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hour = String(now.getHours()).padStart(2, '0');
+    const minute = String(now.getMinutes()).padStart(2, '0');
+    const second = String(now.getSeconds()).padStart(2, '0');
+    const millisecond = String(now.getMilliseconds()).padStart(3, '0');
+    return `INV-${year}-${month}${day}-${hour}${minute}${second}${millisecond}`;
   }
 
   private async saveBillingWithInvoiceNumber(
     manager: any,
-    clinicId: number,
     billingData: Omit<Partial<Billing>, 'invoiceNumber'>,
   ): Promise<Billing> {
     const maxAttempts = 5;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const invoiceNumber = await this.generateInvoiceNumber(manager, clinicId);
+      const invoiceNumber = this.generateInvoiceNumber();
       try {
         return await manager.save(Billing, { ...billingData, invoiceNumber });
       } catch (error: any) {
