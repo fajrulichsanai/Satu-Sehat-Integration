@@ -1,4 +1,4 @@
-name: Deploy NestJS to VPS
+name: Deploy NestJS to Staging VPS
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to VPS
+    name: Deploy to Staging VPS
     runs-on: ubuntu-latest
 
     steps:
@@ -21,15 +21,13 @@ jobs:
           script: |
             set -e
 
-            # Load NVM agar npm & node tersedia
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
             echo "📁 Masuk ke direktori project..."
-            cd ~/dental-clinic-app/Satu-Sehat-Integration
+            cd ~/staging-apex-record/backend/Satu-Sehat-Integration
 
             echo "⬇️  Pull kode terbaru..."
-            git pull origin development
+            git fetch origin development
+            git checkout development
+            git reset --hard origin/development
 
             echo "📦 Install dependencies..."
             npm install
@@ -38,6 +36,6 @@ jobs:
             npm run build
 
             echo "♻️  Restart PM2..."
-            pm2 restart dental-clinic
+            pm2 restart apex-record-staging-backend
 
             echo "✅ Deploy selesai!"
