@@ -142,7 +142,7 @@ export class ReservationsService {
       patientNik: dto.patientNik,
       practitionerId: dto.practitionerId,
       serviceType: dto.serviceType,
-      reservationDate: new Date(`${dto.reservationDate}T00:00:00`),
+      reservationDate: dto.reservationDate,
       jamSlot: dto.jamSlot,
       notes: dto.notes,
       source,
