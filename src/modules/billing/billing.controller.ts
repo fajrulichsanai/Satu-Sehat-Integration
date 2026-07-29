@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Put,
   Query,
@@ -20,6 +21,7 @@ import {
   BillingQueryDto,
   CreateBillingDto,
   CreatePaymentDto,
+  UpdateBillingDto,
 } from './dto/billing.dto';
 import { CreateTarifDto, TarifQueryDto, UpdateTarifDto } from './dto/tarif.dto';
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
@@ -130,6 +132,23 @@ export class BillingController {
     @ClinicId() clinicId: number,
   ) {
     const data = await this.billingsService.findOne(id, clinicId);
+    return { success: true, data };
+  }
+
+  @Patch('billings/:id')
+  @ApiOperation({ summary: 'Update billing items, discount, fee, or notes' })
+  async updateBilling(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: UpdateBillingDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.billingsService.update(
+      id,
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data };
   }
 

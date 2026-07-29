@@ -19,6 +19,7 @@ import {
   BillingItemDto,
   BillingQueryDto,
   CreateBillingDto,
+  UpdateBillingDto,
 } from './dto/billing.dto';
 
 @Injectable()
@@ -123,67 +124,11 @@ export class BillingsService {
     }
 
     return this.dataSource.transaction(async (manager) => {
-      let subtotal = 0;
-      const processedItems: Array<{
-        tarifId?: number;
-        name: string;
-        quantity: number;
-        unitPrice: number;
-        discount: number;
-        discountType: DiscountType;
-        subtotal: number;
-      }> = [];
-
-      for (const item of dto.items!) {
-        const qty = item.quantity || 1;
-        const discountType = item.discountType || DiscountType.NOMINAL;
-        const discountValue = item.discount || 0;
-
-        if (item.tarifId) {
-          const tarif = await manager.findOne(Tarif, {
-            where: { id: item.tarifId, clinicId },
-          });
-          if (!tarif)
-            throw new NotFoundException(
-              `Tarif ID ${item.tarifId} tidak ditemukan`,
-            );
-
-          if (
-            discountType === DiscountType.NOMINAL &&
-            discountValue > tarif.diskonMaksimal
-          ) {
-            throw new UnprocessableEntityException(
-              `Diskon untuk '${tarif.name}' melebihi batas maksimal (Rp ${tarif.diskonMaksimal})`,
-            );
-          }
-          if (
-            discountType === DiscountType.PERCENT &&
-            discountValue > (tarif.diskonMaksimal / tarif.hargaJual) * 100
-          ) {
-            throw new UnprocessableEntityException(
-              `Diskon % untuk '${tarif.name}' melebihi batas maksimal`,
-            );
-          }
-        }
-
-        const discountNominal =
-          discountType === DiscountType.PERCENT
-            ? (item.unitPrice! * discountValue) / 100
-            : discountValue;
-
-        const itemSubtotal = (item.unitPrice! - discountNominal) * qty;
-        subtotal += itemSubtotal;
-
-        processedItems.push({
-          tarifId: item.tarifId ?? undefined,
-          name: item.name!,
-          quantity: qty,
-          unitPrice: item.unitPrice!,
-          discount: discountValue,
-          discountType,
-          subtotal: itemSubtotal,
-        });
-      }
+      const { processedItems, subtotal } = await this.processItems(
+        manager,
+        clinicId,
+        dto.items!,
+      );
 
       // Apply total discount
       let totalDiscountNominal = 0;
@@ -225,6 +170,168 @@ export class BillingsService {
       );
       return billing;
     });
+  }
+
+  async update(
+    id: number,
+    clinicId: number,
+    dto: UpdateBillingDto,
+    userId: number,
+  ) {
+    this.logger.log(
+      `[UPDATE] Memperbarui billing | id=${id}, clinicId=${clinicId}`,
+    );
+    return this.dataSource.transaction(async (manager) => {
+      const billing = await manager.findOne(Billing, {
+        where: { id, clinicId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!billing)
+        throw new NotFoundException(`Billing dengan ID ${id} tidak ditemukan`);
+
+      if (
+        billing.status === BillingStatus.CANCELLED ||
+        billing.status === BillingStatus.REFUNDED
+      ) {
+        throw new BadRequestException(
+          `Billing berstatus '${billing.status}' tidak dapat diedit`,
+        );
+      }
+
+      let subtotal = Number(billing.subtotal);
+      if (dto.items) {
+        const processed = await this.processItems(manager, clinicId, dto.items);
+        subtotal = processed.subtotal;
+
+        await manager.delete(BillingItem, { billingId: billing.id });
+        await manager.save(
+          BillingItem,
+          processed.processedItems.map((i) => ({
+            ...i,
+            billingId: billing.id,
+            createdBy: userId,
+          })),
+        );
+      }
+
+      const totalDiscountInput = dto.totalDiscount ?? Number(billing.totalDiscount);
+      const totalDiscountNominal =
+        dto.totalDiscount !== undefined && dto.totalDiscountType === DiscountType.PERCENT
+          ? (subtotal * dto.totalDiscount) / 100
+          : totalDiscountInput;
+      const additionalFee = dto.additionalFee ?? Number(billing.additionalFee);
+      const grandTotal = subtotal - totalDiscountNominal + additionalFee;
+
+      billing.subtotal = subtotal;
+      billing.totalDiscount = totalDiscountNominal;
+      billing.additionalFee = additionalFee;
+      billing.grandTotal = grandTotal;
+      billing.notes = dto.notes ?? billing.notes;
+      billing.updatedBy = userId;
+
+      const outstandingAmount = grandTotal - Number(billing.paidAmount);
+      if (outstandingAmount <= 0) {
+        billing.status = BillingStatus.PAID;
+        billing.outstandingAmount = 0;
+      } else {
+        billing.status =
+          Number(billing.paidAmount) > 0
+            ? BillingStatus.PARTIAL
+            : BillingStatus.UNPAID;
+        billing.outstandingAmount = outstandingAmount;
+      }
+
+      await manager.save(billing);
+
+      this.logger.log(
+        `[UPDATE] Billing berhasil diperbarui | id=${billing.id}, clinicId=${clinicId}`,
+      );
+      return manager.findOne(Billing, {
+        where: { id: billing.id },
+        relations: { patient: true, items: true, payments: true },
+      });
+    });
+  }
+
+  private async processItems(
+    manager: any,
+    clinicId: number,
+    items: BillingItemDto[],
+  ): Promise<{
+    processedItems: Array<{
+      tarifId?: number;
+      name: string;
+      quantity: number;
+      unitPrice: number;
+      discount: number;
+      discountType: DiscountType;
+      subtotal: number;
+    }>;
+    subtotal: number;
+  }> {
+    let subtotal = 0;
+    const processedItems: Array<{
+      tarifId?: number;
+      name: string;
+      quantity: number;
+      unitPrice: number;
+      discount: number;
+      discountType: DiscountType;
+      subtotal: number;
+    }> = [];
+
+    for (const item of items) {
+      const qty = item.quantity || 1;
+      const discountType = item.discountType || DiscountType.NOMINAL;
+      const discountValue = item.discount || 0;
+
+      if (item.tarifId) {
+        const tarif = await manager.findOne(Tarif, {
+          where: { id: item.tarifId, clinicId },
+        });
+        if (!tarif)
+          throw new NotFoundException(
+            `Tarif ID ${item.tarifId} tidak ditemukan`,
+          );
+
+        if (
+          discountType === DiscountType.NOMINAL &&
+          discountValue > tarif.diskonMaksimal
+        ) {
+          throw new UnprocessableEntityException(
+            `Diskon untuk '${tarif.name}' melebihi batas maksimal (Rp ${tarif.diskonMaksimal})`,
+          );
+        }
+        if (
+          discountType === DiscountType.PERCENT &&
+          discountValue > (tarif.diskonMaksimal / tarif.hargaJual) * 100
+        ) {
+          throw new UnprocessableEntityException(
+            `Diskon % untuk '${tarif.name}' melebihi batas maksimal`,
+          );
+        }
+      }
+
+      const discountNominal =
+        discountType === DiscountType.PERCENT
+          ? (item.unitPrice! * discountValue) / 100
+          : discountValue;
+
+      const itemSubtotal = (item.unitPrice! - discountNominal) * qty;
+      subtotal += itemSubtotal;
+
+      processedItems.push({
+        tarifId: item.tarifId ?? undefined,
+        name: item.name!,
+        quantity: qty,
+        unitPrice: item.unitPrice!,
+        discount: discountValue,
+        discountType,
+        subtotal: itemSubtotal,
+      });
+    }
+
+    return { processedItems, subtotal };
   }
 
   private generateInvoiceNumber(): string {

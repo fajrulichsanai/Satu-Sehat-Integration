@@ -86,6 +86,37 @@ export class CreateBillingDto {
   notes?: string;
 }
 
+export class UpdateBillingDto {
+  @ApiPropertyOptional({ type: [BillingItemDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BillingItemDto)
+  items?: BillingItemDto[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  totalDiscount?: number;
+
+  @ApiPropertyOptional({ enum: DiscountType })
+  @IsOptional()
+  @IsEnum(DiscountType)
+  totalDiscountType?: DiscountType;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  additionalFee?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
 export class BillingQueryDto {
   @ApiPropertyOptional({ enum: BillingStatus })
   @IsOptional()

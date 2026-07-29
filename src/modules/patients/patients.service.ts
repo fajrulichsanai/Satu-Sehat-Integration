@@ -98,15 +98,6 @@ export class PatientsService {
     this.logger.log(
       `[CREATE] Membuat pasien baru | clinicId=${clinicId}, name=${dto.name}, nik=${dto.nik || 'bayi'}`,
     );
-    if (!dto.isNewborn && !dto.nik) {
-      this.logger.warn(
-        `[CREATE] NIK tidak diisi untuk pasien bukan bayi | clinicId=${clinicId}`,
-      );
-      throw new BadRequestException(
-        'NIK wajib diisi untuk pasien bukan bayi baru lahir',
-      );
-    }
-
     if (dto.nik) {
       await this.checkDuplicateNik(dto.nik, clinicId);
     }

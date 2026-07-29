@@ -82,6 +82,11 @@ export class ReservationsService {
     if (query.date) {
       qb.andWhere('r.reservationDate = :date', { date: query.date });
     }
+    if (query.dateFrom) {
+      qb.andWhere('r.reservationDate >= :dateFrom', {
+        dateFrom: query.dateFrom,
+      });
+    }
     if (query.status) {
       qb.andWhere('r.status = :status', { status: query.status });
     }
@@ -137,7 +142,7 @@ export class ReservationsService {
       patientNik: dto.patientNik,
       practitionerId: dto.practitionerId,
       serviceType: dto.serviceType,
-      reservationDate: new Date(dto.reservationDate),
+      reservationDate: new Date(`${dto.reservationDate}T00:00:00`),
       jamSlot: dto.jamSlot,
       notes: dto.notes,
       source,
