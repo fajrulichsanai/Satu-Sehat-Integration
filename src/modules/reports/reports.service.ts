@@ -12,6 +12,7 @@ import { UserRole } from '../../enums/user-role.enum';
 import {
   DoctorFeeShareReportQueryDto,
   FinancialReportQueryDto,
+  FinancialVisitDetailQueryDto,
   RetrySyncDto,
   SatusehatSyncReportQueryDto,
   VisitReportQueryDto,
@@ -21,6 +22,7 @@ import {
   DoctorFeeConfig,
   FeeType,
 } from '../doctor-fee/entities/doctor-fee-config.entity';
+import { OperationalRecord } from '../operational-records/entities/operational-record.entity';
 
 export interface DoctorFeeShareBreakdownItem {
   tarifId: number;
@@ -54,6 +56,8 @@ export class ReportsService {
     private readonly billingItemRepo: Repository<BillingItem>,
     @InjectRepository(DoctorFeeConfig)
     private readonly doctorFeeConfigRepo: Repository<DoctorFeeConfig>,
+    @InjectRepository(OperationalRecord)
+    private readonly operationalRecordRepo: Repository<OperationalRecord>,
   ) {}
 
   async getDoctorFeeShareReport(
@@ -284,16 +288,110 @@ export class ReportsService {
       [clinicId, query.dateFrom, query.dateTo],
     );
 
-    const byDoctor = await this.billingRepo.query(
-      `SELECT pr.name AS practitionerName, SUM(b.grand_total) AS revenue
+    const byDoctorRevenue = await this.billingRepo.query(
+      `SELECT pr.id AS practitionerId, pr.name AS practitionerName, SUM(b.grand_total) AS revenue
        FROM billings b
        JOIN encounters e ON b.encounter_id = e.id
        JOIN practitioners pr ON e.practitioner_id = pr.id
        WHERE b.clinic_id = ? AND DATE(b.created_at) BETWEEN ? AND ?
+         AND b.status != 'cancelled'
        GROUP BY pr.id, pr.name
        ORDER BY revenue DESC`,
       [clinicId, query.dateFrom, query.dateTo],
     );
+
+    const shareRows = await this.billingItemRepo.query(
+      `SELECT
+         pr.id AS practitionerId,
+         t.id AS tarifId,
+         t.harga_jual AS hargaJual,
+         SUM(bi.quantity) AS count,
+         dfc.fee_type AS feeType,
+         dfc.fee_value AS feeValue
+       FROM billing_items bi
+       JOIN billings b ON bi.billing_id = b.id
+       JOIN encounters e ON b.encounter_id = e.id
+       JOIN practitioners pr ON e.practitioner_id = pr.id
+       JOIN tarifs t ON bi.tarif_id = t.id
+       LEFT JOIN doctor_fee_configs dfc
+         ON dfc.tarif_id = t.id AND dfc.clinic_id = b.clinic_id
+       WHERE b.clinic_id = ? AND DATE(b.created_at) BETWEEN ? AND ?
+         AND b.status != 'cancelled'
+       GROUP BY pr.id, t.id, t.harga_jual, dfc.fee_type, dfc.fee_value`,
+      [clinicId, query.dateFrom, query.dateTo],
+    );
+
+    const shareByPractitioner = new Map<number, number>();
+    for (const row of shareRows as any[]) {
+      const count = parseInt(row.count, 10);
+      const hargaJual = parseFloat(row.hargaJual || 0);
+      const feeType: FeeType = row.feeType || FeeType.PERCENTAGE;
+      const feeValue = parseFloat(row.feeValue || 0);
+      const totalShare =
+        feeType === FeeType.FIXED
+          ? count * feeValue
+          : count * (hargaJual * (feeValue / 100));
+      shareByPractitioner.set(
+        row.practitionerId,
+        (shareByPractitioner.get(row.practitionerId) || 0) + totalShare,
+      );
+    }
+
+    const byDoctor = byDoctorRevenue.map((r: any) => ({
+      practitionerName: r.practitionerName,
+      revenue: parseFloat(r.revenue || 0),
+      doctorFeeShare: shareByPractitioner.get(r.practitionerId) || 0,
+    }));
+
+    const tindakanRows = await this.billingItemRepo.query(
+      `SELECT
+         t.id AS tarifId,
+         t.name AS tarifName,
+         t.harga_pokok AS hargaPokok,
+         t.harga_jual AS hargaJual,
+         SUM(bi.quantity) AS frekuensi,
+         SUM(bi.discount) AS totalDiskon,
+         SUM(bi.subtotal) AS totalSubtotal
+       FROM billing_items bi
+       JOIN billings b ON bi.billing_id = b.id
+       JOIN tarifs t ON bi.tarif_id = t.id
+       WHERE b.clinic_id = ? AND DATE(b.created_at) BETWEEN ? AND ?
+         AND b.status != 'cancelled'
+       GROUP BY t.id, t.name, t.harga_pokok, t.harga_jual
+       ORDER BY frekuensi DESC`,
+      [clinicId, query.dateFrom, query.dateTo],
+    );
+
+    const tindakanTerlaris = tindakanRows.map((r: any) => {
+      const frekuensi = parseInt(r.frekuensi, 10);
+      const hargaPokok = parseFloat(r.hargaPokok || 0);
+      const hargaJual = parseFloat(r.hargaJual || 0);
+      const totalDiskon = parseFloat(r.totalDiskon || 0);
+      const totalSubtotal = parseFloat(r.totalSubtotal || 0);
+      const modal = hargaPokok * frekuensi;
+      return {
+        tarifId: r.tarifId,
+        namaTindakan: r.tarifName,
+        modal,
+        hargaJual,
+        frekuensi,
+        totalDiskon,
+        labaBersih: totalSubtotal - modal,
+      };
+    });
+
+    const totalModal = tindakanTerlaris.reduce((sum, t) => sum + t.modal, 0);
+
+    const [pengeluaranRow] = await this.operationalRecordRepo.query(
+      `SELECT SUM(nominal) AS total FROM operational_records
+       WHERE clinic_id = ? AND tanggal BETWEEN ? AND ?`,
+      [clinicId, query.dateFrom, query.dateTo],
+    );
+    const totalPengeluaran = parseFloat(pengeluaranRow?.total || 0);
+
+    const labaBersih = totalPaid - totalModal - totalPengeluaran;
+    const marginPersen =
+      totalPaid > 0 ? parseFloat(((labaBersih / totalPaid) * 100).toFixed(1)) : 0;
 
     return {
       data: {
@@ -316,10 +414,64 @@ export class ReportsService {
           method: r.method,
           amount: parseFloat(r.amount || 0),
         })),
-        byDoctor: byDoctor.map((r: any) => ({
-          practitionerName: r.practitionerName,
-          revenue: parseFloat(r.revenue || 0),
+        byDoctor,
+        ringkasan: {
+          pendapatanTotal: totalPaid,
+          modal: totalModal,
+          labaBersih,
+          pengeluaran: totalPengeluaran,
+          marginPersen,
+        },
+        tindakanTerlaris,
+      },
+    };
+  }
+
+  async getFinancialVisitDetail(
+    clinicId: number,
+    query: FinancialVisitDetailQueryDto,
+  ) {
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+    const offset = (page - 1) * limit;
+
+    const rows = await this.encounterRepo.query(
+      `SELECT
+         e.id AS encounterId,
+         p.name AS patientName,
+         p.birth_date AS birthDate,
+         GROUP_CONCAT(DISTINCT bi.name SEPARATOR ', ') AS tindakan,
+         e.arrived_time AS jamMasuk,
+         e.finished_time AS jamKeluar
+       FROM encounters e
+       JOIN patients p ON e.patient_id = p.id
+       LEFT JOIN billings b ON b.encounter_id = e.id AND b.status != 'cancelled'
+       LEFT JOIN billing_items bi ON bi.billing_id = b.id
+       WHERE e.clinic_id = ? AND DATE(e.arrived_time) BETWEEN ? AND ?
+       GROUP BY e.id, p.name, p.birth_date, e.arrived_time, e.finished_time
+       ORDER BY e.arrived_time DESC
+       LIMIT ? OFFSET ?`,
+      [clinicId, query.dateFrom, query.dateTo, limit, offset],
+    );
+
+    const [countRow] = await this.encounterRepo.query(
+      `SELECT COUNT(*) AS total FROM encounters e
+       WHERE e.clinic_id = ? AND DATE(e.arrived_time) BETWEEN ? AND ?`,
+      [clinicId, query.dateFrom, query.dateTo],
+    );
+    const total = parseInt(countRow?.total || 0, 10);
+
+    return {
+      data: {
+        data: rows.map((r: any) => ({
+          encounterId: r.encounterId,
+          patientName: r.patientName,
+          birthDate: r.birthDate,
+          tindakan: r.tindakan || '-',
+          jamMasuk: r.jamMasuk,
+          jamKeluar: r.jamKeluar,
         })),
+        meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
       },
     };
   }

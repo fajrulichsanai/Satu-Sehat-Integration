@@ -63,6 +63,51 @@ export class PatientsService {
     return paginate(qb, query);
   }
 
+  async getReferralSummary(clinicId: number) {
+    this.logger.log(
+      `[REFERRAL-SUMMARY] Mengambil ringkasan referral | clinicId=${clinicId}`,
+    );
+
+    const bySource = await this.patientRepository
+      .createQueryBuilder('p')
+      .select('p.sumberInformasi', 'sumberInformasi')
+      .addSelect('COUNT(*)', 'count')
+      .where('p.clinicId = :clinicId', { clinicId })
+      .andWhere('p.sumberInformasi IS NOT NULL')
+      .groupBy('p.sumberInformasi')
+      .orderBy('count', 'DESC')
+      .getRawMany<{ sumberInformasi: string; count: string }>();
+
+    const byReferrer = await this.patientRepository
+      .createQueryBuilder('p')
+      .innerJoin(Patient, 'referrer', 'referrer.id = p.referrerPatientId')
+      .select('referrer.id', 'referrerPatientId')
+      .addSelect('referrer.name', 'referrerName')
+      .addSelect('COUNT(*)', 'referralCount')
+      .where('p.clinicId = :clinicId', { clinicId })
+      .andWhere('p.referrerPatientId IS NOT NULL')
+      .groupBy('referrer.id')
+      .addGroupBy('referrer.name')
+      .orderBy('referralCount', 'DESC')
+      .getRawMany<{
+        referrerPatientId: number;
+        referrerName: string;
+        referralCount: string;
+      }>();
+
+    return {
+      bySource: bySource.map((row) => ({
+        sumberInformasi: row.sumberInformasi,
+        count: parseInt(row.count, 10),
+      })),
+      byReferrer: byReferrer.map((row) => ({
+        referrerPatientId: row.referrerPatientId,
+        referrerName: row.referrerName,
+        referralCount: parseInt(row.referralCount, 10),
+      })),
+    };
+  }
+
   async findOne(id: number, clinicId: number): Promise<Patient> {
     this.logger.log(
       `[GET] Mengambil data pasien | id=${id}, clinicId=${clinicId}`,

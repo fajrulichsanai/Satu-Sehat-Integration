@@ -4,6 +4,7 @@ import { ReportsService } from './reports.service';
 import {
   DoctorFeeShareReportQueryDto,
   FinancialReportQueryDto,
+  FinancialVisitDetailQueryDto,
   RetrySyncDto,
   SatusehatSyncReportQueryDto,
   VisitReportQueryDto,
@@ -41,6 +42,17 @@ export class ReportsController {
     @Query() query: FinancialReportQueryDto,
   ) {
     return this.reportsService.getFinancialReport(clinicId, query);
+  }
+
+  @Get('financial/visit-detail')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.OWNER)
+  @ApiOperation({ summary: 'Financial report - patient visit detail (owner only)' })
+  async getFinancialVisitDetail(
+    @ClinicId() clinicId: number,
+    @Query() query: FinancialVisitDetailQueryDto,
+  ) {
+    return this.reportsService.getFinancialVisitDetail(clinicId, query);
   }
 
   @Get('satusehat-sync')

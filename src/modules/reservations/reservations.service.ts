@@ -13,6 +13,7 @@ import {
   CreateReservationDto,
   LinkPatientDto,
   PublicCreateReservationDto,
+  RescheduleReservationDto,
   ReservationQueryDto,
   UpdateReservationStatusDto,
 } from './dto/reservation.dto';
@@ -200,6 +201,38 @@ export class ReservationsService {
     const updated = await this.reservationRepository.save(reservation);
     this.logger.log(
       `[STATUS-UPDATE] Status reservasi berhasil diperbarui | id=${id}, status=${dto.status}`,
+    );
+    return updated;
+  }
+
+  async reschedule(
+    id: number,
+    clinicId: number,
+    dto: RescheduleReservationDto,
+  ): Promise<Reservation> {
+    this.logger.log(
+      `[RESCHEDULE] Mengubah jadwal reservasi | id=${id}, clinicId=${clinicId}, newDate=${dto.reservationDate}, newSlot=${dto.jamSlot || '-'}`,
+    );
+    const reservation = await this.findOne(id, clinicId);
+
+    if (
+      [ReservationStatus.CANCELLED, ReservationStatus.COMPLETED].includes(
+        reservation.status,
+      )
+    ) {
+      throw new BadRequestException(
+        `Tidak bisa mengubah jadwal reservasi berstatus ${reservation.status}`,
+      );
+    }
+
+    reservation.reservationDate = dto.reservationDate;
+    if (dto.jamSlot !== undefined) {
+      reservation.jamSlot = dto.jamSlot;
+    }
+
+    const updated = await this.reservationRepository.save(reservation);
+    this.logger.log(
+      `[RESCHEDULE] Jadwal reservasi berhasil diubah | id=${id}, date=${updated.reservationDate}, slot=${updated.jamSlot || '-'}`,
     );
     return updated;
   }

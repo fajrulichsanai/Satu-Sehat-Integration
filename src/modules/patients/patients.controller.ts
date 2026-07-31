@@ -59,6 +59,13 @@ export class PatientsController {
     return { success: true, data };
   }
 
+  @Get('referral-summary')
+  @ApiOperation({ summary: 'Get referral summary (by source and by referrer)' })
+  async getReferralSummary(@ClinicId() clinicId: number) {
+    const data = await this.patientsService.getReferralSummary(clinicId);
+    return { success: true, data };
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get patient detail' })
   async findOne(

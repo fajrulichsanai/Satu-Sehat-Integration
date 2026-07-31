@@ -15,6 +15,7 @@ import { ReservationsService } from './reservations.service';
 import {
   CreateReservationDto,
   LinkPatientDto,
+  RescheduleReservationDto,
   ReservationQueryDto,
   UpdateReservationStatusDto,
 } from './dto/reservation.dto';
@@ -69,6 +70,21 @@ export class ReservationsController {
     return {
       success: true,
       message: 'Status reservasi berhasil diperbarui',
+      data,
+    };
+  }
+
+  @Patch(':id/reschedule')
+  @ApiOperation({ summary: 'Ubah jadwal (tanggal/jam) reservasi' })
+  async reschedule(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: RescheduleReservationDto,
+  ) {
+    const data = await this.reservationsService.reschedule(id, clinicId, dto);
+    return {
+      success: true,
+      message: 'Jadwal reservasi berhasil diubah',
       data,
     };
   }

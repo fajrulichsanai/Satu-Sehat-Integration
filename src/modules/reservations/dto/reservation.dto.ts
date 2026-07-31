@@ -82,6 +82,18 @@ export class UpdateReservationStatusDto {
   cancelledReason?: string;
 }
 
+export class RescheduleReservationDto {
+  @ApiProperty({ example: '2026-06-15' })
+  @IsDateString()
+  @IsNotEmpty()
+  reservationDate: string;
+
+  @ApiPropertyOptional({ example: '10:00' })
+  @IsOptional()
+  @IsString()
+  jamSlot?: string;
+}
+
 export class ReservationQueryDto extends PaginationDto {
   @ApiPropertyOptional({
     example: '2026-06-12',

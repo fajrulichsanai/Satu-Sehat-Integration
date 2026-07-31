@@ -57,6 +57,31 @@ export class FinancialReportQueryDto {
   type?: 'summary' | 'detailed' = 'summary';
 }
 
+export class FinancialVisitDetailQueryDto {
+  @ApiProperty()
+  @IsDateString()
+  dateFrom: string;
+
+  @ApiProperty()
+  @IsDateString()
+  dateTo: string;
+
+  @ApiPropertyOptional({ default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @ApiPropertyOptional({ default: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number = 20;
+}
+
 export class SatusehatSyncReportQueryDto {
   @ApiPropertyOptional()
   @IsOptional()

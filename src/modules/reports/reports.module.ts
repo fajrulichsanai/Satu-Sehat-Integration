@@ -6,6 +6,7 @@ import { Payment } from '../payments/entities/payment.entity';
 import { SatusehatSyncLog } from '../satusehat/sync/entities/satusehat-sync-log.entity';
 import { BillingItem } from '../billing-item/entities/billing-item.entity';
 import { DoctorFeeConfig } from '../doctor-fee/entities/doctor-fee-config.entity';
+import { OperationalRecord } from '../operational-records/entities/operational-record.entity';
 import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
 
@@ -18,6 +19,7 @@ import { ReportsService } from './reports.service';
       SatusehatSyncLog,
       BillingItem,
       DoctorFeeConfig,
+      OperationalRecord,
     ]),
   ],
   controllers: [ReportsController],
