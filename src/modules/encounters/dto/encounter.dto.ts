@@ -46,6 +46,36 @@ export class CreateEncounterDto {
   chiefComplaint?: string;
 }
 
+export class UpdateEncounterDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  patientId?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  practitionerId?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  locationId?: number;
+
+  @ApiPropertyOptional({ enum: ServiceType })
+  @IsOptional()
+  @IsEnum(ServiceType)
+  serviceType?: ServiceType;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  chiefComplaint?: string;
+}
+
 export class UpdateEncounterStatusDto {
   @ApiProperty({ enum: EncounterStatus })
   @IsEnum(EncounterStatus)

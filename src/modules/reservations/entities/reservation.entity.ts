@@ -39,7 +39,7 @@ export class Reservation extends BaseEntity {
   })
   serviceType: ServiceType;
 
-  @Column({ name: 'reservation_date', type: 'date', utc: true })
+  @Column({ name: 'reservation_date', type: 'date' })
   reservationDate: string;
 
   @Column({ name: 'jam_slot', type: 'time', nullable: true })

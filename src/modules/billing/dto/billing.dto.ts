@@ -157,7 +157,7 @@ export class CreatePaymentDto {
 
   @ApiProperty()
   @IsNumber()
-  @Min(0.01)
+  @Min(0)
   amount: number | undefined;
 
   @ApiPropertyOptional()

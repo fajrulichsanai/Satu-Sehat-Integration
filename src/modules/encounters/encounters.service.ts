@@ -15,6 +15,7 @@ import { UserRole } from '../../enums/user-role.enum';
 import {
   CreateEncounterDto,
   EncounterListQueryDto,
+  UpdateEncounterDto,
   UpdateEncounterStatusDto,
 } from './dto/encounter.dto';
 
@@ -221,6 +222,55 @@ export class EncountersService {
     this.logger.log(
       `[STATUS-UPDATE] Status encounter berhasil diperbarui | id=${id}, status=${dto.status}`,
     );
+    return result;
+  }
+
+  async update(
+    id: number,
+    clinicId: number,
+    dto: UpdateEncounterDto,
+    user: any,
+  ): Promise<Encounter> {
+    this.logger.log(
+      `[UPDATE] Memperbarui data encounter | id=${id}, clinicId=${clinicId}`,
+    );
+    const encounter = await this.encounterRepository.findOne({
+      where: { id, clinicId },
+    });
+    if (!encounter) {
+      throw new NotFoundException(`Encounter dengan ID ${id} tidak ditemukan`);
+    }
+
+    if (user.role === UserRole.DOKTER) {
+      const isOwn = await this.isDokterOwn(
+        encounter.practitionerId,
+        user.userId,
+      );
+      if (!isOwn) {
+        throw new ForbiddenException('Akses ditolak: bukan kunjungan Anda');
+      }
+    }
+
+    if (
+      encounter.status === EncounterStatus.FINISHED ||
+      encounter.status === EncounterStatus.CANCELLED
+    ) {
+      throw new BadRequestException(
+        'Kunjungan yang sudah selesai atau dibatalkan tidak dapat diedit',
+      );
+    }
+
+    if (dto.patientId !== undefined) encounter.patientId = dto.patientId;
+    if (dto.practitionerId !== undefined)
+      encounter.practitionerId = dto.practitionerId;
+    if (dto.locationId !== undefined) encounter.locationId = dto.locationId;
+    if (dto.serviceType !== undefined) encounter.serviceType = dto.serviceType;
+    if (dto.chiefComplaint !== undefined)
+      encounter.chiefComplaint = dto.chiefComplaint;
+    encounter.updatedBy = user.userId;
+
+    const result = await this.encounterRepository.save(encounter);
+    this.logger.log(`[UPDATE] Encounter berhasil diperbarui | id=${id}`);
     return result;
   }
 

@@ -14,6 +14,7 @@ import { EncountersService } from './encounters.service';
 import {
   CreateEncounterDto,
   EncounterListQueryDto,
+  UpdateEncounterDto,
   UpdateEncounterStatusDto,
 } from './dto/encounter.dto';
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
@@ -61,6 +62,23 @@ export class EncountersController {
     @CurrentUser() user: any,
   ) {
     const encounter = await this.encountersService.findOne(id, clinicId, user);
+    return { success: true, data: encounter };
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update encounter data' })
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: UpdateEncounterDto,
+    @CurrentUser() user: any,
+  ) {
+    const encounter = await this.encountersService.update(
+      id,
+      clinicId,
+      dto,
+      user,
+    );
     return { success: true, data: encounter };
   }
 
