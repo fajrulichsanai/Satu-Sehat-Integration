@@ -359,11 +359,11 @@ export class AuthService {
       await this.resend.emails.send({
         from: 'noreply@send.finarch.my.id',
         to: userEmail,
-        subject: 'Verifikasi Email Anda - Satu Sehat',
+        subject: 'Verifikasi Email Anda - ApexRecord',
         html: `
           <h2>Verifikasi Email</h2>
           <p>Halo,</p>
-          <p>Terima kasih telah mendaftar di Satu Sehat. Silakan verifikasi email Anda dengan mengklik tombol di bawah ini:</p>
+          <p>Terima kasih telah mendaftar di ApexRecord. Silakan verifikasi email Anda dengan mengklik tombol di bawah ini:</p>
           <a href="${verificationUrl}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">
             Verifikasi Email
           </a>
@@ -460,7 +460,7 @@ export class AuthService {
     await this.resend.emails.send({
       from: 'noreply@send.finarch.my.id',
       to: userEmail,
-      subject: 'Reset Password Anda - Satu Sehat',
+      subject: 'Reset Password Anda - ApexRecord',
       html: `
         <h2>Reset Password</h2>
         <p>Halo,</p>
