@@ -218,6 +218,11 @@ export class CreatePatientDto {
   @IsBoolean()
   riwayatSistemikLainnya?: boolean;
 
+  @ApiPropertyOptional({ example: 'Asam urat' })
+  @IsOptional()
+  @IsString()
+  catatanSistemikLainnya?: string;
+
   @ApiPropertyOptional({ example: false })
   @IsOptional()
   @IsBoolean()

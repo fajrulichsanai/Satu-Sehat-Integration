@@ -160,6 +160,9 @@ export class Patient extends BaseEntity {
   @Column({ name: 'riwayat_sistemik_lainnya', default: false })
   riwayatSistemikLainnya: boolean;
 
+  @Column('text', { name: 'catatan_sistemik_lainnya', nullable: true })
+  catatanSistemikLainnya: string;
+
   @Column({ name: 'alergi_obat', default: false })
   alergiObat: boolean;
 

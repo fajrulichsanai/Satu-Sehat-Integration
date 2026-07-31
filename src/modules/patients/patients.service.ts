@@ -196,6 +196,7 @@ export class PatientsService {
           riwayatParuParu: dto.riwayatParuParu ?? false,
           riwayatSyaraf: dto.riwayatSyaraf ?? false,
           riwayatSistemikLainnya: dto.riwayatSistemikLainnya ?? false,
+          catatanSistemikLainnya: dto.catatanSistemikLainnya,
           alergiObat: dto.alergiObat ?? false,
           alergiMakanan: dto.alergiMakanan ?? false,
           preferensiKontak: dto.preferensiKontak,
@@ -272,6 +273,8 @@ export class PatientsService {
       riwayatSyaraf: dto.riwayatSyaraf ?? patient.riwayatSyaraf,
       riwayatSistemikLainnya:
         dto.riwayatSistemikLainnya ?? patient.riwayatSistemikLainnya,
+      catatanSistemikLainnya:
+        dto.catatanSistemikLainnya ?? patient.catatanSistemikLainnya,
       alergiObat: dto.alergiObat ?? patient.alergiObat,
       alergiMakanan: dto.alergiMakanan ?? patient.alergiMakanan,
       preferensiKontak: dto.preferensiKontak ?? patient.preferensiKontak,
