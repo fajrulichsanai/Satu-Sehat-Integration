@@ -17,6 +17,7 @@ import {
 } from './dto/patient.dto';
 import { paginate, PaginatedResult } from '../../common/dto/pagination.dto';
 import { SatusehatClientService } from '../satusehat/satusehat-client.service';
+import { TreatmentPlansService } from '../treatment-plans/treatment-plans.service';
 
 @Injectable()
 export class PatientsService {
@@ -29,6 +30,7 @@ export class PatientsService {
     private readonly encounterRepository: Repository<Encounter>,
     private readonly dataSource: DataSource,
     private readonly satusehatClient: SatusehatClientService,
+    private readonly treatmentPlansService: TreatmentPlansService,
   ) {}
 
   async findAll(
@@ -137,6 +139,11 @@ export class PatientsService {
       },
       order: { arrivedTime: 'DESC' },
     });
+  }
+
+  async findTreatmentPlans(patientId: number, clinicId: number) {
+    await this.findOne(patientId, clinicId);
+    return this.treatmentPlansService.findByPatient(patientId, clinicId);
   }
 
   async create(clinicId: number, dto: CreatePatientDto): Promise<Patient> {

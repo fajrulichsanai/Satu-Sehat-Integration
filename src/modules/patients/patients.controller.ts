@@ -101,6 +101,16 @@ export class PatientsController {
     return { success: true, data: encounters };
   }
 
+  @Get(':id/treatment-plans')
+  @ApiOperation({ summary: 'Get patient treatment plan progress' })
+  async findTreatmentPlans(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+  ) {
+    const data = await this.patientsService.findTreatmentPlans(id, clinicId);
+    return { success: true, data };
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete a patient' })

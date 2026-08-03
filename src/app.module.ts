@@ -24,6 +24,8 @@ import { OwnerCodeModule } from './modules/owner-code/owner-code.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { OperationalRecordsModule } from './modules/operational-records/operational-records.module';
 import { DoctorFeeModule } from './modules/doctor-fee/doctor-fee.module';
+import { EncounterSoapNotesModule } from './modules/encounter-soap-notes/encounter-soap-notes.module';
+import { TreatmentPlansModule } from './modules/treatment-plans/treatment-plans.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 
 @Module({
@@ -80,6 +82,8 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     DashboardModule,
     OperationalRecordsModule,
     DoctorFeeModule,
+    EncounterSoapNotesModule,
+    TreatmentPlansModule,
   ],
   controllers: [AppController],
   providers: [

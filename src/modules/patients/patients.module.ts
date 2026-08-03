@@ -5,9 +5,14 @@ import { Encounter } from '../encounters/entities/encounter.entity';
 import { PatientsController } from './patients.controller';
 import { PatientsService } from './patients.service';
 import { SatusehatModule } from '../satusehat/satusehat.module';
+import { TreatmentPlansModule } from '../treatment-plans/treatment-plans.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Patient, Encounter]), SatusehatModule],
+  imports: [
+    TypeOrmModule.forFeature([Patient, Encounter]),
+    SatusehatModule,
+    TreatmentPlansModule,
+  ],
   controllers: [PatientsController],
   providers: [PatientsService],
   exports: [PatientsService],

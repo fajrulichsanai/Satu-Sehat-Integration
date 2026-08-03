@@ -14,3 +14,6 @@ export * from './preferensi-kontak.enum';
 export * from './preferensi-jam-kontak.enum';
 export * from './reservation-status.enum';
 export * from './reservation-source.enum';
+export * from './treatment-type.enum';
+export * from './treatment-plan-status.enum';
+export * from './treatment-session-status.enum';
