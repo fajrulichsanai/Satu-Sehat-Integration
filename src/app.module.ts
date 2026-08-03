@@ -53,6 +53,9 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
           synchronize,
           charset: 'utf8mb4',
           timezone: '+07:00',
+          extra: {
+            dateStrings: ['DATE'],
+          },
           logging: nodeEnv === 'development' ? ['error', 'warn'] : false,
         };
       },
