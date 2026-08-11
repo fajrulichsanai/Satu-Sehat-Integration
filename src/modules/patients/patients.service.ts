@@ -128,17 +128,29 @@ export class PatientsService {
 
   async findEncounters(patientId: number, clinicId: number) {
     await this.findOne(patientId, clinicId);
-    return this.encounterRepository.find({
+    const encounters = await this.encounterRepository.find({
       where: { patientId, clinicId },
       select: {
         id: true,
         status: true,
         serviceType: true,
+        chiefComplaint: true,
         arrivedTime: true,
         finishedTime: true,
+        practitioner: { id: true, name: true },
       },
+      relations: { practitioner: true },
       order: { arrivedTime: 'DESC' },
     });
+    return encounters.map((e) => ({
+      id: e.id,
+      status: e.status,
+      serviceType: e.serviceType,
+      chiefComplaint: e.chiefComplaint,
+      arrivedTime: e.arrivedTime,
+      finishedTime: e.finishedTime,
+      practitionerName: e.practitioner?.name,
+    }));
   }
 
   async findTreatmentPlans(patientId: number, clinicId: number) {
