@@ -15,6 +15,7 @@ import {
 } from '../billing-item/entities/billing-item.entity';
 import { Tarif } from '../tarif/entities/tarif.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
+import { GudangService } from '../gudang/gudang.service';
 import {
   BillingItemDto,
   BillingQueryDto,
@@ -35,6 +36,7 @@ export class BillingsService {
     private readonly tarifRepository: Repository<Tarif>,
     @InjectRepository(Encounter)
     private readonly encounterRepository: Repository<Encounter>,
+    private readonly gudangService: GudangService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -165,9 +167,65 @@ export class BillingsService {
         })),
       );
 
+      for (const item of processedItems) {
+        if (item.tarifId) {
+          await this.gudangService.deductForTindakan(
+            manager,
+            clinicId,
+            item.tarifId,
+            item.quantity,
+            userId,
+          );
+        }
+      }
+
       this.logger.log(
         `[CREATE] Billing berhasil dibuat | id=${billing.id}, invoiceNumber=${billing.invoiceNumber}, clinicId=${clinicId}`,
       );
+      return billing;
+    });
+  }
+
+  async cancel(id: number, clinicId: number, userId: number) {
+    this.logger.log(`[CANCEL] Membatalkan billing | id=${id}, clinicId=${clinicId}`);
+    return this.dataSource.transaction(async (manager) => {
+      const billing = await manager.findOne(Billing, {
+        where: { id, clinicId },
+        relations: { items: true },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!billing) {
+        throw new NotFoundException(`Billing dengan ID ${id} tidak ditemukan`);
+      }
+      if (
+        billing.status === BillingStatus.CANCELLED ||
+        billing.status === BillingStatus.REFUNDED
+      ) {
+        throw new BadRequestException(`Billing sudah berstatus '${billing.status}'`);
+      }
+      if (Number(billing.paidAmount) > 0) {
+        throw new BadRequestException(
+          'Billing yang sudah memiliki pembayaran tidak dapat dibatalkan langsung, gunakan refund',
+        );
+      }
+
+      for (const item of billing.items) {
+        if (item.tarifId) {
+          await this.gudangService.restoreForTindakan(
+            manager,
+            clinicId,
+            item.tarifId,
+            item.quantity,
+            userId,
+          );
+        }
+      }
+
+      billing.status = BillingStatus.CANCELLED;
+      billing.updatedBy = userId;
+      await manager.save(billing);
+
+      this.logger.log(`[CANCEL] Billing berhasil dibatalkan | id=${billing.id}, clinicId=${clinicId}`);
       return billing;
     });
   }

@@ -20,9 +20,8 @@ export class AuditLogController {
 
   @Get()
   @ApiOperation({ summary: 'List audit log entries for the owner\'s clinic' })
-  async findAll(@ClinicId() clinicId: number | null, @Query() query: AuditLogQueryDto, @Req() req: any) {
+  async findAll(@ClinicId() clinicId: number | null, @Query() query: AuditLogQueryDto) {
     const data = await this.auditLogService.findAll(clinicId, query);
-    this.recordSelfView(clinicId, req, 'Audit log list dilihat');
     return { success: true, data };
   }
 
@@ -56,25 +55,8 @@ export class AuditLogController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get single audit log entry detail (full before/after)' })
-  async findOne(@Param('id', ParseIntPipe) id: number, @ClinicId() clinicId: number | null, @Req() req: any) {
+  async findOne(@Param('id', ParseIntPipe) id: number, @ClinicId() clinicId: number | null) {
     const entry = await this.auditLogService.findOne(id, clinicId);
-    this.recordSelfView(clinicId, req, `Audit log detail #${id} dilihat`);
     return { success: true, data: entry };
-  }
-
-  private recordSelfView(clinicId: number | null, req: any, label: string) {
-    // Access to the audit log itself must be logged too. Fire-and-forget:
-    // record() never throws, so this never delays or breaks the response.
-    void this.auditLogService.record({
-      clinicId,
-      actorId: req.user?.userId ?? null,
-      actorName: req.user?.name ?? 'Unknown',
-      actorRole: req.user?.role ?? 'unknown',
-      actionType: AuditActionType.VIEW,
-      entityType: 'AuditLog',
-      entityLabel: label,
-      ipAddress: req.ip,
-      userAgent: req.headers?.['user-agent'],
-    });
   }
 }

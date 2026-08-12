@@ -171,6 +171,20 @@ export class BillingController {
     return { success: true, data };
   }
 
+  @Patch('billings/:id/cancel')
+  @Audit('Invoice', AuditActionType.UPDATE, { labelField: 'invoiceNumber' })
+  @ApiOperation({ summary: 'Batalkan billing (belum ada pembayaran) dan kembalikan stok BOM' })
+  async cancelBilling(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: any,
+    @Req() req: any,
+  ) {
+    req.auditBefore = await this.billingsService.findOne(id, clinicId);
+    const data = await this.billingsService.cancel(id, clinicId, user.userId);
+    return { success: true, data };
+  }
+
   // ── Payments ──────────────────────────────────────────────────────────────
 
   @Post('billings/:id/payments')

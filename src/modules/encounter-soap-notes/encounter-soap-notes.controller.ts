@@ -30,7 +30,6 @@ export class EncounterSoapNotesController {
   ) {}
 
   @Get()
-  @Audit('MedicalRecord', AuditActionType.VIEW)
   @ApiOperation({ summary: 'Get SOAP note for an encounter' })
   async findOne(
     @Param('encounterId', ParseIntPipe) encounterId: number,
