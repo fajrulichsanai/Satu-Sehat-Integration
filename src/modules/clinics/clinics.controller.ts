@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Post, Body, Req, UseGuards, UseInterceptors } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -12,10 +12,14 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { UserRole } from '../../enums';
 import { UpdateClinicDto, ClinicResponseDto } from './dto/clinic.dto';
+import { Audit } from '../audit-log/decorators/audit.decorator';
+import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
+import { AuditActionType } from '../audit-log/entities/audit-log.entity';
 
 @ApiTags('settings')
 @Controller('settings/clinic')
 @UseGuards(JwtAuthGuard, RolesGuard, ClinicContextGuard)
+@UseInterceptors(AuditInterceptor)
 @ApiBearerAuth('JWT-auth')
 export class ClinicsController {
   constructor(private readonly clinicsService: ClinicsService) {}
@@ -34,6 +38,7 @@ export class ClinicsController {
   }
 
   @Put()
+  @Audit('Clinic', AuditActionType.UPDATE)
   @Roles(UserRole.OWNER)
   @ApiOperation({ summary: 'Update clinic profile (Owner only)' })
   @ApiResponse({ status: 200, description: 'Clinic updated successfully' })
@@ -42,7 +47,9 @@ export class ClinicsController {
     @Body() dto: UpdateClinicDto,
     @CurrentUser() user: any,
     @ClinicId() clinicId: number,
+    @Req() req: any,
   ) {
+    req.auditBefore = await this.clinicsService.findOne(clinicId).catch(() => null);
     return this.clinicsService.update(clinicId, dto, user.userId);
   }
 }

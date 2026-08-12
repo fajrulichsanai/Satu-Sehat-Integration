@@ -7,8 +7,10 @@ import {
   Param,
   Body,
   Query,
+  Req,
   Logger,
   UseGuards,
+  UseInterceptors,
   ParseIntPipe,
 } from '@nestjs/common';
 import {
@@ -32,10 +34,14 @@ import {
   InviteUserDto,
   UpdateUserDto,
 } from './dto/user.dto';
+import { Audit } from '../audit-log/decorators/audit.decorator';
+import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
+import { AuditActionType } from '../audit-log/entities/audit-log.entity';
 
 @ApiTags('users')
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard, ClinicContextGuard)
+@UseInterceptors(AuditInterceptor)
 @ApiBearerAuth('JWT-auth')
 export class UsersController {
   private readonly logger = new Logger(UsersController.name);
@@ -121,6 +127,7 @@ export class UsersController {
   }
 
   @Post('invite')
+  @Audit('Staff', AuditActionType.CREATE, { labelField: 'email' })
   @Roles(UserRole.OWNER, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Create/invite a new user directly with a role' })
   @ApiResponse({ status: 201, description: 'User created successfully' })
@@ -138,6 +145,7 @@ export class UsersController {
   }
 
   @Patch(':id')
+  @Audit('Staff', AuditActionType.UPDATE, { labelField: 'email' })
   @Roles(UserRole.OWNER, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Update user name/email' })
   @ApiResponse({ status: 200, description: 'User updated successfully' })
@@ -147,16 +155,19 @@ export class UsersController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateUserDto,
     @CurrentUser() user: any,
+    @Req() req: any,
   ) {
     this.logger.log(
       `[PATCH /users/:id] Request masuk | userId=${id}, requestedBy=${user.userId}`,
     );
+    req.auditBefore = await this.usersService.findOne(id, user).catch(() => null);
     const result = await this.usersService.update(id, dto, user);
     this.logger.log(`[PATCH /users/:id] Response dikirim | userId=${id}`);
     return result;
   }
 
   @Post(':id/activate')
+  @Audit('Staff', AuditActionType.UPDATE)
   @Roles(UserRole.OWNER, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Activate pending user' })
   @ApiResponse({ status: 200, description: 'User activated successfully' })
@@ -168,10 +179,12 @@ export class UsersController {
   async activate(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: any,
+    @Req() req: any,
   ) {
     this.logger.log(
       `[POST /users/:id/activate] Request masuk | userId=${id}, requestedBy=${user.userId}`,
     );
+    req.auditBefore = await this.usersService.findOne(id, user).catch(() => null);
     const result = await this.usersService.activate(id, user);
     this.logger.log(
       `[POST /users/:id/activate] Response dikirim | userId=${id}`,
@@ -180,6 +193,7 @@ export class UsersController {
   }
 
   @Post(':id/deactivate')
+  @Audit('Staff', AuditActionType.UPDATE)
   @Roles(UserRole.OWNER, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Deactivate active user' })
   @ApiResponse({ status: 200, description: 'User deactivated successfully' })
@@ -189,10 +203,12 @@ export class UsersController {
   async deactivate(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: any,
+    @Req() req: any,
   ) {
     this.logger.log(
       `[POST /users/:id/deactivate] Request masuk | userId=${id}, requestedBy=${user.userId}`,
     );
+    req.auditBefore = await this.usersService.findOne(id, user).catch(() => null);
     const result = await this.usersService.deactivate(id, user);
     this.logger.log(
       `[POST /users/:id/deactivate] Response dikirim | userId=${id}`,
@@ -201,6 +217,7 @@ export class UsersController {
   }
 
   @Delete(':id')
+  @Audit('Staff', AuditActionType.DELETE)
   @Roles(UserRole.OWNER, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Delete a user (pending or active)' })
   @ApiResponse({ status: 200, description: 'User deleted' })
@@ -209,16 +226,21 @@ export class UsersController {
   async remove(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: any,
+    @Req() req: any,
   ) {
     this.logger.log(
       `[DELETE /users/:id] Request masuk | userId=${id}, requestedBy=${user.userId}`,
     );
+    const existing = await this.usersService.findOne(id, user).catch(() => null);
+    req.auditBefore = existing;
+    req.auditEntityLabel = (existing as any)?.data?.email;
     const result = await this.usersService.remove(id, user);
     this.logger.log(`[DELETE /users/:id] Response dikirim | userId=${id}`);
     return result;
   }
 
   @Patch(':id/role')
+  @Audit('Staff', AuditActionType.UPDATE)
   @Roles(UserRole.OWNER, UserRole.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Update pending user role to admin/dokter/owner',
@@ -230,16 +252,19 @@ export class UsersController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateUserRoleDto,
     @CurrentUser() user: any,
+    @Req() req: any,
   ) {
     this.logger.log(
       `[PATCH /users/:id/role] Request masuk | userId=${id}, newRole=${dto.role}`,
     );
+    req.auditBefore = await this.usersService.findOne(id, user).catch(() => null);
     const result = await this.usersService.updateRole(id, dto.role, user);
     this.logger.log(`[PATCH /users/:id/role] Response dikirim | userId=${id}`);
     return result;
   }
 
   @Patch(':id/assign-role')
+  @Audit('Staff', AuditActionType.UPDATE)
   @Roles(UserRole.OWNER, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Assign role to any active user' })
   @ApiResponse({ status: 200, description: 'Role assigned successfully' })
@@ -249,10 +274,12 @@ export class UsersController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: AssignUserRoleDto,
     @CurrentUser() user: any,
+    @Req() req: any,
   ) {
     this.logger.log(
       `[PATCH /users/:id/assign-role] Request masuk | userId=${id}, newRole=${dto.role}, requestedBy=${user.userId}`,
     );
+    req.auditBefore = await this.usersService.findOne(id, user).catch(() => null);
     const result = await this.usersService.assignRole(id, dto.role, user);
     this.logger.log(
       `[PATCH /users/:id/assign-role] Response dikirim | userId=${id}`,

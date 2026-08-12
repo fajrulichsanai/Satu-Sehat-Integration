@@ -7,7 +7,9 @@ import {
   Body,
   Param,
   Query,
+  Req,
   UseGuards,
+  UseInterceptors,
   ParseIntPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -22,10 +24,14 @@ import {
   UpdateOperationalRecordDto,
   OperationalRecordListQueryDto,
 } from './dto/operational-record.dto';
+import { Audit } from '../audit-log/decorators/audit.decorator';
+import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
+import { AuditActionType } from '../audit-log/entities/audit-log.entity';
 
 @ApiTags('operational-records')
 @Controller('operational-records')
 @UseGuards(JwtAuthGuard, RolesGuard, ClinicContextGuard)
+@UseInterceptors(AuditInterceptor)
 @ApiBearerAuth('JWT-auth')
 export class OperationalRecordsController {
   constructor(private readonly service: OperationalRecordsService) {}
@@ -51,6 +57,7 @@ export class OperationalRecordsController {
   }
 
   @Post()
+  @Audit('OperationalRecord', AuditActionType.CREATE)
   @Roles(UserRole.OWNER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Create operational record' })
   async create(
@@ -62,6 +69,7 @@ export class OperationalRecordsController {
   }
 
   @Put(':id')
+  @Audit('OperationalRecord', AuditActionType.UPDATE)
   @Roles(UserRole.OWNER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Update operational record' })
   async update(
@@ -69,17 +77,22 @@ export class OperationalRecordsController {
     @Body() dto: UpdateOperationalRecordDto,
     @CurrentUser() user: any,
     @ClinicId() clinicId: number,
+    @Req() req: any,
   ) {
+    req.auditBefore = await this.service.findOne(id, clinicId).catch(() => null);
     return this.service.update(id, dto, clinicId, user.userId);
   }
 
   @Delete(':id')
+  @Audit('OperationalRecord', AuditActionType.DELETE)
   @Roles(UserRole.OWNER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete operational record' })
   async remove(
     @Param('id', ParseIntPipe) id: number,
     @ClinicId() clinicId: number,
+    @Req() req: any,
   ) {
+    req.auditBefore = await this.service.findOne(id, clinicId).catch(() => null);
     return this.service.remove(id, clinicId);
   }
 }

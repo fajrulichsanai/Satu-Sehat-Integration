@@ -10,7 +10,9 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PatientsService } from './patients.service';
@@ -23,10 +25,14 @@ import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { IsString } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Audit } from '../audit-log/decorators/audit.decorator';
+import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
+import { AuditActionType } from '../audit-log/entities/audit-log.entity';
 
 @ApiTags('patients')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(ClinicContextGuard)
+@UseInterceptors(AuditInterceptor)
 @Controller('patients')
 export class PatientsController {
   constructor(private readonly patientsService: PatientsService) {}
@@ -39,6 +45,7 @@ export class PatientsController {
   }
 
   @Post()
+  @Audit('Patient', AuditActionType.CREATE, { labelField: 'name' })
   @ApiOperation({ summary: 'Register new patient' })
   async create(@ClinicId() clinicId: number, @Body() dto: CreatePatientDto) {
     const patient = await this.patientsService.create(clinicId, dto);
@@ -77,12 +84,15 @@ export class PatientsController {
   }
 
   @Put(':id')
+  @Audit('Patient', AuditActionType.UPDATE, { labelField: 'name' })
   @ApiOperation({ summary: 'Update patient demographics' })
   async update(
     @Param('id', ParseIntPipe) id: number,
     @ClinicId() clinicId: number,
     @Body() dto: UpdatePatientDto,
+    @Req() req: any,
   ) {
+    req.auditBefore = await this.patientsService.findOne(id, clinicId);
     const patient = await this.patientsService.update(id, clinicId, dto);
     return {
       success: true,
@@ -113,11 +123,16 @@ export class PatientsController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
+  @Audit('Patient', AuditActionType.DELETE)
   @ApiOperation({ summary: 'Delete a patient' })
   async remove(
     @Param('id', ParseIntPipe) id: number,
     @ClinicId() clinicId: number,
+    @Req() req: any,
   ) {
+    const existing = await this.patientsService.findOne(id, clinicId);
+    req.auditBefore = existing;
+    req.auditEntityLabel = existing?.name;
     await this.patientsService.remove(id, clinicId);
     return { success: true, message: 'Pasien berhasil dihapus' };
   }

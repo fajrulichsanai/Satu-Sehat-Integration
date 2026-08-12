@@ -7,7 +7,9 @@ import {
   Body,
   Param,
   Query,
+  Req,
   UseGuards,
+  UseInterceptors,
   ParseIntPipe,
 } from '@nestjs/common';
 import {
@@ -30,10 +32,14 @@ import {
   LocationResponseDto,
   LocationListResponseDto,
 } from './dto/location.dto';
+import { Audit } from '../audit-log/decorators/audit.decorator';
+import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
+import { AuditActionType } from '../audit-log/entities/audit-log.entity';
 
 @ApiTags('settings')
 @Controller('settings/locations')
 @UseGuards(JwtAuthGuard, RolesGuard, ClinicContextGuard)
+@UseInterceptors(AuditInterceptor)
 @ApiBearerAuth('JWT-auth')
 export class LocationsController {
   constructor(private readonly locationsService: LocationsService) {}
@@ -78,6 +84,7 @@ export class LocationsController {
   }
 
   @Post()
+  @Audit('Location', AuditActionType.CREATE, { labelField: 'name' })
   @Roles(UserRole.OWNER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Create new location (Owner/Admin only)' })
   @ApiResponse({
@@ -94,6 +101,7 @@ export class LocationsController {
   }
 
   @Put(':id')
+  @Audit('Location', AuditActionType.UPDATE, { labelField: 'name' })
   @Roles(UserRole.OWNER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Update location (Owner/Admin only)' })
   @ApiParam({ name: 'id', type: Number })
@@ -105,11 +113,14 @@ export class LocationsController {
     @Body() dto: UpdateLocationDto,
     @CurrentUser() user: any,
     @ClinicId() clinicId: number,
+    @Req() req: any,
   ) {
+    req.auditBefore = await this.locationsService.findOne(id, clinicId).catch(() => null);
     return this.locationsService.update(id, dto, clinicId, user.userId);
   }
 
   @Delete(':id')
+  @Audit('Location', AuditActionType.DELETE)
   @Roles(UserRole.OWNER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete location (Owner/Admin only)' })
   @ApiParam({ name: 'id', type: Number })
@@ -118,11 +129,14 @@ export class LocationsController {
   async remove(
     @Param('id', ParseIntPipe) id: number,
     @ClinicId() clinicId: number,
+    @Req() req: any,
   ) {
+    req.auditBefore = await this.locationsService.findOne(id, clinicId).catch(() => null);
     return this.locationsService.remove(id, clinicId);
   }
 
   @Post(':id/toggle-active')
+  @Audit('Location', AuditActionType.UPDATE)
   @Roles(UserRole.OWNER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Activate/deactivate location (Owner/Admin only)' })
   @ApiParam({ name: 'id', type: Number })

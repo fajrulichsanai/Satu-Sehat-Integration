@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, UseGuards, Query } from '@nestjs/common';
+import { Controller, Post, Get, Body, Req, UseGuards, Query } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -18,11 +18,16 @@ import {
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
+import { AuditLogService } from '../audit-log/audit-log.service';
+import { AuditActionType, AuditStatus } from '../audit-log/entities/audit-log.entity';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   @Public()
   @Post('register')
@@ -44,9 +49,38 @@ export class AuthController {
     type: LoginResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  async login(@Body() dto: LoginDto) {
+  async login(@Body() dto: LoginDto, @Req() req: any) {
     console.log(`Received login request for email: ${dto.email}`);
-    return this.authService.login(dto);
+    try {
+      const result = await this.authService.login(dto);
+      const loggedInUser = result?.data?.user;
+      void this.auditLogService.record({
+        clinicId: loggedInUser?.clinicId ?? null,
+        actorId: loggedInUser?.id ?? null,
+        actorName: loggedInUser?.name ?? dto.email ?? 'Unknown',
+        actorRole: loggedInUser?.role ?? 'unknown',
+        actionType: AuditActionType.LOGIN,
+        entityType: 'Auth',
+        status: AuditStatus.SUCCESS,
+        ipAddress: req.ip,
+        userAgent: req.headers?.['user-agent'],
+      });
+      return result;
+    } catch (err) {
+      void this.auditLogService.record({
+        clinicId: null,
+        actorId: null,
+        actorName: dto.email ?? 'Unknown',
+        actorRole: 'unknown',
+        actionType: AuditActionType.LOGIN,
+        entityType: 'Auth',
+        status: AuditStatus.FAILED,
+        failureReason: (err as Error)?.message?.slice(0, 255),
+        ipAddress: req.ip,
+        userAgent: req.headers?.['user-agent'],
+      });
+      throw err;
+    }
   }
 
   @Get('me')
@@ -91,7 +125,18 @@ export class AuthController {
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Logout (client should discard token)' })
   @ApiResponse({ status: 200, description: 'Logged out' })
-  async logout() {
+  async logout(@CurrentUser() user: any, @Req() req: any) {
+    void this.auditLogService.record({
+      clinicId: user?.clinicId ?? null,
+      actorId: user?.userId ?? null,
+      actorName: user?.name ?? 'Unknown',
+      actorRole: user?.role ?? 'unknown',
+      actionType: AuditActionType.LOGOUT,
+      entityType: 'Auth',
+      status: AuditStatus.SUCCESS,
+      ipAddress: req.ip,
+      userAgent: req.headers?.['user-agent'],
+    });
     return this.authService.logout();
   }
 

@@ -26,6 +26,7 @@ import { OperationalRecordsModule } from './modules/operational-records/operatio
 import { DoctorFeeModule } from './modules/doctor-fee/doctor-fee.module';
 import { EncounterSoapNotesModule } from './modules/encounter-soap-notes/encounter-soap-notes.module';
 import { TreatmentPlansModule } from './modules/treatment-plans/treatment-plans.module';
+import { AuditLogModule } from './modules/audit-log/audit-log.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 
 @Module({
@@ -84,6 +85,7 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     DoctorFeeModule,
     EncounterSoapNotesModule,
     TreatmentPlansModule,
+    AuditLogModule,
   ],
   controllers: [AppController],
   providers: [

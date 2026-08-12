@@ -6,12 +6,14 @@ import { PatientsController } from './patients.controller';
 import { PatientsService } from './patients.service';
 import { SatusehatModule } from '../satusehat/satusehat.module';
 import { TreatmentPlansModule } from '../treatment-plans/treatment-plans.module';
+import { AuditLogModule } from '../audit-log/audit-log.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Patient, Encounter]),
     SatusehatModule,
     TreatmentPlansModule,
+    AuditLogModule,
   ],
   controllers: [PatientsController],
   providers: [PatientsService],

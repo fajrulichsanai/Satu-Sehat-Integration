@@ -9,8 +9,10 @@ import {
   Post,
   Put,
   Query,
+  Req,
   Res,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -28,10 +30,14 @@ import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { InvoiceService } from './invoice.service';
+import { Audit } from '../audit-log/decorators/audit.decorator';
+import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
+import { AuditActionType } from '../audit-log/entities/audit-log.entity';
 
 @ApiTags('billing')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(ClinicContextGuard)
+@UseInterceptors(AuditInterceptor)
 @Controller()
 export class BillingController {
   constructor(
@@ -64,6 +70,7 @@ export class BillingController {
   }
 
   @Post('settings/tarifs')
+  @Audit('Tarif', AuditActionType.CREATE, { labelField: 'name' })
   @ApiOperation({ summary: 'Create tarif' })
   async createTarif(
     @ClinicId() clinicId: number,
@@ -75,13 +82,16 @@ export class BillingController {
   }
 
   @Put('settings/tarifs/:id')
+  @Audit('Tarif', AuditActionType.UPDATE, { labelField: 'name' })
   @ApiOperation({ summary: 'Update tarif' })
   async updateTarif(
     @Param('id', ParseIntPipe) id: number,
     @ClinicId() clinicId: number,
     @Body() dto: UpdateTarifDto,
     @CurrentUser() user: any,
+    @Req() req: any,
   ) {
+    req.auditBefore = await this.tarifsService.findOne(id, clinicId);
     const data = await this.tarifsService.update(
       id,
       clinicId,
@@ -92,12 +102,17 @@ export class BillingController {
   }
 
   @Delete('settings/tarifs/:id')
+  @Audit('Tarif', AuditActionType.DELETE)
   @ApiOperation({ summary: 'Delete (deactivate) tarif' })
   async deleteTarif(
     @Param('id', ParseIntPipe) id: number,
     @ClinicId() clinicId: number,
     @CurrentUser() user: any,
+    @Req() req: any,
   ) {
+    const existing = await this.tarifsService.findOne(id, clinicId);
+    req.auditBefore = existing;
+    req.auditEntityLabel = existing?.name;
     await this.tarifsService.remove(id, clinicId, user.userId);
     return { success: true };
   }
@@ -115,6 +130,7 @@ export class BillingController {
   }
 
   @Post('billings')
+  @Audit('Invoice', AuditActionType.CREATE, { labelField: 'invoiceNumber' })
   @ApiOperation({ summary: 'Create billing for encounter' })
   async createBilling(
     @ClinicId() clinicId: number,
@@ -136,13 +152,16 @@ export class BillingController {
   }
 
   @Patch('billings/:id')
+  @Audit('Invoice', AuditActionType.UPDATE, { labelField: 'invoiceNumber' })
   @ApiOperation({ summary: 'Update billing items, discount, fee, or notes' })
   async updateBilling(
     @Param('id', ParseIntPipe) id: number,
     @ClinicId() clinicId: number,
     @Body() dto: UpdateBillingDto,
     @CurrentUser() user: any,
+    @Req() req: any,
   ) {
+    req.auditBefore = await this.billingsService.findOne(id, clinicId);
     const data = await this.billingsService.update(
       id,
       clinicId,
@@ -155,6 +174,7 @@ export class BillingController {
   // ── Payments ──────────────────────────────────────────────────────────────
 
   @Post('billings/:id/payments')
+  @Audit('Payment', AuditActionType.CREATE)
   @ApiOperation({ summary: 'Record payment for billing' })
   async createPayment(
     @Param('id', ParseIntPipe) id: number,
@@ -172,6 +192,7 @@ export class BillingController {
   }
 
   @Get('billings/:id/invoice')
+  @Audit('Invoice', AuditActionType.EXPORT)
   @ApiOperation({ summary: 'Download invoice as PDF' })
   async downloadInvoice(
     @Param('id', ParseIntPipe) id: number,

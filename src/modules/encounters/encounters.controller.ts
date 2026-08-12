@@ -7,7 +7,9 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { EncountersService } from './encounters.service';
@@ -20,10 +22,14 @@ import {
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Audit } from '../audit-log/decorators/audit.decorator';
+import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
+import { AuditActionType } from '../audit-log/entities/audit-log.entity';
 
 @ApiTags('encounters')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(ClinicContextGuard)
+@UseInterceptors(AuditInterceptor)
 @Controller('encounters')
 export class EncountersController {
   constructor(private readonly encountersService: EncountersService) {}
@@ -40,6 +46,7 @@ export class EncountersController {
   }
 
   @Post()
+  @Audit('MedicalRecord', AuditActionType.CREATE)
   @ApiOperation({ summary: 'Create encounter (from reservation check-in or walk-in)' })
   async create(
     @ClinicId() clinicId: number,
@@ -66,13 +73,16 @@ export class EncountersController {
   }
 
   @Patch(':id')
+  @Audit('MedicalRecord', AuditActionType.UPDATE)
   @ApiOperation({ summary: 'Update encounter data' })
   async update(
     @Param('id', ParseIntPipe) id: number,
     @ClinicId() clinicId: number,
     @Body() dto: UpdateEncounterDto,
     @CurrentUser() user: any,
+    @Req() req: any,
   ) {
+    req.auditBefore = await this.encountersService.findOne(id, clinicId, user).catch(() => null);
     const encounter = await this.encountersService.update(
       id,
       clinicId,
@@ -83,6 +93,7 @@ export class EncountersController {
   }
 
   @Patch(':id/status')
+  @Audit('MedicalRecord', AuditActionType.UPDATE)
   @ApiOperation({ summary: 'Update encounter status' })
   async updateStatus(
     @Param('id', ParseIntPipe) id: number,

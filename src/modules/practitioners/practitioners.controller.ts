@@ -6,7 +6,9 @@ import {
   Delete,
   Body,
   Param,
+  Req,
   UseGuards,
+  UseInterceptors,
   ParseIntPipe,
 } from '@nestjs/common';
 import {
@@ -30,10 +32,14 @@ import {
   PractitionerListResponseDto,
   SatusehatPractitionerSearchResultDto,
 } from './dto/practitioner.dto';
+import { Audit } from '../audit-log/decorators/audit.decorator';
+import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
+import { AuditActionType } from '../audit-log/entities/audit-log.entity';
 
 @ApiTags('settings')
 @Controller('settings/practitioners')
 @UseGuards(JwtAuthGuard, RolesGuard, ClinicContextGuard)
+@UseInterceptors(AuditInterceptor)
 @ApiBearerAuth('JWT-auth')
 export class PractitionersController {
   constructor(private readonly practitionersService: PractitionersService) {}
@@ -68,6 +74,7 @@ export class PractitionersController {
   }
 
   @Post()
+  @Audit('Staff', AuditActionType.CREATE)
   @Roles(UserRole.OWNER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Register new practitioner' })
   @ApiResponse({
@@ -84,6 +91,7 @@ export class PractitionersController {
   }
 
   @Put(':id')
+  @Audit('Staff', AuditActionType.UPDATE)
   @Roles(UserRole.OWNER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Update practitioner' })
   @ApiParam({ name: 'id', type: Number })
@@ -94,11 +102,14 @@ export class PractitionersController {
     @Body() dto: UpdatePractitionerDto,
     @CurrentUser() user: any,
     @ClinicId() clinicId: number,
+    @Req() req: any,
   ) {
+    req.auditBefore = await this.practitionersService.findOne(id, clinicId).catch(() => null);
     return this.practitionersService.update(id, dto, clinicId, user.userId);
   }
 
   @Delete(':id')
+  @Audit('Staff', AuditActionType.DELETE)
   @Roles(UserRole.OWNER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete practitioner' })
   @ApiParam({ name: 'id', type: Number })
@@ -107,7 +118,9 @@ export class PractitionersController {
   async remove(
     @Param('id', ParseIntPipe) id: number,
     @ClinicId() clinicId: number,
+    @Req() req: any,
   ) {
+    req.auditBefore = await this.practitionersService.findOne(id, clinicId).catch(() => null);
     return this.practitionersService.remove(id, clinicId);
   }
 

@@ -4,9 +4,10 @@ import { TreatmentPlan } from './entities/treatment-plan.entity';
 import { TreatmentPlanSession } from './entities/treatment-plan-session.entity';
 import { TreatmentPlansController } from './treatment-plans.controller';
 import { TreatmentPlansService } from './treatment-plans.service';
+import { AuditLogModule } from '../audit-log/audit-log.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([TreatmentPlan, TreatmentPlanSession])],
+  imports: [TypeOrmModule.forFeature([TreatmentPlan, TreatmentPlanSession]), AuditLogModule],
   controllers: [TreatmentPlansController],
   providers: [TreatmentPlansService],
   exports: [TreatmentPlansService],

@@ -10,10 +10,12 @@ import { BillingsService } from './billings.service';
 import { PaymentsService } from '../payments/payments.service';
 import { TarifsService } from './tarifs.service';
 import { InvoiceService } from './invoice.service';
+import { AuditLogModule } from '../audit-log/audit-log.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Billing, BillingItem, Tarif, Payment, Encounter]),
+    AuditLogModule,
   ],
   controllers: [BillingController],
   providers: [BillingsService, PaymentsService, TarifsService, InvoiceService],

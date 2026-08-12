@@ -9,6 +9,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { User } from '../users/entities/user.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { OwnerCodeModule } from '../owner-code/owner-code.module';
+import { AuditLogModule } from '../audit-log/audit-log.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { OwnerCodeModule } from '../owner-code/owner-code.module';
       inject: [ConfigService],
     }),
     OwnerCodeModule,
+    AuditLogModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],
