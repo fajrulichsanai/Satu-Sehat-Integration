@@ -45,10 +45,10 @@ export class AuditLog {
   @Column({ name: 'entity_type', length: 100 })
   entityType: string;
 
-  @Column({ name: 'entity_id', length: 100, nullable: true })
+  @Column({ name: 'entity_id', type: 'varchar', length: 100, nullable: true })
   entityId: string | null;
 
-  @Column({ name: 'entity_label', length: 255, nullable: true })
+  @Column({ name: 'entity_label', type: 'varchar', length: 255, nullable: true })
   entityLabel: string | null;
 
   @Column({ name: 'before_value', type: 'json', nullable: true })
@@ -60,13 +60,13 @@ export class AuditLog {
   @Column({ type: 'enum', enum: AuditStatus, default: AuditStatus.SUCCESS })
   status: AuditStatus;
 
-  @Column({ name: 'failure_reason', length: 255, nullable: true })
+  @Column({ name: 'failure_reason', type: 'varchar', length: 255, nullable: true })
   failureReason: string | null;
 
-  @Column({ name: 'ip_address', length: 64, nullable: true })
+  @Column({ name: 'ip_address', type: 'varchar', length: 64, nullable: true })
   ipAddress: string | null;
 
-  @Column({ name: 'user_agent', length: 255, nullable: true })
+  @Column({ name: 'user_agent', type: 'varchar', length: 255, nullable: true })
   userAgent: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
