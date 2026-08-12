@@ -26,11 +26,11 @@ export class AuditLog {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'clinic_id', nullable: true })
+  @Column({ name: 'clinic_id', type: 'int', nullable: true })
   @Index()
   clinicId: number | null;
 
-  @Column({ name: 'actor_id', nullable: true })
+  @Column({ name: 'actor_id', type: 'int', nullable: true })
   actorId: number | null;
 
   @Column({ name: 'actor_name', length: 150 })
