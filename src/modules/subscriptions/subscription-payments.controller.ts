@@ -6,10 +6,17 @@ import {
   ParseIntPipe,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { SubscriptionPaymentsService } from './subscription-payments.service';
 import {
   CreateSubscriptionPaymentDto,
@@ -25,6 +32,7 @@ import { SkipSubscriptionCheck } from './guards/subscription.guard';
 import { Audit } from '../audit-log/decorators/audit.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
 import { AuditActionType } from '../audit-log/entities/audit-log.entity';
+import { paymentProofUploadOptions } from './upload/payment-proof.storage';
 
 @ApiTags('subscriptions')
 @ApiBearerAuth('JWT-auth')
@@ -36,16 +44,20 @@ export class SubscriptionPaymentsController {
   constructor(private readonly paymentsService: SubscriptionPaymentsService) {}
 
   @Post()
+  @UseInterceptors(FileInterceptor('proof', paymentProofUploadOptions))
   @Audit('SubscriptionPayment', AuditActionType.CREATE, { labelField: 'id' })
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
-    summary: "Clinic claims 'I have paid' for a plan (any clinic user)",
+    summary:
+      "Clinic claims 'I have paid' for a plan, with an optional transfer-proof upload (any clinic user)",
   })
   claim(
     @Body() dto: CreateSubscriptionPaymentDto,
     @ClinicId() clinicId: number,
     @CurrentUser() user: any,
+    @UploadedFile() proof?: Express.Multer.File,
   ) {
-    return this.paymentsService.claim(clinicId, dto, user.userId);
+    return this.paymentsService.claim(clinicId, dto, user.userId, proof);
   }
 
   @Get('mine')

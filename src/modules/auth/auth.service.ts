@@ -243,6 +243,72 @@ export class AuthService {
   }
 
   /**
+   * Super Admin support tool: issue a token that authenticates as another
+   * user, so support/debugging can be done from that user's exact
+   * perspective. Short-lived (1h, vs the normal 24h) since it's meant for a
+   * single support session, not standing access. The caller (AuthController)
+   * is responsible for audit-logging who impersonated whom.
+   */
+  async impersonate(targetUserId: number) {
+    const target = await this.userRepository.findOne({
+      where: { id: targetUserId },
+    });
+
+    if (!target) {
+      throw new NotFoundException({
+        success: false,
+        error: { code: 'USER_NOT_FOUND', message: 'User tidak ditemukan' },
+      });
+    }
+
+    if (target.role === UserRole.SUPER_ADMIN) {
+      throw new BadRequestException({
+        success: false,
+        error: {
+          code: 'CANNOT_IMPERSONATE_SUPER_ADMIN',
+          message: 'Tidak dapat impersonate sesama Super Admin',
+        },
+      });
+    }
+
+    if (!target.isActive) {
+      throw new BadRequestException({
+        success: false,
+        error: {
+          code: 'USER_NOT_ACTIVE',
+          message: 'User ini belum aktif',
+        },
+      });
+    }
+
+    const payload = {
+      sub: target.id,
+      email: target.email,
+      role: target.role,
+      clinicId: target.clinicId,
+      practitionerId: target.practitionerId,
+    };
+
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
+
+    return {
+      success: true,
+      data: {
+        accessToken,
+        user: {
+          id: target.id,
+          email: target.email,
+          name: target.name,
+          role: target.role,
+          clinicId: target.clinicId,
+          practitionerId: target.practitionerId,
+          isActive: target.isActive,
+        },
+      },
+    };
+  }
+
+  /**
    * Get current user profile
    */
   async getMe(userId: number) {

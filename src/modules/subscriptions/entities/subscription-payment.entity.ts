@@ -50,4 +50,7 @@ export class SubscriptionPayment extends BaseEntity {
 
   @Column('text', { nullable: true })
   notes: string | null;
+
+  @Column({ name: 'proof_url', type: 'varchar', length: 500, nullable: true })
+  proofUrl: string | null;
 }

@@ -18,6 +18,7 @@ import {
   SubscriptionPaymentQueryDto,
 } from './dto/subscription-payment.dto';
 import { PaginatedResult, paginate } from '../../common/dto/pagination.dto';
+import { proofFileToUrl } from './upload/payment-proof.storage';
 
 @Injectable()
 export class SubscriptionPaymentsService {
@@ -34,6 +35,7 @@ export class SubscriptionPaymentsService {
     clinicId: number,
     dto: CreateSubscriptionPaymentDto,
     createdBy: number,
+    proof?: Express.Multer.File,
   ): Promise<SubscriptionPayment> {
     await this.subscriptionPlansService.findOne(dto.planId);
     const payment = this.paymentRepository.create({
@@ -42,6 +44,7 @@ export class SubscriptionPaymentsService {
       amount: dto.amount,
       status: SubscriptionPaymentStatus.PENDING,
       notes: dto.notes ?? null,
+      proofUrl: proofFileToUrl(proof),
       createdBy,
     });
     return this.paymentRepository.save(payment);

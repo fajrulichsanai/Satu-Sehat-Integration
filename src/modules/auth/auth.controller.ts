@@ -1,4 +1,14 @@
-import { Controller, Post, Get, Body, Req, UseGuards, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Req,
+  UseGuards,
+  Query,
+  Param,
+  ParseIntPipe,
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -16,10 +26,16 @@ import {
   ResetPasswordDto,
 } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
+import { Roles } from './decorators/roles.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
+import { UserRole } from '../../enums';
 import { AuditLogService } from '../audit-log/audit-log.service';
-import { AuditActionType, AuditStatus } from '../audit-log/entities/audit-log.entity';
+import {
+  AuditActionType,
+  AuditStatus,
+} from '../audit-log/entities/audit-log.entity';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -162,5 +178,45 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Invalid or expired token' })
   async resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto.token!, dto.password!);
+  }
+
+  @Post('impersonate/:userId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary:
+      'Super Admin: issue a short-lived token to act as another user, for support/debugging (audited)',
+  })
+  @ApiResponse({ status: 200, description: 'Impersonation token issued' })
+  async impersonate(
+    @Param('userId', ParseIntPipe) userId: number,
+    @CurrentUser() admin: any,
+    @Req() req: any,
+  ) {
+    const result = await this.authService.impersonate(userId);
+    const target = result?.data?.user;
+    void this.auditLogService.record({
+      clinicId: target?.clinicId ?? null,
+      actorId: admin.userId,
+      actorName: admin.name ?? admin.email ?? 'Super Admin',
+      actorRole: admin.role,
+      actionType: AuditActionType.LOGIN,
+      entityType: 'Impersonation',
+      entityId: target?.id ?? null,
+      entityLabel: target ? `${target.name} (${target.email})` : null,
+      afterValue: target
+        ? {
+            impersonatedUserId: target.id,
+            impersonatedUserEmail: target.email,
+            impersonatedUserRole: target.role,
+            impersonatedClinicId: target.clinicId,
+          }
+        : null,
+      status: AuditStatus.SUCCESS,
+      ipAddress: req.ip,
+      userAgent: req.headers?.['user-agent'],
+    });
+    return result;
   }
 }

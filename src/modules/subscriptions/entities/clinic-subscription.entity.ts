@@ -48,4 +48,12 @@ export class ClinicSubscription extends BaseEntity {
 
   @Column('text', { nullable: true })
   notes: string | null;
+
+  // Dedup flags so the daily expiry-warning cron sends each reminder once,
+  // even though it re-evaluates every ACTIVE row every day.
+  @Column({ name: 'notified_h7_at', type: 'datetime', nullable: true })
+  notifiedH7At: Date | null;
+
+  @Column({ name: 'notified_h1_at', type: 'datetime', nullable: true })
+  notifiedH1At: Date | null;
 }

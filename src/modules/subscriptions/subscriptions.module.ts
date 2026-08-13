@@ -4,10 +4,12 @@ import { SubscriptionPlan } from './entities/subscription-plan.entity';
 import { ClinicSubscription } from './entities/clinic-subscription.entity';
 import { SubscriptionPayment } from './entities/subscription-payment.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
+import { User } from '../users/entities/user.entity';
 import { SubscriptionPlansService } from './subscription-plans.service';
 import { ClinicSubscriptionsService } from './clinic-subscriptions.service';
 import { SubscriptionPaymentsService } from './subscription-payments.service';
 import { SuperAdminReportsService } from './super-admin-reports.service';
+import { SubscriptionNotificationsService } from './subscription-notifications.service';
 import { SubscriptionPlansController } from './subscription-plans.controller';
 import { ClinicSubscriptionsController } from './clinic-subscriptions.controller';
 import { SubscriptionPaymentsController } from './subscription-payments.controller';
@@ -23,6 +25,7 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
       ClinicSubscription,
       SubscriptionPayment,
       Clinic,
+      User,
     ]),
     AuditLogModule,
   ],
@@ -37,6 +40,7 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
     ClinicSubscriptionsService,
     SubscriptionPaymentsService,
     SuperAdminReportsService,
+    SubscriptionNotificationsService,
     SubscriptionGuard,
     SubscriptionExpiryCron,
   ],
