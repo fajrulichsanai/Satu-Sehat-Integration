@@ -1,7 +1,11 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { AuditLog, AuditActionType, AuditStatus } from './entities/audit-log.entity';
+import {
+  AuditLog,
+  AuditActionType,
+  AuditStatus,
+} from './entities/audit-log.entity';
 import { AuditLogQueryDto } from './dto/audit-log-query.dto';
 import { PaginatedResult, paginate } from '../../common/dto/pagination.dto';
 
@@ -44,7 +48,10 @@ export class AuditLogService {
         actorRole: input.actorRole,
         actionType: input.actionType,
         entityType: input.entityType,
-        entityId: input.entityId !== undefined && input.entityId !== null ? String(input.entityId) : null,
+        entityId:
+          input.entityId !== undefined && input.entityId !== null
+            ? String(input.entityId)
+            : null,
         entityLabel: input.entityLabel ?? null,
         beforeValue: input.beforeValue ?? null,
         afterValue: input.afterValue ?? null,
@@ -55,7 +62,10 @@ export class AuditLogService {
       });
       await this.auditLogRepository.save(entry);
     } catch (err) {
-      this.logger.error(`Gagal mencatat audit log: ${(err as Error).message}`, (err as Error).stack);
+      this.logger.error(
+        `Gagal mencatat audit log: ${(err as Error).message}`,
+        (err as Error).stack,
+      );
     }
   }
 
@@ -64,8 +74,14 @@ export class AuditLogService {
 
     // SUPER_ADMIN carries clinicId = null and sees every clinic; everyone else
     // is hard-scoped to their own clinic — this is the tenant isolation boundary.
+    // A SUPER_ADMIN may still narrow to one clinic via query.clinicId; that filter
+    // is ignored for tenant-scoped callers since their clinicId already wins.
     if (clinicId !== null) {
       qb.andWhere('a.clinicId = :clinicId', { clinicId });
+    } else if (query.clinicId) {
+      qb.andWhere('a.clinicId = :queryClinicId', {
+        queryClinicId: query.clinicId,
+      });
     }
 
     if (query.dateFrom) {
@@ -78,10 +94,14 @@ export class AuditLogService {
       qb.andWhere('a.actorId = :actorId', { actorId: query.actorId });
     }
     if (query.actionType) {
-      qb.andWhere('a.actionType = :actionType', { actionType: query.actionType });
+      qb.andWhere('a.actionType = :actionType', {
+        actionType: query.actionType,
+      });
     }
     if (query.entityType) {
-      qb.andWhere('a.entityType = :entityType', { entityType: query.entityType });
+      qb.andWhere('a.entityType = :entityType', {
+        entityType: query.entityType,
+      });
     }
     if (query.search) {
       qb.andWhere('(a.actorName LIKE :search OR a.entityLabel LIKE :search)', {
@@ -93,13 +113,18 @@ export class AuditLogService {
     return qb;
   }
 
-  async findAll(clinicId: number | null, query: AuditLogQueryDto): Promise<PaginatedResult<AuditLog>> {
+  async findAll(
+    clinicId: number | null,
+    query: AuditLogQueryDto,
+  ): Promise<PaginatedResult<AuditLog>> {
     const qb = this.buildQuery(clinicId, query);
     return paginate(qb, query);
   }
 
   async findOne(id: number, clinicId: number | null): Promise<AuditLog> {
-    const qb = this.auditLogRepository.createQueryBuilder('a').where('a.id = :id', { id });
+    const qb = this.auditLogRepository
+      .createQueryBuilder('a')
+      .where('a.id = :id', { id });
     if (clinicId !== null) {
       qb.andWhere('a.clinicId = :clinicId', { clinicId });
     }
@@ -113,7 +138,10 @@ export class AuditLogService {
     return entry;
   }
 
-  async exportCsv(clinicId: number | null, query: AuditLogQueryDto): Promise<string> {
+  async exportCsv(
+    clinicId: number | null,
+    query: AuditLogQueryDto,
+  ): Promise<string> {
     const qb = this.buildQuery(clinicId, query).take(10000);
     const rows = await qb.getMany();
 
@@ -122,7 +150,16 @@ export class AuditLogService {
       return `"${s.replace(/"/g, '""')}"`;
     };
 
-    const header = ['Timestamp', 'Actor', 'Role', 'Action', 'Entity Type', 'Entity', 'Status', 'IP Address'];
+    const header = [
+      'Timestamp',
+      'Actor',
+      'Role',
+      'Action',
+      'Entity Type',
+      'Entity',
+      'Status',
+      'IP Address',
+    ];
     const lines = [header.map(escape).join(',')];
     for (const row of rows) {
       lines.push(

@@ -5,12 +5,16 @@ import { PaginationDto } from '../../../common/dto/pagination.dto';
 import { AuditActionType } from '../entities/audit-log.entity';
 
 export class AuditLogQueryDto extends PaginationDto {
-  @ApiPropertyOptional({ description: 'ISO date, inclusive lower bound on createdAt' })
+  @ApiPropertyOptional({
+    description: 'ISO date, inclusive lower bound on createdAt',
+  })
   @IsOptional()
   @IsString()
   dateFrom?: string;
 
-  @ApiPropertyOptional({ description: 'ISO date, inclusive upper bound on createdAt' })
+  @ApiPropertyOptional({
+    description: 'ISO date, inclusive upper bound on createdAt',
+  })
   @IsOptional()
   @IsString()
   dateTo?: string;
@@ -35,4 +39,13 @@ export class AuditLogQueryDto extends PaginationDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Narrow to one clinic. Only takes effect for SUPER_ADMIN callers (who otherwise see every clinic).',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  clinicId?: number;
 }

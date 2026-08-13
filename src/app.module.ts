@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -28,7 +29,9 @@ import { EncounterSoapNotesModule } from './modules/encounter-soap-notes/encount
 import { TreatmentPlansModule } from './modules/treatment-plans/treatment-plans.module';
 import { AuditLogModule } from './modules/audit-log/audit-log.module';
 import { GudangModule } from './modules/gudang/gudang.module';
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
+import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.guard';
 
 @Module({
   imports: [
@@ -37,6 +40,7 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
       envFilePath: '.env',
     }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
@@ -88,6 +92,7 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     TreatmentPlansModule,
     AuditLogModule,
     GudangModule,
+    SubscriptionsModule,
   ],
   controllers: [AppController],
   providers: [
@@ -96,6 +101,12 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    // Global subscription-expiry gate on every mutating request — see
+    // SubscriptionGuard for the exemptions (SUPER_ADMIN, @SkipSubscriptionCheck routes).
+    {
+      provide: APP_GUARD,
+      useExisting: SubscriptionGuard,
     },
   ],
 })
