@@ -20,6 +20,9 @@ export class EncounterSoapNote extends BaseEntity {
   @Column({ type: 'text', nullable: true })
   plan: string;
 
+  @Column({ type: 'mediumtext', nullable: true })
+  signature: string;
+
   @ManyToOne(() => Encounter, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'encounter_id' })
   encounter: Encounter;

@@ -21,4 +21,9 @@ export class UpsertEncounterSoapNoteDto {
   @IsOptional()
   @IsString()
   plan?: string;
+
+  @ApiPropertyOptional({ description: 'Tanda tangan dokter (base64 PNG data URL)' })
+  @IsOptional()
+  @IsString()
+  signature?: string;
 }

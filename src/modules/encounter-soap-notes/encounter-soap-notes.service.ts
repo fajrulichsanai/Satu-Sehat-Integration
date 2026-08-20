@@ -41,6 +41,7 @@ export class EncounterSoapNotesService {
         objective: dto.objective,
         assessment: dto.assessment,
         plan: dto.plan,
+        signature: dto.signature,
         createdBy: userId,
       });
     } else {
@@ -49,6 +50,7 @@ export class EncounterSoapNotesService {
         objective: dto.objective ?? note.objective,
         assessment: dto.assessment ?? note.assessment,
         plan: dto.plan ?? note.plan,
+        signature: dto.signature ?? note.signature,
         updatedBy: userId,
       });
     }
