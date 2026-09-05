@@ -5,6 +5,7 @@ import { Billing } from '../../billing/entities/billing.entity';
 export enum PaymentMethod {
   CASH = 'cash',
   TRANSFER = 'transfer',
+  QRIS = 'qris',
   INSURANCE = 'insurance',
   BPJS = 'bpjs',
 }
