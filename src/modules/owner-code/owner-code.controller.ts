@@ -19,9 +19,9 @@ export class OwnerCodeController {
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER)
+  @Roles(UserRole.OWNER, UserRole.SUPER_ADMIN)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Create new owner code (Owner only)' })
+  @ApiOperation({ summary: 'Create new owner code (Owner/Super Admin only)' })
   @ApiResponse({
     status: 201,
     description: 'Owner code created successfully',
@@ -34,9 +34,9 @@ export class OwnerCodeController {
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER)
+  @Roles(UserRole.OWNER, UserRole.SUPER_ADMIN)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get all owner codes (Owner only)' })
+  @ApiOperation({ summary: 'Get all owner codes (Owner/Super Admin only)' })
   @ApiResponse({
     status: 200,
     description: 'Owner codes list',
