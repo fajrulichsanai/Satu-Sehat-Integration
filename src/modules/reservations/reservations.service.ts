@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Reservation } from './entities/reservation.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
+import { Patient } from '../patients/entities/patient.entity';
 import { ReservationSource, ReservationStatus } from '../../enums';
 import {
   CreateReservationDto,
@@ -43,6 +44,8 @@ export class ReservationsService {
     private readonly reservationRepository: Repository<Reservation>,
     @InjectRepository(Clinic)
     private readonly clinicRepository: Repository<Clinic>,
+    @InjectRepository(Patient)
+    private readonly patientRepository: Repository<Patient>,
   ) {}
 
   async getBookedSlots(
@@ -135,11 +138,31 @@ export class ReservationsService {
       `[CREATE] Membuat reservasi baru | clinicId=${clinicId}, patientName=${dto.patientName}, date=${dto.reservationDate}, source=${source}`,
     );
 
+    let patientPhone = dto.patientPhone?.trim();
+
+    if (dto.patientId) {
+      const patient = await this.patientRepository.findOne({
+        where: { id: dto.patientId, clinicId },
+      });
+      if (!patient) {
+        throw new NotFoundException(
+          `Pasien dengan ID ${dto.patientId} tidak ditemukan`,
+        );
+      }
+      if (!patientPhone) {
+        patientPhone = patient.phone;
+      }
+    }
+
+    if (!patientPhone) {
+      throw new BadRequestException('Nomor telepon wajib diisi');
+    }
+
     const reservation = this.reservationRepository.create({
       clinicId,
       patientId: dto.patientId,
       patientName: dto.patientName,
-      patientPhone: dto.patientPhone,
+      patientPhone,
       patientNik: dto.patientNik,
       practitionerId: dto.practitionerId,
       serviceType: dto.serviceType,
