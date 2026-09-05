@@ -19,6 +19,18 @@ import {
   UpdateEncounterStatusDto,
 } from './dto/encounter.dto';
 
+/**
+ * The DB connection timezone is fixed at +07:00 (WIB, see data-source
+ * config), so "today" for a date-only filter must be computed on that same
+ * offset. `new Date().toISOString().slice(0, 10)` is UTC and drifts a whole
+ * day off between 00:00-06:59 WIB — an encounter created at 01:00 WIB would
+ * be dated "today" in the DB but excluded from a list defaulting to the
+ * UTC date, which is still "yesterday" at that hour.
+ */
+function todayInClinicTimezone(): string {
+  return new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 @Injectable()
 export class EncountersService {
   private readonly logger = new Logger(EncountersService.name);
@@ -54,7 +66,7 @@ export class EncountersService {
       });
     }
 
-    const date = query.date || new Date().toISOString().split('T')[0];
+    const date = query.date || todayInClinicTimezone();
     qb.andWhere('DATE(e.arrivedTime) = :date', { date });
 
     if (query.status) {
