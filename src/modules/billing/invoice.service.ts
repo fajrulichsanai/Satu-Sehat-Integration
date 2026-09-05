@@ -1,8 +1,35 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as path from 'path';
 import { Billing } from './entities/billing.entity';
-import * as PdfPrinter from 'pdfmake';
+// pdfmake ships no type declarations; `import PdfMake = require(...)` is the
+// plain-CommonJS-safe way to pull in its default-exported singleton under
+// `module: nodenext` without esModuleInterop guessing wrong.
+import PdfMake = require('pdfmake');
+
+// pdfmake 0.3.x's server build (js/index.js) exports one process-wide
+// PdfMake instance whose fonts/access policies are configured via setters
+// rather than passed to a constructor — so this must run exactly once.
+const ROBOTO_DIR = path.join(
+  require.resolve('pdfmake/package.json'),
+  '..',
+  'fonts',
+  'Roboto',
+);
+PdfMake.setFonts({
+  Roboto: {
+    normal: path.join(ROBOTO_DIR, 'Roboto-Regular.ttf'),
+    bold: path.join(ROBOTO_DIR, 'Roboto-Medium.ttf'),
+    italics: path.join(ROBOTO_DIR, 'Roboto-Italic.ttf'),
+    bolditalics: path.join(ROBOTO_DIR, 'Roboto-MediumItalic.ttf'),
+  },
+});
+// We only ever reference the bundled Roboto files above (no user-supplied
+// paths/URLs reach pdfmake), so it's safe to allow local access and deny
+// remote URLs outright.
+PdfMake.setLocalAccessPolicy(() => true);
+PdfMake.setUrlAccessPolicy(() => false);
 
 @Injectable()
 export class InvoiceService {
@@ -32,17 +59,6 @@ export class InvoiceService {
         `Billing dengan ID ${billingId} tidak ditemukan`,
       );
     }
-
-    const fonts = {
-      Roboto: {
-        normal: Buffer.from(''),
-        bold: Buffer.from(''),
-        italics: Buffer.from(''),
-        bolditalics: Buffer.from(''),
-      },
-    };
-
-    const printer = new PdfPrinter(fonts);
 
     const itemRows = (billing.items || []).map((item) => [
       { text: item.name, style: 'tableCell' },
@@ -154,13 +170,6 @@ export class InvoiceService {
       },
     };
 
-    return new Promise((resolve, reject) => {
-      const pdfDoc = printer.createPdfKitDocument(docDefinition);
-      const chunks: Buffer[] = [];
-      pdfDoc.on('data', (chunk: Buffer) => chunks.push(chunk));
-      pdfDoc.on('end', () => resolve(Buffer.concat(chunks)));
-      pdfDoc.on('error', reject);
-      pdfDoc.end();
-    });
+    return PdfMake.createPdf(docDefinition).getBuffer();
   }
 }
