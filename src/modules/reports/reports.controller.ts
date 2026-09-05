@@ -30,7 +30,12 @@ export class ReportsController {
     @Query() query: VisitReportQueryDto,
     @CurrentUser() user: any,
   ) {
-    return this.reportsService.getVisitReport(clinicId, query, user);
+    const result = await this.reportsService.getVisitReport(
+      clinicId,
+      query,
+      user,
+    );
+    return { ...result.data, meta: result.meta };
   }
 
   @Get('financial')
@@ -41,7 +46,11 @@ export class ReportsController {
     @ClinicId() clinicId: number,
     @Query() query: FinancialReportQueryDto,
   ) {
-    return this.reportsService.getFinancialReport(clinicId, query);
+    const result = await this.reportsService.getFinancialReport(
+      clinicId,
+      query,
+    );
+    return { success: true, data: result.data };
   }
 
   @Get('financial/visit-detail')
@@ -52,7 +61,11 @@ export class ReportsController {
     @ClinicId() clinicId: number,
     @Query() query: FinancialVisitDetailQueryDto,
   ) {
-    return this.reportsService.getFinancialVisitDetail(clinicId, query);
+    const result = await this.reportsService.getFinancialVisitDetail(
+      clinicId,
+      query,
+    );
+    return result.data;
   }
 
   @Get('satusehat-sync')
@@ -63,7 +76,11 @@ export class ReportsController {
     @ClinicId() clinicId: number,
     @Query() query: SatusehatSyncReportQueryDto,
   ) {
-    return this.reportsService.getSatusehatSyncReport(clinicId, query);
+    const result = await this.reportsService.getSatusehatSyncReport(
+      clinicId,
+      query,
+    );
+    return { success: true, data: result.data };
   }
 
   @Get('doctor-fee-share')
