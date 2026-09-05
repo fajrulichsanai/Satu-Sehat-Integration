@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - development
+      - dev-daffa
 
 jobs:
   deploy:
@@ -24,10 +25,10 @@ jobs:
             echo "📁 Masuk ke direktori project..."
             cd ~/staging-apex-record/backend/Satu-Sehat-Integration
 
-            echo "⬇️  Pull kode terbaru..."
-            git fetch origin development
-            git checkout development
-            git reset --hard origin/development
+            echo "⬇️  Pull kode terbaru dari branch ${{ github.ref_name }}..."
+            git fetch origin ${{ github.ref_name }}
+            git checkout ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
 
             echo "📦 Install dependencies..."
             npm install
