@@ -91,6 +91,9 @@ export class ReservationsService {
         dateFrom: query.dateFrom,
       });
     }
+    if (query.dateTo) {
+      qb.andWhere('r.reservationDate <= :dateTo', { dateTo: query.dateTo });
+    }
     if (query.status) {
       qb.andWhere('r.status = :status', { status: query.status });
     }

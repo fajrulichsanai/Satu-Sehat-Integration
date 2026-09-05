@@ -117,6 +117,14 @@ export class ReservationQueryDto extends PaginationDto {
   @IsDateString()
   dateFrom?: string;
 
+  @ApiPropertyOptional({
+    example: '2026-06-18',
+    description: 'Filter reservasi sampai tanggal ini (inklusif)',
+  })
+  @IsOptional()
+  @IsDateString()
+  dateTo?: string;
+
   @ApiPropertyOptional({ enum: ReservationStatus })
   @IsOptional()
   @IsEnum(ReservationStatus)
