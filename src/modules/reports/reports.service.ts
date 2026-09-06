@@ -593,6 +593,37 @@ export class ReportsService {
         ? parseFloat(((labaBersih / totalPaid) * 100).toFixed(1))
         : 0;
 
+    // ----- Perbandingan periode sebelumnya (durasi sama, langsung sebelum dateFrom) -----
+    const rangeDays =
+      Math.round(
+        (new Date(`${query.dateTo}T00:00:00`).getTime() -
+          new Date(`${query.dateFrom}T00:00:00`).getTime()) /
+          86400000,
+      ) + 1;
+    const prevDateTo = new Date(`${query.dateFrom}T00:00:00`);
+    prevDateTo.setDate(prevDateTo.getDate() - 1);
+    const prevDateFrom = new Date(prevDateTo);
+    prevDateFrom.setDate(prevDateFrom.getDate() - (rangeDays - 1));
+    const toIso = (d: Date) => d.toISOString().slice(0, 10);
+
+    const [prevSummaryRow] = await this.billingRepo.query(
+      `SELECT SUM(paid_amount) AS totalPaid
+       FROM billings
+       WHERE clinic_id = ? AND DATE(created_at) BETWEEN ? AND ?
+         AND status != 'cancelled'`,
+      [clinicId, toIso(prevDateFrom), toIso(prevDateTo)],
+    );
+    const previousPendapatan = parseFloat(prevSummaryRow?.totalPaid || 0);
+    const changePercent =
+      previousPendapatan > 0
+        ? parseFloat(
+            (
+              ((totalPaid - previousPendapatan) / previousPendapatan) *
+              100
+            ).toFixed(1),
+          )
+        : null;
+
     return {
       data: {
         summary: {
@@ -604,6 +635,10 @@ export class ReportsService {
               ? parseFloat(((totalPaid / totalBilling) * 100).toFixed(1))
               : 0,
           totalRefunded: parseFloat(summaryRow.totalRefunded || 0),
+        },
+        comparison: {
+          previousPendapatan,
+          changePercent,
         },
         byDay: byDay.map((r: any) => ({
           date: r.date,
