@@ -658,7 +658,417 @@ export class ReportsService {
           marginPersen,
         },
         tindakanTerlaris,
+        businessMetrics: {
+          ltv: await this.computeLtv(clinicId),
+          arpv: await this.computeArpv(clinicId, query.dateFrom, query.dateTo),
+          pareto: await this.computeParetoConcentration(
+            clinicId,
+            query.dateFrom,
+            query.dateTo,
+          ),
+          dso: await this.computeDso(clinicId),
+          retention: await this.computeRetentionRate(
+            clinicId,
+            query.dateFrom,
+            query.dateTo,
+          ),
+          categoryProfitability: await this.computeCategoryProfitability(
+            clinicId,
+            query.dateFrom,
+            query.dateTo,
+          ),
+        },
       },
+    };
+  }
+
+  // ================= Metrik bisnis & keuangan lanjutan =================
+  // Dipakai baik oleh laporan keuangan interaktif (getFinancialReport) maupun
+  // laporan investor (getInvestorReportData) supaya definisinya konsisten.
+
+  /**
+   * Customer Lifetime Value — rata-rata total pembayaran per pasien
+   * SEPANJANG riwayat klinik (all-time), bukan cuma periode yang dipilih,
+   * karena LTV secara definisi adalah ukuran seumur hidup pelanggan.
+   */
+  private async computeLtv(clinicId: number) {
+    const [row] = await this.billingRepo.query(
+      `SELECT AVG(total) AS avgLtv, AVG(visits) AS avgVisits, COUNT(*) AS patientCount
+       FROM (
+         SELECT patient_id, SUM(paid_amount) AS total, COUNT(*) AS visits
+         FROM billings
+         WHERE clinic_id = ? AND status != 'cancelled' AND paid_amount > 0
+         GROUP BY patient_id
+       ) x`,
+      [clinicId],
+    );
+    return {
+      averageLtv: parseFloat(row?.avgLtv || 0),
+      averageVisitsPerPatient: row?.avgVisits
+        ? parseFloat(parseFloat(row.avgVisits).toFixed(1))
+        : 0,
+      patientCount: parseInt(row?.patientCount || 0, 10),
+    };
+  }
+
+  /** Average Revenue Per Visit — rata-rata pendapatan per transaksi pada periode. */
+  private async computeArpv(
+    clinicId: number,
+    dateFrom: string,
+    dateTo: string,
+  ) {
+    const [row] = await this.billingRepo.query(
+      `SELECT SUM(paid_amount) AS totalPaid, COUNT(*) AS totalBillings
+       FROM billings
+       WHERE clinic_id = ? AND DATE(created_at) BETWEEN ? AND ? AND status != 'cancelled'`,
+      [clinicId, dateFrom, dateTo],
+    );
+    const totalPaid = parseFloat(row?.totalPaid || 0);
+    const totalBillings = parseInt(row?.totalBillings || 0, 10);
+    return totalBillings > 0
+      ? parseFloat((totalPaid / totalBillings).toFixed(0))
+      : 0;
+  }
+
+  /**
+   * Konsentrasi pendapatan ala Pareto — berapa persen pendapatan periode ini
+   * berasal dari 20% pasien dengan pembayaran terbesar. Angka tinggi berarti
+   * pendapatan klinik bergantung pada segelintir pasien (risiko konsentrasi).
+   */
+  private async computeParetoConcentration(
+    clinicId: number,
+    dateFrom: string,
+    dateTo: string,
+  ) {
+    const rows = await this.billingRepo.query(
+      `SELECT patient_id, SUM(paid_amount) AS total
+       FROM billings
+       WHERE clinic_id = ? AND DATE(created_at) BETWEEN ? AND ? AND status != 'cancelled'
+       GROUP BY patient_id
+       HAVING total > 0
+       ORDER BY total DESC`,
+      [clinicId, dateFrom, dateTo],
+    );
+    const totals = (rows as any[]).map((r) => parseFloat(r.total));
+    const grandTotal = totals.reduce((sum, v) => sum + v, 0);
+    if (totals.length === 0 || grandTotal === 0) {
+      return { top20PercentPatientShare: 0, patientCount: 0 };
+    }
+    const top20Count = Math.max(1, Math.ceil(totals.length * 0.2));
+    const top20Sum = totals.slice(0, top20Count).reduce((sum, v) => sum + v, 0);
+    return {
+      top20PercentPatientShare: parseFloat(
+        ((top20Sum / grandTotal) * 100).toFixed(1),
+      ),
+      patientCount: totals.length,
+    };
+  }
+
+  /**
+   * Days Sales Outstanding (proxy) — rata-rata umur (hari) tagihan yang
+   * masih outstanding SAAT INI (snapshot, bukan terikat periode terpilih).
+   */
+  private async computeDso(clinicId: number) {
+    const [row] = await this.billingRepo.query(
+      `SELECT AVG(DATEDIFF(CURDATE(), created_at)) AS avgAgeDays, COUNT(*) AS count
+       FROM billings
+       WHERE clinic_id = ? AND status IN ('unpaid', 'partial') AND outstanding_amount > 0`,
+      [clinicId],
+    );
+    return {
+      averageDays: row?.avgAgeDays ? Math.round(parseFloat(row.avgAgeDays)) : 0,
+      outstandingCount: parseInt(row?.count || 0, 10),
+    };
+  }
+
+  /**
+   * Retention — dari pasien yang membayar pada periode SEBELUMNYA (durasi
+   * sama, langsung sebelum dateFrom), berapa persen kembali membayar lagi
+   * pada periode ini.
+   */
+  private async computeRetentionRate(
+    clinicId: number,
+    dateFrom: string,
+    dateTo: string,
+  ) {
+    const rangeDays =
+      Math.round(
+        (new Date(`${dateTo}T00:00:00`).getTime() -
+          new Date(`${dateFrom}T00:00:00`).getTime()) /
+          86400000,
+      ) + 1;
+    const prevDateTo = new Date(`${dateFrom}T00:00:00`);
+    prevDateTo.setDate(prevDateTo.getDate() - 1);
+    const prevDateFrom = new Date(prevDateTo);
+    prevDateFrom.setDate(prevDateFrom.getDate() - (rangeDays - 1));
+    const toIso = (d: Date) => d.toISOString().slice(0, 10);
+
+    const [row] = await this.billingRepo.query(
+      `SELECT
+         COUNT(DISTINCT prev.patient_id) AS prevPatients,
+         COUNT(DISTINCT CASE WHEN cur.patient_id IS NOT NULL THEN prev.patient_id END) AS returningPatients
+       FROM (
+         SELECT DISTINCT patient_id FROM billings
+         WHERE clinic_id = ? AND DATE(created_at) BETWEEN ? AND ? AND status != 'cancelled' AND paid_amount > 0
+       ) prev
+       LEFT JOIN (
+         SELECT DISTINCT patient_id FROM billings
+         WHERE clinic_id = ? AND DATE(created_at) BETWEEN ? AND ? AND status != 'cancelled' AND paid_amount > 0
+       ) cur ON cur.patient_id = prev.patient_id`,
+      [
+        clinicId,
+        toIso(prevDateFrom),
+        toIso(prevDateTo),
+        clinicId,
+        dateFrom,
+        dateTo,
+      ],
+    );
+    const prevPatients = parseInt(row?.prevPatients || 0, 10);
+    const returningPatients = parseInt(row?.returningPatients || 0, 10);
+    return {
+      retentionRatePercent:
+        prevPatients > 0
+          ? parseFloat(((returningPatients / prevPatients) * 100).toFixed(1))
+          : null,
+      previousPeriodPatients: prevPatients,
+      returningPatients,
+    };
+  }
+
+  /**
+   * Profitabilitas per kategori tindakan pada periode — melengkapi
+   * tindakanTerlaris (yang berbasis frekuensi) dengan sudut pandang margin.
+   */
+  private async computeCategoryProfitability(
+    clinicId: number,
+    dateFrom: string,
+    dateTo: string,
+  ) {
+    const rows = await this.billingItemRepo.query(
+      `SELECT
+         t.kategori AS kategori,
+         SUM(bi.quantity) AS frekuensi,
+         SUM(bi.subtotal) AS pendapatan,
+         SUM(t.harga_pokok * bi.quantity) AS modal
+       FROM billing_items bi
+       JOIN billings b ON bi.billing_id = b.id
+       JOIN tarifs t ON bi.tarif_id = t.id
+       WHERE b.clinic_id = ? AND DATE(b.created_at) BETWEEN ? AND ? AND b.status != 'cancelled'
+       GROUP BY t.kategori
+       ORDER BY pendapatan DESC`,
+      [clinicId, dateFrom, dateTo],
+    );
+    return (rows as any[]).map((r) => {
+      const pendapatan = parseFloat(r.pendapatan || 0);
+      const modal = parseFloat(r.modal || 0);
+      const labaBersih = pendapatan - modal;
+      return {
+        kategori: r.kategori || 'Lainnya',
+        frekuensi: parseInt(r.frekuensi, 10),
+        pendapatan,
+        modal,
+        labaBersih,
+        marginPersen:
+          pendapatan > 0
+            ? parseFloat(((labaBersih / pendapatan) * 100).toFixed(1))
+            : 0,
+      };
+    });
+  }
+
+  private getTrailing12MonthKeys(): string[] {
+    const keys: string[] = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      keys.push(
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      );
+    }
+    return keys;
+  }
+
+  /**
+   * Data untuk Laporan Investor: tren 12 bulan terakhir + unit economics,
+   * dipakai untuk render PDF (lihat InvestorReportPdfService). Selalu
+   * trailing 12 bulan dari bulan berjalan — tidak terikat filter tanggal
+   * halaman laporan keuangan, karena investor melihat tren, bukan snapshot.
+   */
+  async getInvestorReportData(clinicId: number) {
+    const monthKeys = this.getTrailing12MonthKeys();
+    const startDate = `${monthKeys[0]}-01`;
+    const dateTo = new Date().toISOString().slice(0, 10);
+
+    const revenueRows = await this.billingRepo.query(
+      `SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, SUM(paid_amount) AS revenue
+       FROM billings
+       WHERE clinic_id = ? AND status != 'cancelled' AND created_at >= ?
+       GROUP BY month`,
+      [clinicId, startDate],
+    );
+    const modalRows = await this.billingItemRepo.query(
+      `SELECT DATE_FORMAT(b.created_at, '%Y-%m') AS month, SUM(t.harga_pokok * bi.quantity) AS modal
+       FROM billing_items bi
+       JOIN billings b ON bi.billing_id = b.id
+       JOIN tarifs t ON bi.tarif_id = t.id
+       WHERE b.clinic_id = ? AND b.status != 'cancelled' AND b.created_at >= ?
+       GROUP BY month`,
+      [clinicId, startDate],
+    );
+    const expenseRows = await this.operationalRecordRepo.query(
+      `SELECT DATE_FORMAT(tanggal, '%Y-%m') AS month, SUM(nominal) AS expense
+       FROM operational_records
+       WHERE clinic_id = ? AND tanggal >= ?
+       GROUP BY month`,
+      [clinicId, startDate],
+    );
+    const visitRows = await this.encounterRepo.query(
+      `SELECT DATE_FORMAT(arrived_time, '%Y-%m') AS month, COUNT(*) AS visits
+       FROM encounters
+       WHERE clinic_id = ? AND arrived_time >= ?
+       GROUP BY month`,
+      [clinicId, startDate],
+    );
+    const newPatientRows = await this.encounterRepo.query(
+      `SELECT DATE_FORMAT(fv.firstDate, '%Y-%m') AS month, COUNT(*) AS newPatients
+       FROM (
+         SELECT patient_id, MIN(arrived_time) AS firstDate
+         FROM encounters WHERE clinic_id = ?
+         GROUP BY patient_id
+       ) fv
+       WHERE fv.firstDate >= ?
+       GROUP BY month`,
+      [clinicId, startDate],
+    );
+
+    const findMonth = (rows: any[], month: string, field: string): number => {
+      const found = rows.find((r) => r.month === month);
+      return found ? parseFloat(found[field] || 0) : 0;
+    };
+
+    const monthly = monthKeys.map((month) => {
+      const revenue = findMonth(revenueRows, month, 'revenue');
+      const modal = findMonth(modalRows, month, 'modal');
+      const expense = findMonth(expenseRows, month, 'expense');
+      const netProfit = revenue - modal - expense;
+      return {
+        month,
+        revenue,
+        modal,
+        expense,
+        netProfit,
+        marginPercent:
+          revenue > 0
+            ? parseFloat(((netProfit / revenue) * 100).toFixed(1))
+            : 0,
+        visits: Math.round(findMonth(visitRows, month, 'visits')),
+        newPatients: Math.round(
+          findMonth(newPatientRows, month, 'newPatients'),
+        ),
+      };
+    });
+
+    const totalRevenue12mo = monthly.reduce((sum, m) => sum + m.revenue, 0);
+    const totalNetProfit12mo = monthly.reduce((sum, m) => sum + m.netProfit, 0);
+    const totalVisits12mo = monthly.reduce((sum, m) => sum + m.visits, 0);
+    const totalNewPatients12mo = monthly.reduce(
+      (sum, m) => sum + m.newPatients,
+      0,
+    );
+    const avgMonthlyRevenue = totalRevenue12mo / 12;
+    const avgMarginPercent =
+      totalRevenue12mo > 0
+        ? parseFloat(((totalNetProfit12mo / totalRevenue12mo) * 100).toFixed(1))
+        : 0;
+
+    const last3 = monthly.slice(-3).reduce((sum, m) => sum + m.revenue, 0);
+    const prior3 = monthly.slice(-6, -3).reduce((sum, m) => sum + m.revenue, 0);
+    const recentGrowthPercent =
+      prior3 > 0
+        ? parseFloat((((last3 - prior3) / prior3) * 100).toFixed(1))
+        : null;
+
+    const [totalPatientsRow] = await this.encounterRepo.query(
+      `SELECT COUNT(DISTINCT patient_id) AS total FROM encounters WHERE clinic_id = ? AND arrived_time >= ?`,
+      [clinicId, startDate],
+    );
+
+    const midDate = `${monthKeys[6]}-01`;
+    const [halfYearRetentionRow] = await this.billingRepo.query(
+      `SELECT
+         COUNT(DISTINCT prev.patient_id) AS prevPatients,
+         COUNT(DISTINCT CASE WHEN cur.patient_id IS NOT NULL THEN prev.patient_id END) AS returningPatients
+       FROM (
+         SELECT DISTINCT patient_id FROM billings
+         WHERE clinic_id = ? AND status != 'cancelled' AND paid_amount > 0 AND created_at >= ? AND created_at < ?
+       ) prev
+       LEFT JOIN (
+         SELECT DISTINCT patient_id FROM billings
+         WHERE clinic_id = ? AND status != 'cancelled' AND paid_amount > 0 AND created_at >= ?
+       ) cur ON cur.patient_id = prev.patient_id`,
+      [clinicId, startDate, midDate, clinicId, midDate],
+    );
+    const prevHalfPatients = parseInt(
+      halfYearRetentionRow?.prevPatients || 0,
+      10,
+    );
+    const returningHalfPatients = parseInt(
+      halfYearRetentionRow?.returningPatients || 0,
+      10,
+    );
+
+    const byDoctorRevenue = await this.billingRepo.query(
+      `SELECT pr.id AS practitionerId, pr.name AS practitionerName, SUM(b.grand_total) AS revenue
+       FROM billings b
+       JOIN encounters e ON b.encounter_id = e.id
+       JOIN practitioners pr ON e.practitioner_id = pr.id
+       WHERE b.clinic_id = ? AND b.created_at >= ? AND b.status != 'cancelled'
+       GROUP BY pr.id, pr.name
+       ORDER BY revenue DESC`,
+      [clinicId, startDate],
+    );
+
+    const ltv = await this.computeLtv(clinicId);
+    const dso = await this.computeDso(clinicId);
+    const arpv = await this.computeArpv(clinicId, startDate, dateTo);
+    const categoryProfitability = await this.computeCategoryProfitability(
+      clinicId,
+      startDate,
+      dateTo,
+    );
+
+    return {
+      periodStart: monthKeys[0],
+      periodEnd: monthKeys[11],
+      generatedAt: new Date().toISOString(),
+      monthly,
+      summary: {
+        totalRevenue12mo,
+        totalNetProfit12mo,
+        avgMonthlyRevenue,
+        avgMarginPercent,
+        totalVisits12mo,
+        totalNewPatients12mo,
+        totalPatients12mo: parseInt(totalPatientsRow?.total || 0, 10),
+        recentGrowthPercent,
+      },
+      unitEconomics: {
+        ltv,
+        arpv,
+        dso,
+        halfYearRetentionPercent:
+          prevHalfPatients > 0
+            ? parseFloat(
+                ((returningHalfPatients / prevHalfPatients) * 100).toFixed(1),
+              )
+            : null,
+      },
+      categoryProfitability,
+      byDoctor: (byDoctorRevenue as any[]).map((r) => ({
+        practitionerName: r.practitionerName,
+        revenue: parseFloat(r.revenue || 0),
+      })),
     };
   }
 

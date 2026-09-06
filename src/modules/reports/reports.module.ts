@@ -7,8 +7,10 @@ import { SatusehatSyncLog } from '../satusehat/sync/entities/satusehat-sync-log.
 import { BillingItem } from '../billing-item/entities/billing-item.entity';
 import { DoctorFeeConfig } from '../doctor-fee/entities/doctor-fee-config.entity';
 import { OperationalRecord } from '../operational-records/entities/operational-record.entity';
+import { Clinic } from '../clinics/entities/clinic.entity';
 import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
+import { InvestorReportPdfService } from './investor-report-pdf.service';
 
 @Module({
   imports: [
@@ -20,9 +22,10 @@ import { ReportsService } from './reports.service';
       BillingItem,
       DoctorFeeConfig,
       OperationalRecord,
+      Clinic,
     ]),
   ],
   controllers: [ReportsController],
-  providers: [ReportsService],
+  providers: [ReportsService, InvestorReportPdfService],
 })
 export class ReportsModule {}

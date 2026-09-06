@@ -1,6 +1,16 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ReportsService } from './reports.service';
+import { InvestorReportPdfService } from './investor-report-pdf.service';
 import {
   DoctorFeeShareReportQueryDto,
   FinancialReportQueryDto,
@@ -21,7 +31,10 @@ import { UserRole } from '../../enums/user-role.enum';
 @UseGuards(ClinicContextGuard)
 @Controller('reports')
 export class ReportsController {
-  constructor(private readonly reportsService: ReportsService) {}
+  constructor(
+    private readonly reportsService: ReportsService,
+    private readonly investorReportPdfService: InvestorReportPdfService,
+  ) {}
 
   @Get('visits')
   @ApiOperation({ summary: 'Visit report (dokter sees own only)' })
@@ -53,10 +66,32 @@ export class ReportsController {
     return { success: true, data: result.data };
   }
 
+  @Get('investor/pdf')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.OWNER)
+  @ApiOperation({
+    summary:
+      'Download investor-grade financial & business report as PDF (owner only, trailing 12 months)',
+  })
+  async downloadInvestorReport(
+    @ClinicId() clinicId: number,
+    @Res() res: Response,
+  ) {
+    const pdfBuffer = await this.investorReportPdfService.generate(clinicId);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="laporan-investor-${clinicId}.pdf"`,
+    );
+    res.end(pdfBuffer);
+  }
+
   @Get('financial/visit-detail')
   @UseGuards(RolesGuard)
   @Roles(UserRole.OWNER)
-  @ApiOperation({ summary: 'Financial report - patient visit detail (owner only)' })
+  @ApiOperation({
+    summary: 'Financial report - patient visit detail (owner only)',
+  })
   async getFinancialVisitDetail(
     @ClinicId() clinicId: number,
     @Query() query: FinancialVisitDetailQueryDto,
