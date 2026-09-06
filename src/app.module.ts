@@ -26,6 +26,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { OperationalRecordsModule } from './modules/operational-records/operational-records.module';
 import { DoctorFeeModule } from './modules/doctor-fee/doctor-fee.module';
 import { EncounterSoapNotesModule } from './modules/encounter-soap-notes/encounter-soap-notes.module';
+import { PhysicalExaminationModule } from './modules/physical-examination/physical-examination.module';
 import { TreatmentPlansModule } from './modules/treatment-plans/treatment-plans.module';
 import { AuditLogModule } from './modules/audit-log/audit-log.module';
 import { GudangModule } from './modules/gudang/gudang.module';
@@ -89,6 +90,7 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     OperationalRecordsModule,
     DoctorFeeModule,
     EncounterSoapNotesModule,
+    PhysicalExaminationModule,
     TreatmentPlansModule,
     AuditLogModule,
     GudangModule,
