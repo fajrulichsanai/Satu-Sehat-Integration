@@ -31,6 +31,13 @@ export class SubscriptionPayment extends BaseEntity {
   @Column({ name: 'subscription_id', type: 'int', nullable: true })
   subscriptionId: number | null;
 
+  // Always 1 except for MULTI_KLINIK, where the owner picks how many clinics
+  // this single payment covers. Only the paying clinic's own subscription is
+  // extended here — the other (quantity - 1) clinics get provisioned
+  // manually by an ApexRecord super admin once the payment is confirmed.
+  @Column({ type: 'int', default: 1 })
+  quantity: number;
+
   @Column('decimal', { precision: 12, scale: 2 })
   amount: number;
 

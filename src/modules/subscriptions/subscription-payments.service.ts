@@ -12,6 +12,7 @@ import {
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { ClinicSubscriptionsService } from './clinic-subscriptions.service';
 import { SubscriptionPlansService } from './subscription-plans.service';
+import { SubscriptionPlanTier } from './entities/subscription-plan.entity';
 import {
   CreateSubscriptionPaymentDto,
   ReviewSubscriptionPaymentDto,
@@ -37,11 +38,19 @@ export class SubscriptionPaymentsService {
     createdBy: number,
     proof?: Express.Multer.File,
   ): Promise<SubscriptionPayment> {
-    await this.subscriptionPlansService.findOne(dto.planId);
+    const plan = await this.subscriptionPlansService.findOne(dto.planId);
+    // Quantity (clinic count) only makes sense for Multi Klinik — any value
+    // sent for another tier is ignored so the amount can't be manipulated.
+    const quantity =
+      plan.tier === SubscriptionPlanTier.MULTI_KLINIK
+        ? Math.max(1, dto.quantity ?? 1)
+        : 1;
+    const amount = Number(plan.price) * quantity + Number(plan.ownerFee ?? 0);
     const payment = this.paymentRepository.create({
       clinicId,
       planId: dto.planId,
-      amount: dto.amount,
+      quantity,
+      amount,
       status: SubscriptionPaymentStatus.PENDING,
       notes: dto.notes ?? null,
       proofUrl: proofFileToUrl(proof),
