@@ -213,6 +213,185 @@ export class ReportsService {
       [clinicId, query.dateFrom, query.dateTo],
     );
 
+    // ----- Demografi pasien: gender, kelompok usia, pasien baru vs lama -----
+    // Counted per KUNJUNGAN (encounter), not per unique patient, to stay
+    // consistent with byDay/byDoctor above (a patient visiting 3x in the
+    // range contributes 3x here).
+    const byGender = await this.encounterRepo.query(
+      `SELECT p.gender AS gender, COUNT(*) AS count
+       FROM encounters e JOIN patients p ON e.patient_id = p.id
+       WHERE e.clinic_id = ? AND DATE(e.arrived_time) BETWEEN ? AND ?
+       GROUP BY p.gender`,
+      [clinicId, query.dateFrom, query.dateTo],
+    );
+
+    const byAgeGroupRaw = await this.encounterRepo.query(
+      `SELECT
+         CASE
+           WHEN p.birth_date IS NULL THEN 'Tidak diketahui'
+           WHEN TIMESTAMPDIFF(YEAR, p.birth_date, e.arrived_time) <= 12 THEN '0-12 (Anak)'
+           WHEN TIMESTAMPDIFF(YEAR, p.birth_date, e.arrived_time) <= 17 THEN '13-17 (Remaja)'
+           WHEN TIMESTAMPDIFF(YEAR, p.birth_date, e.arrived_time) <= 25 THEN '18-25 (Dewasa Muda)'
+           WHEN TIMESTAMPDIFF(YEAR, p.birth_date, e.arrived_time) <= 40 THEN '26-40 (Dewasa)'
+           WHEN TIMESTAMPDIFF(YEAR, p.birth_date, e.arrived_time) <= 60 THEN '41-60 (Paruh Baya)'
+           ELSE '60+ (Lansia)'
+         END AS ageGroup,
+         COUNT(*) AS count
+       FROM encounters e JOIN patients p ON e.patient_id = p.id
+       WHERE e.clinic_id = ? AND DATE(e.arrived_time) BETWEEN ? AND ?
+       GROUP BY ageGroup`,
+      [clinicId, query.dateFrom, query.dateTo],
+    );
+    const AGE_GROUP_ORDER = [
+      '0-12 (Anak)',
+      '13-17 (Remaja)',
+      '18-25 (Dewasa Muda)',
+      '26-40 (Dewasa)',
+      '41-60 (Paruh Baya)',
+      '60+ (Lansia)',
+      'Tidak diketahui',
+    ];
+    const byAgeGroup = AGE_GROUP_ORDER.map((group) => ({
+      group,
+      count: parseInt(
+        byAgeGroupRaw.find((r: any) => r.ageGroup === group)?.count || 0,
+        10,
+      ),
+    })).filter((g) => g.count > 0);
+
+    const newVsReturningRaw = await this.encounterRepo.query(
+      `SELECT
+         CASE WHEN fv.firstDate < ? THEN 'returning' ELSE 'new' END AS patientType,
+         COUNT(*) AS count
+       FROM encounters e
+       JOIN (
+         SELECT patient_id, MIN(DATE(arrived_time)) AS firstDate
+         FROM encounters
+         WHERE clinic_id = ?
+         GROUP BY patient_id
+       ) fv ON fv.patient_id = e.patient_id
+       WHERE e.clinic_id = ? AND DATE(e.arrived_time) BETWEEN ? AND ?
+       GROUP BY patientType`,
+      [query.dateFrom, clinicId, clinicId, query.dateFrom, query.dateTo],
+    );
+    const newVsReturning = {
+      new: parseInt(
+        newVsReturningRaw.find((r: any) => r.patientType === 'new')?.count || 0,
+        10,
+      ),
+      returning: parseInt(
+        newVsReturningRaw.find((r: any) => r.patientType === 'returning')
+          ?.count || 0,
+        10,
+      ),
+    };
+
+    // ----- Tindakan (procedures performed) selama periode -----
+    const procedureRows = await this.encounterRepo.query(
+      `SELECT t.name AS tindakan, t.kategori AS kategori, SUM(bi.quantity) AS count
+       FROM billing_items bi
+       JOIN billings b ON bi.billing_id = b.id
+       JOIN encounters e ON b.encounter_id = e.id
+       JOIN tarifs t ON bi.tarif_id = t.id
+       WHERE e.clinic_id = ? AND DATE(e.arrived_time) BETWEEN ? AND ?
+         AND b.status != 'cancelled'
+       GROUP BY t.id, t.name, t.kategori
+       ORDER BY count DESC`,
+      [clinicId, query.dateFrom, query.dateTo],
+    );
+    const topProcedures = procedureRows.slice(0, 10).map((r: any) => ({
+      tarifName: r.tindakan,
+      kategori: r.kategori,
+      count: parseInt(r.count, 10),
+    }));
+    const kategoriTotals = new Map<string, number>();
+    for (const r of procedureRows as any[]) {
+      const kategori = r.kategori || 'Lainnya';
+      kategoriTotals.set(
+        kategori,
+        (kategoriTotals.get(kategori) || 0) + parseInt(r.count, 10),
+      );
+    }
+    const byKategori = Array.from(kategoriTotals.entries())
+      .map(([kategori, count]) => ({ kategori, count }))
+      .sort((a, b) => b.count - a.count);
+    const totalProcedures = byKategori.reduce((sum, k) => sum + k.count, 0);
+    const avgProceduresPerVisit =
+      parseInt(summaryRows.total) > 0
+        ? parseFloat((totalProcedures / parseInt(summaryRows.total)).toFixed(2))
+        : 0;
+
+    // ----- Pola waktu: jam tersibuk & hari dalam seminggu -----
+    const byHourRaw = await this.encounterRepo.query(
+      `SELECT HOUR(arrived_time) AS hour, COUNT(*) AS count
+       FROM encounters
+       WHERE clinic_id = ? AND DATE(arrived_time) BETWEEN ? AND ?
+       GROUP BY hour`,
+      [clinicId, query.dateFrom, query.dateTo],
+    );
+    const byHour = Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      count: parseInt(
+        byHourRaw.find((r: any) => parseInt(r.hour, 10) === hour)?.count || 0,
+        10,
+      ),
+    }));
+
+    const byDayOfWeekRaw = await this.encounterRepo.query(
+      `SELECT DAYOFWEEK(arrived_time) AS dow, COUNT(*) AS count
+       FROM encounters
+       WHERE clinic_id = ? AND DATE(arrived_time) BETWEEN ? AND ?
+       GROUP BY dow`,
+      [clinicId, query.dateFrom, query.dateTo],
+    );
+    // MySQL DAYOFWEEK: 1=Minggu ... 7=Sabtu. Displayed Senin -> Minggu.
+    const DOW_LABELS = [
+      'Minggu',
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu',
+    ];
+    const DOW_DISPLAY_ORDER = [2, 3, 4, 5, 6, 7, 1];
+    const byDayOfWeek = DOW_DISPLAY_ORDER.map((dow) => ({
+      day: DOW_LABELS[dow - 1],
+      count: parseInt(
+        byDayOfWeekRaw.find((r: any) => parseInt(r.dow, 10) === dow)?.count ||
+          0,
+        10,
+      ),
+    }));
+
+    // ----- Perbandingan periode sebelumnya (durasi sama, langsung sebelum dateFrom) -----
+    const rangeDays =
+      Math.round(
+        (new Date(`${query.dateTo}T00:00:00`).getTime() -
+          new Date(`${query.dateFrom}T00:00:00`).getTime()) /
+          86400000,
+      ) + 1;
+    const prevDateTo = new Date(`${query.dateFrom}T00:00:00`);
+    prevDateTo.setDate(prevDateTo.getDate() - 1);
+    const prevDateFrom = new Date(prevDateTo);
+    prevDateFrom.setDate(prevDateFrom.getDate() - (rangeDays - 1));
+    const toIso = (d: Date) => d.toISOString().slice(0, 10);
+
+    const [prevSummaryRow] = await this.encounterRepo.query(
+      `SELECT COUNT(*) AS total
+       FROM encounters
+       WHERE clinic_id = ? AND DATE(arrived_time) BETWEEN ? AND ?`,
+      [clinicId, toIso(prevDateFrom), toIso(prevDateTo)],
+    );
+    const previousTotal = parseInt(prevSummaryRow?.total || 0, 10);
+    const currentTotal = parseInt(summaryRows.total);
+    const changePercent =
+      previousTotal > 0
+        ? parseFloat(
+            (((currentTotal - previousTotal) / previousTotal) * 100).toFixed(1),
+          )
+        : null;
+
     return {
       data: {
         summary: {
@@ -232,6 +411,25 @@ export class ReportsService {
           practitionerName: r.practitionerName,
           count: parseInt(r.count),
         })),
+        demographics: {
+          byGender: byGender.map((r: any) => ({
+            gender: r.gender,
+            count: parseInt(r.count, 10),
+          })),
+          byAgeGroup,
+          newVsReturning,
+        },
+        procedureMix: {
+          topProcedures,
+          byKategori,
+          avgProceduresPerVisit,
+        },
+        byHour,
+        byDayOfWeek,
+        comparison: {
+          previousTotal,
+          changePercent,
+        },
         encounters: encounters.map((e) => ({
           encounterId: e.id,
           date: e.arrivedTime?.toISOString().split('T')[0],
@@ -391,7 +589,9 @@ export class ReportsService {
 
     const labaBersih = totalPaid - totalModal - totalPengeluaran;
     const marginPersen =
-      totalPaid > 0 ? parseFloat(((labaBersih / totalPaid) * 100).toFixed(1)) : 0;
+      totalPaid > 0
+        ? parseFloat(((labaBersih / totalPaid) * 100).toFixed(1))
+        : 0;
 
     return {
       data: {
