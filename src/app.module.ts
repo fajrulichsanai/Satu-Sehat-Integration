@@ -29,6 +29,8 @@ import { EncounterSoapNotesModule } from './modules/encounter-soap-notes/encount
 import { PhysicalExaminationModule } from './modules/physical-examination/physical-examination.module';
 import { PrescriptionsModule } from './modules/prescriptions/prescriptions.module';
 import { OdontogramModule } from './modules/odontogram/odontogram.module';
+import { DentalExaminationModule } from './modules/dental-examination/dental-examination.module';
+import { SupportingExamModule } from './modules/supporting-exam/supporting-exam.module';
 import { TreatmentPlansModule } from './modules/treatment-plans/treatment-plans.module';
 import { AuditLogModule } from './modules/audit-log/audit-log.module';
 import { GudangModule } from './modules/gudang/gudang.module';
@@ -95,6 +97,8 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     PhysicalExaminationModule,
     PrescriptionsModule,
     OdontogramModule,
+    DentalExaminationModule,
+    SupportingExamModule,
     TreatmentPlansModule,
     AuditLogModule,
     GudangModule,
