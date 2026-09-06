@@ -17,12 +17,23 @@ export class UpsertEncounterSoapNoteDto {
   @IsString()
   assessment?: string;
 
-  @ApiPropertyOptional({ description: 'Plan - rencana tindakan/terapi' })
+  @ApiPropertyOptional({
+    description: 'Treatment - tindakan yang dilakukan pada kunjungan ini',
+  })
+  @IsOptional()
+  @IsString()
+  treatment?: string;
+
+  @ApiPropertyOptional({
+    description: 'Plan - rencana untuk kunjungan berikutnya',
+  })
   @IsOptional()
   @IsString()
   plan?: string;
 
-  @ApiPropertyOptional({ description: 'Tanda tangan dokter (base64 PNG data URL)' })
+  @ApiPropertyOptional({
+    description: 'Tanda tangan dokter (base64 PNG data URL)',
+  })
   @IsOptional()
   @IsString()
   signature?: string;

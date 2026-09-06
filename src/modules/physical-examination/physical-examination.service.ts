@@ -8,6 +8,11 @@ import { UpsertPhysicalExaminationDto } from './dto/physical-examination.dto';
 const FIELDS: (keyof UpsertPhysicalExaminationDto)[] = [
   'generalCondition',
   'consciousness',
+  'nutritionalStatus',
+  'height',
+  'weight',
+  'painScale',
+  'painPoints',
   'bloodPressureSystolic',
   'bloodPressureDiastolic',
   'pulseRate',

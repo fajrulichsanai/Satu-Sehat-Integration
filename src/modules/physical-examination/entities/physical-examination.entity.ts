@@ -16,11 +16,37 @@ export class PhysicalExamination extends BaseEntity {
   encounterId: number;
 
   // Keadaan umum & kesadaran
-  @Column({ name: 'general_condition', type: 'varchar', length: 255, nullable: true })
+  @Column({
+    name: 'general_condition',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   generalCondition: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   consciousness: string;
+
+  @Column({
+    name: 'nutritional_status',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  nutritionalStatus: string;
+
+  @Column({ type: 'decimal', precision: 5, scale: 1, nullable: true })
+  height: number;
+
+  @Column({ type: 'decimal', precision: 5, scale: 1, nullable: true })
+  weight: number;
+
+  // Skala nyeri
+  @Column({ name: 'pain_scale', type: 'int', nullable: true })
+  painScale: number;
+
+  @Column({ name: 'pain_points', type: 'json', nullable: true })
+  painPoints: { x: number; y: number }[];
 
   // Tanda vital
   @Column({ name: 'blood_pressure_systolic', type: 'int', nullable: true })

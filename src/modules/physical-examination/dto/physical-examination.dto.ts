@@ -1,9 +1,20 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsArray,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class UpsertPhysicalExaminationDto {
-  @ApiPropertyOptional({ description: 'Keadaan umum', example: 'Tampak sakit sedang' })
+  @ApiPropertyOptional({
+    description: 'Keadaan umum',
+    example: 'Tampak sakit sedang',
+  })
   @IsOptional()
   @IsString()
   generalCondition?: string;
@@ -12,6 +23,42 @@ export class UpsertPhysicalExaminationDto {
   @IsOptional()
   @IsString()
   consciousness?: string;
+
+  @ApiPropertyOptional({ description: 'Status gizi', example: 'Gizi baik' })
+  @IsOptional()
+  @IsString()
+  nutritionalStatus?: string;
+
+  @ApiPropertyOptional({ description: 'Tinggi badan (cm)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(300)
+  height?: number;
+
+  @ApiPropertyOptional({ description: 'Berat badan (kg)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(500)
+  weight?: number;
+
+  @ApiPropertyOptional({ description: 'Skala nyeri (0-10)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(10)
+  painScale?: number;
+
+  @ApiPropertyOptional({
+    description: 'Titik lokasi nyeri pada diagram tubuh (persen x/y)',
+  })
+  @IsOptional()
+  @IsArray()
+  painPoints?: { x: number; y: number }[];
 
   @ApiPropertyOptional({ description: 'Tekanan darah sistolik (mmHg)' })
   @IsOptional()

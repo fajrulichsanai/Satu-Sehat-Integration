@@ -17,6 +17,11 @@ export class EncounterSoapNote extends BaseEntity {
   @Column({ type: 'text', nullable: true })
   assessment: string;
 
+  // Tindakan yang dilakukan pada kunjungan ini (bukan rencana ke depan —
+  // itu ada di `plan`).
+  @Column({ type: 'text', nullable: true })
+  treatment: string;
+
   @Column({ type: 'text', nullable: true })
   plan: string;
 
