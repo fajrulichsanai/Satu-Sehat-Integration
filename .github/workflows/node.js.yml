@@ -36,8 +36,8 @@ jobs:
             echo "🔨 Build project..."
             npm run build
 
-            echo "🗄️  Jalankan migration database..."
-            npm run migration:run
+            echo "🗄️  Jalankan repair schema paket langganan (one-off, aman diulang)..."
+            node scripts/repair-subscription-plans.js || echo "⚠️  Repair script gagal, lanjut deploy — cek log di atas"
 
             echo "♻️  Restart PM2..."
             pm2 restart apex-record-staging-backend
