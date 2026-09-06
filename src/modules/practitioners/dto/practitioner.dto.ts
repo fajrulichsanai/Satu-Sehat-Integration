@@ -42,6 +42,15 @@ export class CreatePractitionerDto {
   @MaxLength(50)
   sipNumber?: string;
 
+  @ApiProperty({
+    example: 'STR/123/2026',
+    required: false,
+    description: 'Surat Tanda Registrasi — dicetak di kop resep',
+  })
+  @IsOptional()
+  @MaxLength(50)
+  strNumber?: string;
+
   @ApiProperty({ example: 'Spesialis Konservasi Gigi', required: false })
   @IsOptional()
   @MaxLength(100)
@@ -77,6 +86,11 @@ export class UpdatePractitionerDto {
   @IsOptional()
   @MaxLength(50)
   sipNumber?: string;
+
+  @ApiProperty({ example: 'STR/123/2026', required: false })
+  @IsOptional()
+  @MaxLength(50)
+  strNumber?: string;
 
   @ApiProperty({ example: 'Spesialis Konservasi Gigi', required: false })
   @IsOptional()
@@ -121,6 +135,9 @@ export class PractitionerResponseDto {
 
   @ApiProperty({ example: 'SIP/123/2026' })
   sipNumber: string | undefined;
+
+  @ApiProperty({ example: 'STR/123/2026' })
+  strNumber: string | undefined;
 
   @ApiProperty({ example: 'Spesialis Konservasi Gigi' })
   specialization: string | undefined;

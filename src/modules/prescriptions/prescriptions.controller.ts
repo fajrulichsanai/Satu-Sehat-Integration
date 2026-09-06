@@ -6,11 +6,14 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Res,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PrescriptionsService } from './prescriptions.service';
+import { PrescriptionPdfService } from './prescription-pdf.service';
 import { CreatePrescriptionItemDto } from './dto/prescription-item.dto';
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
@@ -25,7 +28,10 @@ import { AuditActionType } from '../audit-log/entities/audit-log.entity';
 @UseInterceptors(AuditInterceptor)
 @Controller('encounters/:encounterId/prescriptions')
 export class PrescriptionsController {
-  constructor(private readonly prescriptionsService: PrescriptionsService) {}
+  constructor(
+    private readonly prescriptionsService: PrescriptionsService,
+    private readonly prescriptionPdfService: PrescriptionPdfService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'List prescription items for an encounter' })
@@ -38,6 +44,26 @@ export class PrescriptionsController {
       clinicId,
     );
     return { success: true, data };
+  }
+
+  @Get('pdf')
+  @Audit('Prescription', AuditActionType.EXPORT)
+  @ApiOperation({ summary: 'Download prescription sheet as PDF' })
+  async downloadPdf(
+    @Param('encounterId', ParseIntPipe) encounterId: number,
+    @ClinicId() clinicId: number,
+    @Res() res: Response,
+  ) {
+    const pdfBuffer = await this.prescriptionPdfService.generatePrescriptionPdf(
+      encounterId,
+      clinicId,
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="resep-${encounterId}.pdf"`,
+    );
+    res.end(pdfBuffer);
   }
 
   @Post()
