@@ -7,9 +7,16 @@ import {
 } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { Patient } from './entities/patient.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
+import { EncounterSoapNote } from '../encounter-soap-notes/entities/encounter-soap-note.entity';
+import { Billing } from '../billing/entities/billing.entity';
+import {
+  SupportingExamImage,
+  SupportingExamImageType,
+} from '../supporting-exam/entities/supporting-exam-image.entity';
+import { PatientRecall } from '../recalls/entities/patient-recall.entity';
 import {
   CreatePatientDto,
   PatientQueryDto,
@@ -28,6 +35,14 @@ export class PatientsService {
     private readonly patientRepository: Repository<Patient>,
     @InjectRepository(Encounter)
     private readonly encounterRepository: Repository<Encounter>,
+    @InjectRepository(EncounterSoapNote)
+    private readonly encounterSoapNoteRepository: Repository<EncounterSoapNote>,
+    @InjectRepository(Billing)
+    private readonly billingRepository: Repository<Billing>,
+    @InjectRepository(SupportingExamImage)
+    private readonly supportingExamImageRepository: Repository<SupportingExamImage>,
+    @InjectRepository(PatientRecall)
+    private readonly patientRecallRepository: Repository<PatientRecall>,
     private readonly dataSource: DataSource,
     private readonly satusehatClient: SatusehatClientService,
     private readonly treatmentPlansService: TreatmentPlansService,
@@ -156,6 +171,141 @@ export class PatientsService {
   async findTreatmentPlans(patientId: number, clinicId: number) {
     await this.findOne(patientId, clinicId);
     return this.treatmentPlansService.findByPatient(patientId, clinicId);
+  }
+
+  /**
+   * Patient Timeline (PRD 5.1) — semua aktivitas pasien digabung jadi satu
+   * daftar kronologis, terisi otomatis dari data yang sudah ada (kunjungan,
+   * billing, foto klinis, treatment plan, recall). Tidak ada form khusus,
+   * murni agregasi read-only.
+   */
+  async getTimeline(patientId: number, clinicId: number) {
+    await this.findOne(patientId, clinicId);
+
+    const encounters = await this.encounterRepository.find({
+      where: { patientId, clinicId },
+      relations: { practitioner: true },
+      order: { arrivedTime: 'DESC' },
+    });
+    const encounterIds = encounters.map((e) => e.id);
+
+    const [soapNotes, billings, photos, recalls] = await Promise.all([
+      encounterIds.length
+        ? this.encounterSoapNoteRepository.find({
+            where: { encounterId: In(encounterIds) },
+          })
+        : Promise.resolve([]),
+      this.billingRepository.find({
+        where: { patientId, clinicId },
+        relations: { items: true },
+        order: { createdAt: 'DESC' },
+      }),
+      encounterIds.length
+        ? this.supportingExamImageRepository.find({
+            where: { encounterId: In(encounterIds) },
+            order: { createdAt: 'DESC' },
+          })
+        : Promise.resolve([]),
+      this.patientRecallRepository.find({
+        where: { patientId, clinicId },
+        relations: { tarif: true },
+        order: { dueDate: 'DESC' },
+      }),
+    ]);
+
+    const soapByEncounter = new Map(soapNotes.map((s) => [s.encounterId, s]));
+    const billingsByEncounter = new Map<number, Billing[]>();
+    for (const b of billings) {
+      const list = billingsByEncounter.get(b.encounterId) ?? [];
+      list.push(b);
+      billingsByEncounter.set(b.encounterId, list);
+    }
+
+    const treatmentPlans = await this.treatmentPlansService.findByPatient(
+      patientId,
+      clinicId,
+    );
+
+    type TimelineItem = {
+      type: 'kunjungan' | 'billing' | 'foto' | 'treatment_plan' | 'recall';
+      date: string;
+      title: string;
+      subtitle?: string;
+      meta?: Record<string, unknown>;
+    };
+
+    const items: TimelineItem[] = [];
+
+    for (const e of encounters) {
+      const soap = soapByEncounter.get(e.id);
+      const encounterBillings = billingsByEncounter.get(e.id) ?? [];
+      const tindakanNames = encounterBillings
+        .flatMap((b) => b.items?.map((i) => i.name) ?? [])
+        .join(', ');
+      items.push({
+        type: 'kunjungan',
+        date: (e.finishedTime ?? e.arrivedTime).toISOString(),
+        title: tindakanNames || e.chiefComplaint || 'Kunjungan',
+        subtitle: e.practitioner?.name
+          ? `drg. ${e.practitioner.name}`
+          : undefined,
+        meta: {
+          encounterId: e.id,
+          status: e.status,
+          soapSummary: soap?.assessment || soap?.subjective || null,
+        },
+      });
+    }
+
+    for (const b of billings) {
+      items.push({
+        type: 'billing',
+        date: b.createdAt.toISOString(),
+        title: `Invoice ${b.invoiceNumber}`,
+        subtitle: `Rp ${Number(b.grandTotal).toLocaleString('id-ID')} · ${b.status}`,
+        meta: { billingId: b.id, encounterId: b.encounterId, status: b.status },
+      });
+    }
+
+    for (const p of photos) {
+      items.push({
+        type: 'foto',
+        date: p.createdAt.toISOString(),
+        title: p.category
+          ? `Foto ${p.category}`
+          : p.imageType === SupportingExamImageType.XRAY
+            ? 'Rontgen'
+            : 'Foto Klinis',
+        subtitle: p.notes || undefined,
+        meta: { imageId: p.id, fileUrl: p.fileUrl, encounterId: p.encounterId },
+      });
+    }
+
+    for (const r of recalls) {
+      items.push({
+        type: 'recall',
+        date: new Date(`${r.dueDate}T00:00:00`).toISOString(),
+        title: `Recall: ${r.tarif?.name ?? 'Kontrol'}`,
+        subtitle: r.status,
+        meta: { recallId: r.id, status: r.status },
+      });
+    }
+
+    for (const tp of treatmentPlans) {
+      items.push({
+        type: 'treatment_plan',
+        date: new Date(tp.createdAt).toISOString(),
+        title: tp.label || tp.treatmentType,
+        subtitle: `${tp.status} · tahap ${tp.currentStage}/${tp.totalStages ?? '-'}`,
+        meta: { treatmentPlanId: tp.id, status: tp.status },
+      });
+    }
+
+    items.sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+
+    return items;
   }
 
   async create(clinicId: number, dto: CreatePatientDto): Promise<Patient> {
