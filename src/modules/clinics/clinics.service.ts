@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import { Clinic } from './entities/clinic.entity';
 import { UpdateClinicDto } from './dto/clinic.dto';
 import { encrypt } from '../../common/utils/crypto.util';
+import { S3StorageService } from '../../common/storage/s3-storage.service';
 
 @Injectable()
 export class ClinicsService {
@@ -20,6 +21,7 @@ export class ClinicsService {
     @InjectRepository(Clinic)
     private clinicRepository: Repository<Clinic>,
     private readonly configService: ConfigService,
+    private readonly s3StorageService: S3StorageService,
   ) {
     this.encryptionKey = this.configService.get<string>(
       'ENCRYPTION_KEY',
@@ -122,6 +124,46 @@ export class ClinicsService {
       success: true,
       data: clinic,
       message: 'Profil klinik berhasil diperbarui',
+    };
+  }
+
+  async uploadLogo(clinicId: number, file?: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException({
+        success: false,
+        error: { code: 'FILE_REQUIRED', message: 'File gambar wajib diunggah' },
+      });
+    }
+
+    const clinic = await this.clinicRepository.findOne({
+      where: { id: clinicId },
+    });
+    if (!clinic) {
+      throw new NotFoundException({
+        success: false,
+        error: { code: 'CLINIC_NOT_FOUND', message: 'Klinik tidak ditemukan' },
+      });
+    }
+
+    const ext = file.originalname.split('.').pop() || 'jpg';
+    const key = `clinics/${clinicId}/logo-${Date.now()}.${ext}`;
+    const logoUrl = await this.s3StorageService.uploadBuffer(
+      key,
+      file.buffer,
+      file.mimetype,
+    );
+
+    clinic.logoUrl = logoUrl;
+    await this.clinicRepository.save(clinic);
+
+    this.logger.log(
+      `[UPLOAD-LOGO] Logo klinik berhasil diunggah | clinicId=${clinicId}`,
+    );
+
+    return {
+      success: true,
+      data: { logoUrl },
+      message: 'Logo klinik berhasil diunggah',
     };
   }
 }

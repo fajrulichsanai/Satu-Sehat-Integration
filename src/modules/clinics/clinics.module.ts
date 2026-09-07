@@ -4,9 +4,10 @@ import { ClinicsController, ClinicsListController } from './clinics.controller';
 import { ClinicsService } from './clinics.service';
 import { Clinic } from './entities/clinic.entity';
 import { AuditLogModule } from '../audit-log/audit-log.module';
+import { StorageModule } from '../../common/storage/storage.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Clinic]), AuditLogModule],
+  imports: [TypeOrmModule.forFeature([Clinic]), AuditLogModule, StorageModule],
   controllers: [ClinicsController, ClinicsListController],
   providers: [ClinicsService],
   exports: [ClinicsService],
