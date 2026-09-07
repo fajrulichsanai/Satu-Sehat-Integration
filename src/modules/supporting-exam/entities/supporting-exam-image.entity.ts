@@ -7,6 +7,17 @@ export enum SupportingExamImageType {
   XRAY = 'xray',
 }
 
+// Kategori foto klinis (PRD 5.6) — hanya relevan untuk imageType PHOTO,
+// dipakai juga sebagai basis fitur compare before/after.
+export enum SupportingExamImageCategory {
+  INTRAORAL = 'intraoral',
+  EXTRAORAL = 'extraoral',
+  OCCLUSAL = 'occlusal',
+  BEFORE = 'before',
+  PROGRESS = 'progress',
+  AFTER = 'after',
+}
+
 /**
  * "Pemeriksaan Penunjang" — one uploaded image per row (photo or X-ray/
  * Rontgen), many per encounter. Kept as a plain list rather than a single
@@ -26,6 +37,13 @@ export class SupportingExamImage extends BaseEntity {
     default: SupportingExamImageType.PHOTO,
   })
   imageType: SupportingExamImageType;
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
+  category: SupportingExamImageCategory | null;
 
   @Column({ name: 'file_url', length: 255 })
   fileUrl: string;

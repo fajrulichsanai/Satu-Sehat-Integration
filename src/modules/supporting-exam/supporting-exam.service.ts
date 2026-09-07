@@ -47,6 +47,7 @@ export class SupportingExamService {
     const image = this.imageRepository.create({
       encounterId,
       imageType: dto.imageType,
+      category: dto.category ?? null,
       fileUrl,
       originalName: file?.originalname,
       notes: dto.notes,
