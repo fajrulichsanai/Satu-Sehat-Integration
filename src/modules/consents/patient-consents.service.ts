@@ -137,6 +137,9 @@ export class PatientConsentsService {
     if (dto.role === ConsentSignerRole.PATIENT) {
       consent.patientSignature = dto.signatureDataUrl;
       consent.patientSignerName = dto.signerName || consent.patient.name;
+      consent.signerRelation = dto.signerRelation ?? null;
+      consent.signerAddress = dto.signerAddress ?? null;
+      consent.signerPhone = dto.signerPhone ?? null;
       consent.patientSignedAt = new Date();
     } else {
       consent.doctorSignature = dto.signatureDataUrl;

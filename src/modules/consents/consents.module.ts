@@ -4,6 +4,7 @@ import { ConsentTemplate } from './entities/consent-template.entity';
 import { PatientConsent } from './entities/patient-consent.entity';
 import { Patient } from '../patients/entities/patient.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
+import { User } from '../users/entities/user.entity';
 import { ConsentTemplatesService } from './consent-templates.service';
 import { PatientConsentsService } from './patient-consents.service';
 import { PatientConsentPdfService } from './patient-consent-pdf.service';
@@ -18,6 +19,7 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
       PatientConsent,
       Patient,
       Clinic,
+      User,
     ]),
     AuditLogModule,
   ],

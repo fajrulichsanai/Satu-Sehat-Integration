@@ -9,7 +9,10 @@ import {
   Matches,
   Min,
 } from 'class-validator';
-import { PatientConsentStatus } from '../entities/patient-consent.entity';
+import {
+  ConsentSignerRelation,
+  PatientConsentStatus,
+} from '../entities/patient-consent.entity';
 
 export class CreatePatientConsentDto {
   @ApiProperty()
@@ -98,4 +101,27 @@ export class SignPatientConsentDto {
   @IsOptional()
   @IsString()
   signerName?: string;
+
+  @ApiPropertyOptional({
+    enum: ConsentSignerRelation,
+    description:
+      'Hubungan penanda tangan dengan pasien (hanya untuk role patient)',
+  })
+  @IsOptional()
+  @IsEnum(ConsentSignerRelation)
+  signerRelation?: ConsentSignerRelation;
+
+  @ApiPropertyOptional({
+    description: 'Alamat penanda tangan (hanya untuk role patient)',
+  })
+  @IsOptional()
+  @IsString()
+  signerAddress?: string;
+
+  @ApiPropertyOptional({
+    description: 'No. telp penanda tangan (hanya untuk role patient)',
+  })
+  @IsOptional()
+  @IsString()
+  signerPhone?: string;
 }

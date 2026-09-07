@@ -11,6 +11,12 @@ export enum PatientConsentStatus {
   COMPLETED = 'completed',
 }
 
+export enum ConsentSignerRelation {
+  SELF = 'self',
+  PARENT = 'parent',
+  GUARDIAN = 'guardian',
+}
+
 /**
  * Satu formulir informed consent untuk satu pasien + tindakan (PRD 5.16).
  * Isi (title/content) di-snapshot dari ConsentTemplate saat dibuat supaya
@@ -52,8 +58,27 @@ export class PatientConsent extends BaseEntity {
   @Column({ name: 'patient_signature', type: 'mediumtext', nullable: true })
   patientSignature: string | null;
 
-  @Column({ name: 'patient_signer_name', type: 'varchar', length: 150, nullable: true })
+  @Column({
+    name: 'patient_signer_name',
+    type: 'varchar',
+    length: 150,
+    nullable: true,
+  })
   patientSignerName: string | null;
+
+  @Column({
+    name: 'signer_relation',
+    type: 'varchar',
+    length: 16,
+    nullable: true,
+  })
+  signerRelation: ConsentSignerRelation | null;
+
+  @Column({ name: 'signer_address', type: 'text', nullable: true })
+  signerAddress: string | null;
+
+  @Column({ name: 'signer_phone', type: 'varchar', length: 20, nullable: true })
+  signerPhone: string | null;
 
   @Column({ name: 'patient_signed_at', type: 'datetime', nullable: true })
   patientSignedAt: Date | null;
