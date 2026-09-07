@@ -315,6 +315,7 @@ export class UsersService {
     const roles = this.isSuperAdmin(currentUser)
       ? [
           { value: UserRole.SUPER_ADMIN, label: 'Super Admin' },
+          { value: UserRole.MULTI_CLINIC_OWNER, label: 'Multi-Klinik Owner' },
           { value: UserRole.OWNER, label: 'Owner' },
           { value: UserRole.ADMIN, label: 'Admin' },
           { value: UserRole.DOKTER, label: 'Dokter' },
