@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Encounter } from './entities/encounter.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
+import { Billing, BillingStatus } from '../billing/entities/billing.entity';
 import { EncounterStatus, ServiceType } from '../../enums';
 import { ReservationStatus } from '../../enums/reservation-status.enum';
 import { UserRole } from '../../enums/user-role.enum';
@@ -66,11 +67,35 @@ export class EncountersService {
       });
     }
 
-    const date = query.date || todayInClinicTimezone();
-    qb.andWhere('DATE(e.arrivedTime) = :date', { date });
-
     if (query.status) {
       qb.andWhere('e.status = :status', { status: query.status });
+    }
+
+    if (query.unbilled) {
+      // Dipakai untuk backlog "belum ditagih" di halaman Billing — harus
+      // lintas semua tanggal, bukan cuma hari ini, supaya kunjungan lama
+      // yang belum dibuatkan tagihan tetap kelihatan.
+      qb.leftJoin(
+        Billing,
+        'activeBilling',
+        'activeBilling.encounterId = e.id AND activeBilling.status != :cancelledBillingStatus',
+        { cancelledBillingStatus: BillingStatus.CANCELLED },
+      ).andWhere('activeBilling.id IS NULL');
+    }
+
+    // Encounter yang masih terbuka (arrived/in_progress) adalah backlog aktif
+    // yang harus tetap terlihat lintas tanggal sampai diselesaikan/dibatalkan —
+    // membatasinya ke hari ini membuat kunjungan yang belum selesai kemarin
+    // jadi "hilang" dan tidak bisa dibuka lagi hari ini.
+    const isOpenStatusQuery =
+      query.status === EncounterStatus.ARRIVED ||
+      query.status === EncounterStatus.IN_PROGRESS;
+
+    if (query.date) {
+      qb.andWhere('DATE(e.arrivedTime) = :date', { date: query.date });
+    } else if (!isOpenStatusQuery && !query.unbilled) {
+      const date = todayInClinicTimezone();
+      qb.andWhere('DATE(e.arrivedTime) = :date', { date });
     }
 
     qb.orderBy('e.arrivedTime', 'DESC');
