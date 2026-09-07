@@ -27,13 +27,13 @@ export class PatientConsent extends BaseEntity {
   @Column({ name: 'patient_id' })
   patientId: number;
 
-  @Column({ name: 'encounter_id', nullable: true })
+  @Column({ name: 'encounter_id', type: 'int', nullable: true })
   encounterId: number | null;
 
-  @Column({ name: 'tarif_id', nullable: true })
+  @Column({ name: 'tarif_id', type: 'int', nullable: true })
   tarifId: number | null;
 
-  @Column({ name: 'template_id', nullable: true })
+  @Column({ name: 'template_id', type: 'int', nullable: true })
   templateId: number | null;
 
   @Column({ length: 200 })
@@ -52,7 +52,7 @@ export class PatientConsent extends BaseEntity {
   @Column({ name: 'patient_signature', type: 'mediumtext', nullable: true })
   patientSignature: string | null;
 
-  @Column({ name: 'patient_signer_name', length: 150, nullable: true })
+  @Column({ name: 'patient_signer_name', type: 'varchar', length: 150, nullable: true })
   patientSignerName: string | null;
 
   @Column({ name: 'patient_signed_at', type: 'datetime', nullable: true })
