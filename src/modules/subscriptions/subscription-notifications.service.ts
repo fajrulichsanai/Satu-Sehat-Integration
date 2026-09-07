@@ -7,6 +7,7 @@ import {
   ClinicSubscription,
   ClinicSubscriptionStatus,
 } from './entities/clinic-subscription.entity';
+import { SubscriptionPlanTier } from './entities/subscription-plan.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from '../../enums';
@@ -80,6 +81,131 @@ export class SubscriptionNotificationsService {
     }
 
     return { h7Sent, h1Sent };
+  }
+
+  /**
+   * Trial-specific reminder sequence per PRD bagian 7 — dipicu berdasarkan
+   * hari sejak trial dimulai (7/13/15 dari 15 hari), yang secara matematis
+   * sama dengan sisa hari 8/2/0 sebelum trial berakhir. Terpisah dari
+   * sendUpcomingExpiryReminders karena copy-nya beda (ajak upgrade, bukan
+   * "perpanjang") dan hanya menyasar baris berstatus trial.
+   */
+  async sendTrialReminders(): Promise<{
+    d7Sent: number;
+    d13Sent: number;
+    d15Sent: number;
+  }> {
+    const today = new Date(new Date().toDateString());
+    const active = await this.clinicSubscriptionRepository.find({
+      where: { status: ClinicSubscriptionStatus.ACTIVE },
+      relations: { plan: true },
+      order: { id: 'DESC' },
+    });
+
+    const latestByClinic = new Map<number, ClinicSubscription>();
+    for (const row of active) {
+      if (!latestByClinic.has(row.clinicId))
+        latestByClinic.set(row.clinicId, row);
+    }
+
+    let d7Sent = 0;
+    let d13Sent = 0;
+    let d15Sent = 0;
+
+    for (const sub of latestByClinic.values()) {
+      if (sub.plan?.tier !== SubscriptionPlanTier.TRIAL) continue;
+
+      const daysLeft = daysBetween(new Date(`${sub.endDate}T00:00:00`), today);
+
+      if (daysLeft === 8 && !sub.notifiedTrialD7At) {
+        if (
+          await this.notifyTrialClinic(
+            sub,
+            'Masih ada 8 hari lagi — pastikan data klinik Anda tidak terkunci.',
+          )
+        ) {
+          sub.notifiedTrialD7At = new Date();
+          await this.clinicSubscriptionRepository.save(sub);
+          d7Sent += 1;
+        }
+      } else if (daysLeft === 2 && !sub.notifiedTrialD13At) {
+        if (
+          await this.notifyTrialClinic(
+            sub,
+            '2 hari lagi trial berakhir — upgrade sekarang.',
+          )
+        ) {
+          sub.notifiedTrialD13At = new Date();
+          await this.clinicSubscriptionRepository.save(sub);
+          d13Sent += 1;
+        }
+      } else if (daysLeft === 0 && !sub.notifiedTrialD15At) {
+        if (
+          await this.notifyTrialClinic(
+            sub,
+            'Trial berakhir hari ini — upgrade untuk tetap akses semua data Anda.',
+          )
+        ) {
+          sub.notifiedTrialD15At = new Date();
+          await this.clinicSubscriptionRepository.save(sub);
+          d15Sent += 1;
+        }
+      }
+    }
+
+    return { d7Sent, d13Sent, d15Sent };
+  }
+
+  private async notifyTrialClinic(
+    sub: ClinicSubscription,
+    message: string,
+  ): Promise<boolean> {
+    const [clinic, owners] = await Promise.all([
+      this.clinicRepository.findOne({ where: { id: sub.clinicId } }),
+      this.userRepository.find({
+        where: { clinicId: sub.clinicId, role: UserRole.OWNER, isActive: true },
+      }),
+    ]);
+
+    const recipients = owners.map((o) => o.email).filter(Boolean);
+    if (recipients.length === 0) {
+      this.logger.warn(
+        `No active owner email found for clinic ${sub.clinicId} — skipping trial reminder`,
+      );
+      return false;
+    }
+
+    const appUrl = this.configService.get<string>(
+      'APP_URL',
+      'http://localhost:3000',
+    );
+
+    try {
+      await this.resend.emails.send({
+        from: 'noreply@send.finarch.my.id',
+        to: recipients,
+        subject: `Free Trial ${clinic?.name ?? 'Klinik Anda'} — ${message}`,
+        html: `
+          <h2>Free Trial ApexRecord</h2>
+          <p>Halo,</p>
+          <p>${message}</p>
+          <p>Klinik <strong>${clinic?.name ?? ''}</strong> sedang menjalani masa Free Trial 15 hari (berakhir ${sub.endDate}).</p>
+          <a href="${appUrl}/langganan" style="display: inline-block; padding: 10px 20px; background-color: #4F7EF8; color: white; text-decoration: none; border-radius: 5px;">
+            Upgrade Sekarang
+          </a>
+          <p>Salam,<br>Tim ApexRecord</p>
+        `,
+      });
+      this.logger.log(
+        `Sent trial reminder to clinic ${sub.clinicId} (${recipients.join(', ')})`,
+      );
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `Failed to send trial reminder for clinic ${sub.clinicId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    }
   }
 
   private async notifyClinic(

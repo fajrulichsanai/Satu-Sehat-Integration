@@ -2,6 +2,7 @@ import { Entity, Column } from 'typeorm';
 import { BaseEntity } from '../../../common/base.entity';
 
 export enum SubscriptionPlanTier {
+  TRIAL = 'trial',
   BASIC = 'basic',
   PRO = 'pro',
   MULTI_KLINIK = 'multi_klinik',

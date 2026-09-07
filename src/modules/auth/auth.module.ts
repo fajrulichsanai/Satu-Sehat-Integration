@@ -10,6 +10,7 @@ import { User } from '../users/entities/user.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { OwnerCodeModule } from '../owner-code/owner-code.module';
 import { AuditLogModule } from '../audit-log/audit-log.module';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
     }),
     OwnerCodeModule,
     AuditLogModule,
+    SubscriptionsModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

@@ -18,6 +18,7 @@ import { Clinic } from '../clinics/entities/clinic.entity';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
 import { UserRole } from '../../enums';
 import { OwnerCodeService } from '../owner-code/owner-code.service';
+import { ClinicSubscriptionsService } from '../subscriptions/clinic-subscriptions.service';
 
 @Injectable()
 export class AuthService {
@@ -31,6 +32,7 @@ export class AuthService {
     private jwtService: JwtService,
     private configService: ConfigService,
     private ownerCodeService: OwnerCodeService,
+    private clinicSubscriptionsService: ClinicSubscriptionsService,
   ) {
     this.resend = new Resend(this.configService.get<string>('RESEND_API_KEY'));
   }
@@ -113,6 +115,16 @@ export class AuthService {
     });
 
     await this.userRepository.save(user);
+
+    // New clinic gets an automatic 15-day free trial (see PRD bagian 7) so
+    // it isn't immediately locked out by SubscriptionGuard before ever
+    // reaching the payment flow.
+    if (clinic) {
+      await this.clinicSubscriptionsService.provisionTrialForNewClinic(
+        clinic.id,
+        user.id,
+      );
+    }
 
     // Mark owner code as used if valid
     if (isValidOwnerCode && dto.ownerCode) {

@@ -30,5 +30,13 @@ export class SubscriptionExpiryCron {
         `Sent expiry reminders: ${h7Sent} at H-7, ${h1Sent} at H-1`,
       );
     }
+
+    const { d7Sent, d13Sent, d15Sent } =
+      await this.notificationsService.sendTrialReminders();
+    if (d7Sent + d13Sent + d15Sent > 0) {
+      this.logger.log(
+        `Sent trial reminders: ${d7Sent} at day 7, ${d13Sent} at day 13, ${d15Sent} at day 15`,
+      );
+    }
   }
 }

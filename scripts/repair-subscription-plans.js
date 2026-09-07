@@ -64,8 +64,8 @@ async function main() {
       INSERT INTO \`subscription_plans\`
         (\`name\`, \`duration_days\`, \`price\`, \`is_active\`, \`tier\`, \`billing_cycle\`, \`owner_fee\`)
       VALUES
-        ('Basic Bulanan', 30, 99000, 1, 'basic', 'monthly', 0),
-        ('Basic Tahunan', 365, 990000, 1, 'basic', 'yearly', 0),
+        ('Starter Bulanan', 30, 99000, 1, 'basic', 'monthly', 0),
+        ('Starter Tahunan', 365, 990000, 1, 'basic', 'yearly', 0),
         ('Pro Bulanan', 30, 149000, 1, 'pro', 'monthly', 0),
         ('Pro Tahunan', 365, 1490000, 1, 'pro', 'yearly', 0),
         ('Multi Klinik Bulanan', 30, 149000, 1, 'multi_klinik', 'monthly', 99000),
@@ -73,6 +73,46 @@ async function main() {
     `);
   } else {
     console.log('Tier plans already seeded, skipping insert.');
+  }
+
+  // Rename pre-existing "Basic ..." rows (from an earlier deploy, before the
+  // Starter rename) — idempotent since a second run finds nothing left
+  // matching 'Basic%'.
+  const [renamed] = await conn.query(
+    "UPDATE `subscription_plans` SET `name` = REPLACE(`name`, 'Basic', 'Starter') WHERE `tier` = 'basic' AND `name` LIKE 'Basic%'",
+  );
+  if (renamed.affectedRows > 0) {
+    console.log(`Renamed ${renamed.affectedRows} 'Basic ...' plan(s) to 'Starter ...'.`);
+  }
+
+  // --- Free Trial 15 hari (PRD bagian 7) ---
+  const hasTrialD7 = await columnExists(conn, database, 'clinic_subscriptions', 'notified_trial_d7_at');
+  const hasTrialD13 = await columnExists(conn, database, 'clinic_subscriptions', 'notified_trial_d13_at');
+  const hasTrialD15 = await columnExists(conn, database, 'clinic_subscriptions', 'notified_trial_d15_at');
+  if (!hasTrialD7) {
+    console.log('Adding clinic_subscriptions.notified_trial_d7_at...');
+    await conn.query('ALTER TABLE `clinic_subscriptions` ADD COLUMN `notified_trial_d7_at` DATETIME NULL');
+  }
+  if (!hasTrialD13) {
+    console.log('Adding clinic_subscriptions.notified_trial_d13_at...');
+    await conn.query('ALTER TABLE `clinic_subscriptions` ADD COLUMN `notified_trial_d13_at` DATETIME NULL');
+  }
+  if (!hasTrialD15) {
+    console.log('Adding clinic_subscriptions.notified_trial_d15_at...');
+    await conn.query('ALTER TABLE `clinic_subscriptions` ADD COLUMN `notified_trial_d15_at` DATETIME NULL');
+  }
+
+  const [existingTrial] = await conn.query("SELECT COUNT(*) AS cnt FROM `subscription_plans` WHERE `tier` = 'trial'");
+  if (existingTrial[0].cnt === 0) {
+    console.log('Seeding Free Trial plan...');
+    await conn.query(`
+      INSERT INTO \`subscription_plans\`
+        (\`name\`, \`duration_days\`, \`price\`, \`is_active\`, \`tier\`, \`billing_cycle\`, \`owner_fee\`)
+      VALUES
+        ('Free Trial 15 Hari', 15, 0, 1, 'trial', NULL, 0)
+    `);
+  } else {
+    console.log('Free Trial plan already seeded, skipping insert.');
   }
 
   const [plans] = await conn.query(
