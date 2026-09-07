@@ -12,12 +12,14 @@ import { TarifsService } from './tarifs.service';
 import { InvoiceService } from './invoice.service';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 import { GudangModule } from '../gudang/gudang.module';
+import { RecallsModule } from '../recalls/recalls.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Billing, BillingItem, Tarif, Payment, Encounter]),
     AuditLogModule,
     GudangModule,
+    RecallsModule,
   ],
   controllers: [BillingController],
   providers: [BillingsService, PaymentsService, TarifsService, InvoiceService],

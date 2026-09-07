@@ -16,6 +16,7 @@ import {
 import { Tarif } from '../tarif/entities/tarif.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import { GudangService } from '../gudang/gudang.service';
+import { PatientRecallsService } from '../recalls/patient-recalls.service';
 import {
   BillingItemDto,
   BillingQueryDto,
@@ -37,6 +38,7 @@ export class BillingsService {
     @InjectRepository(Encounter)
     private readonly encounterRepository: Repository<Encounter>,
     private readonly gudangService: GudangService,
+    private readonly patientRecallsService: PatientRecallsService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -140,7 +142,8 @@ export class BillingsService {
             ? (subtotal * dto.totalDiscount) / 100
             : dto.totalDiscount;
       }
-      const additionalFee = dto.additionalFee && dto.additionalFee > 0 ? dto.additionalFee : 0;
+      const additionalFee =
+        dto.additionalFee && dto.additionalFee > 0 ? dto.additionalFee : 0;
       const grandTotal = subtotal - totalDiscountNominal + additionalFee;
 
       const billing = await this.saveBillingWithInvoiceNumber(manager, {
@@ -158,7 +161,7 @@ export class BillingsService {
         createdBy: userId,
       });
 
-      await manager.save(
+      const savedItems = await manager.save(
         BillingItem,
         processedItems.map((i) => ({
           ...i,
@@ -179,6 +182,25 @@ export class BillingsService {
         }
       }
 
+      // Recall dijadwalkan otomatis kalau tarif-nya punya interval recall
+      // terkonfigurasi (PRD 5.10) — kegagalan di sini tidak boleh
+      // membatalkan billing yang sudah tersimpan.
+      try {
+        await this.patientRecallsService.scheduleFromBillingItems(
+          manager,
+          clinicId,
+          encounter.patientId,
+          savedItems
+            .filter((i) => i.tarifId)
+            .map((i) => ({ tarifId: i.tarifId, billingItemId: i.id })),
+          userId,
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Gagal menjadwalkan recall untuk billing baru: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+
       this.logger.log(
         `[CREATE] Billing berhasil dibuat | id=${billing.id}, invoiceNumber=${billing.invoiceNumber}, clinicId=${clinicId}`,
       );
@@ -187,7 +209,9 @@ export class BillingsService {
   }
 
   async cancel(id: number, clinicId: number, userId: number) {
-    this.logger.log(`[CANCEL] Membatalkan billing | id=${id}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[CANCEL] Membatalkan billing | id=${id}, clinicId=${clinicId}`,
+    );
     return this.dataSource.transaction(async (manager) => {
       const billing = await manager.findOne(Billing, {
         where: { id, clinicId },
@@ -201,7 +225,9 @@ export class BillingsService {
         billing.status === BillingStatus.CANCELLED ||
         billing.status === BillingStatus.REFUNDED
       ) {
-        throw new BadRequestException(`Billing sudah berstatus '${billing.status}'`);
+        throw new BadRequestException(
+          `Billing sudah berstatus '${billing.status}'`,
+        );
       }
       if (Number(billing.paidAmount) > 0) {
         throw new BadRequestException(
@@ -225,7 +251,9 @@ export class BillingsService {
       billing.updatedBy = userId;
       await manager.save(billing);
 
-      this.logger.log(`[CANCEL] Billing berhasil dibatalkan | id=${billing.id}, clinicId=${clinicId}`);
+      this.logger.log(
+        `[CANCEL] Billing berhasil dibatalkan | id=${billing.id}, clinicId=${clinicId}`,
+      );
       return billing;
     });
   }
@@ -272,9 +300,11 @@ export class BillingsService {
         );
       }
 
-      const totalDiscountInput = dto.totalDiscount ?? Number(billing.totalDiscount);
+      const totalDiscountInput =
+        dto.totalDiscount ?? Number(billing.totalDiscount);
       const totalDiscountNominal =
-        dto.totalDiscount !== undefined && dto.totalDiscountType === DiscountType.PERCENT
+        dto.totalDiscount !== undefined &&
+        dto.totalDiscountType === DiscountType.PERCENT
           ? (subtotal * dto.totalDiscount) / 100
           : totalDiscountInput;
       const additionalFee = dto.additionalFee ?? Number(billing.additionalFee);

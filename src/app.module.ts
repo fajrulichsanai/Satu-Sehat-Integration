@@ -35,6 +35,7 @@ import { TreatmentPlansModule } from './modules/treatment-plans/treatment-plans.
 import { AuditLogModule } from './modules/audit-log/audit-log.module';
 import { GudangModule } from './modules/gudang/gudang.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
+import { RecallsModule } from './modules/recalls/recalls.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.guard';
 
@@ -103,6 +104,7 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     AuditLogModule,
     GudangModule,
     SubscriptionsModule,
+    RecallsModule,
   ],
   controllers: [AppController],
   providers: [
