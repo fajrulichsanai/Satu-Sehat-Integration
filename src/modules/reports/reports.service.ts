@@ -658,26 +658,11 @@ export class ReportsService {
           marginPersen,
         },
         tindakanTerlaris,
-        businessMetrics: {
-          ltv: await this.computeLtv(clinicId),
-          arpv: await this.computeArpv(clinicId, query.dateFrom, query.dateTo),
-          pareto: await this.computeParetoConcentration(
-            clinicId,
-            query.dateFrom,
-            query.dateTo,
-          ),
-          dso: await this.computeDso(clinicId),
-          retention: await this.computeRetentionRate(
-            clinicId,
-            query.dateFrom,
-            query.dateTo,
-          ),
-          categoryProfitability: await this.computeCategoryProfitability(
-            clinicId,
-            query.dateFrom,
-            query.dateTo,
-          ),
-        },
+        businessMetrics: await this.computeBusinessMetrics(
+          clinicId,
+          query.dateFrom,
+          query.dateTo,
+        ),
       },
     };
   }
@@ -877,6 +862,77 @@ export class ReportsService {
     });
   }
 
+  /**
+   * Customer Acquisition Cost — total biaya iklan klinik (kategori
+   * `biaya_iklan` di Catat Operasional) dibagi jumlah pasien BARU pada
+   * periode yang sama, plus rasio LTV:CAC (indikator kesehatan akuisisi:
+   * >= 3x umumnya dianggap sehat).
+   */
+  private async computeMarketingMetrics(
+    clinicId: number,
+    dateFrom: string,
+    dateTo: string,
+    averageLtv: number,
+  ) {
+    const [adSpendRow] = await this.operationalRecordRepo.query(
+      `SELECT SUM(nominal) AS total FROM operational_records
+       WHERE clinic_id = ? AND tanggal BETWEEN ? AND ? AND kategori = 'biaya_iklan'`,
+      [clinicId, dateFrom, dateTo],
+    );
+    const totalAdSpend = parseFloat(adSpendRow?.total || 0);
+
+    const [newPatientsRow] = await this.encounterRepo.query(
+      `SELECT COUNT(*) AS count FROM (
+         SELECT patient_id, MIN(DATE(arrived_time)) AS firstDate
+         FROM encounters WHERE clinic_id = ?
+         GROUP BY patient_id
+       ) fv
+       WHERE fv.firstDate BETWEEN ? AND ?`,
+      [clinicId, dateFrom, dateTo],
+    );
+    const newPatients = parseInt(newPatientsRow?.count || 0, 10);
+
+    // null (bukan 0) kalau belum ada data biaya iklan tercatat — supaya UI
+    // tidak salah baca "akuisisi gratis" padahal datanya memang belum diisi.
+    const cac =
+      totalAdSpend > 0 && newPatients > 0
+        ? parseFloat((totalAdSpend / newPatients).toFixed(0))
+        : null;
+    const ltvCacRatio =
+      cac !== null && cac > 0
+        ? parseFloat((averageLtv / cac).toFixed(2))
+        : null;
+
+    return { totalAdSpend, newPatients, cac, ltvCacRatio };
+  }
+
+  /** Membungkus semua metrik bisnis/keuangan lanjutan untuk satu periode. */
+  private async computeBusinessMetrics(
+    clinicId: number,
+    dateFrom: string,
+    dateTo: string,
+  ) {
+    const ltv = await this.computeLtv(clinicId);
+    return {
+      ltv,
+      arpv: await this.computeArpv(clinicId, dateFrom, dateTo),
+      pareto: await this.computeParetoConcentration(clinicId, dateFrom, dateTo),
+      dso: await this.computeDso(clinicId),
+      retention: await this.computeRetentionRate(clinicId, dateFrom, dateTo),
+      categoryProfitability: await this.computeCategoryProfitability(
+        clinicId,
+        dateFrom,
+        dateTo,
+      ),
+      marketing: await this.computeMarketingMetrics(
+        clinicId,
+        dateFrom,
+        dateTo,
+        ltv.averageLtv,
+      ),
+    };
+  }
+
   private getTrailing12MonthKeys(): string[] {
     const keys: string[] = [];
     const now = new Date();
@@ -1037,6 +1093,12 @@ export class ReportsService {
       startDate,
       dateTo,
     );
+    const marketing = await this.computeMarketingMetrics(
+      clinicId,
+      startDate,
+      dateTo,
+      ltv.averageLtv,
+    );
 
     return {
       periodStart: monthKeys[0],
@@ -1057,6 +1119,7 @@ export class ReportsService {
         ltv,
         arpv,
         dso,
+        marketing,
         halfYearRetentionPercent:
           prevHalfPatients > 0
             ? parseFloat(

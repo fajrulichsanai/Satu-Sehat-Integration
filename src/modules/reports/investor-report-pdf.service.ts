@@ -95,7 +95,12 @@ export class InvestorReportPdfService {
           ? 'berada pada level yang wajar, dengan ruang untuk efisiensi lebih lanjut'
           : 'masih tipis dan memerlukan perhatian pada struktur biaya';
 
-    const narrative = `${clinic?.name || 'Klinik ini'} mencatatkan total pendapatan kumulatif sebesar ${formatRupiah(summary.totalRevenue12mo)} sepanjang 12 bulan terakhir, dengan rata-rata ${formatRupiah(summary.avgMonthlyRevenue)} per bulan. Pendapatan tiga bulan terakhir ${growthLabel} dibandingkan tiga bulan sebelumnya. Margin keuntungan bersih rata-rata tercatat ${summary.avgMarginPercent}%, yang ${marginNarrative}. Klinik melayani ${summary.totalPatients12mo} pasien unik dengan total ${summary.totalVisits12mo} kunjungan sepanjang periode ini, di mana ${summary.totalNewPatients12mo} di antaranya adalah pasien baru. Dari pasien yang bertransaksi pada paruh pertama periode, ${retentionLabel} kembali bertransaksi pada paruh kedua — mengindikasikan tingkat retensi pasien.`;
+    const cacSentence =
+      unitEconomics.marketing.cac !== null
+        ? ` Biaya akuisisi pasien baru (CAC) rata-rata ${formatRupiah(unitEconomics.marketing.cac)}${unitEconomics.marketing.ltvCacRatio !== null ? `, dengan rasio LTV:CAC sebesar ${unitEconomics.marketing.ltvCacRatio}x` : ''}.`
+        : '';
+
+    const narrative = `${clinic?.name || 'Klinik ini'} mencatatkan total pendapatan kumulatif sebesar ${formatRupiah(summary.totalRevenue12mo)} sepanjang 12 bulan terakhir, dengan rata-rata ${formatRupiah(summary.avgMonthlyRevenue)} per bulan. Pendapatan tiga bulan terakhir ${growthLabel} dibandingkan tiga bulan sebelumnya. Margin keuntungan bersih rata-rata tercatat ${summary.avgMarginPercent}%, yang ${marginNarrative}. Klinik melayani ${summary.totalPatients12mo} pasien unik dengan total ${summary.totalVisits12mo} kunjungan sepanjang periode ini, di mana ${summary.totalNewPatients12mo} di antaranya adalah pasien baru. Dari pasien yang bertransaksi pada paruh pertama periode, ${retentionLabel} kembali bertransaksi pada paruh kedua — mengindikasikan tingkat retensi pasien.${cacSentence}`;
 
     const monthlyTableBody: any[] = [
       [
@@ -334,11 +339,30 @@ export class InvestorReportPdfService {
               'Days Sales Outstanding (DSO)',
               `${unitEconomics.dso.averageDays} hari`,
             ),
-            { text: '', width: '*' },
+            this.summaryBox(
+              'Customer Acquisition Cost (CAC)',
+              unitEconomics.marketing.cac !== null
+                ? formatRupiah(unitEconomics.marketing.cac)
+                : 'Belum ada data',
+            ),
           ],
           columnGap: 12,
-          margin: [0, 0, 0, 18],
+          margin: [0, 0, 0, 8],
         },
+        unitEconomics.marketing.ltvCacRatio !== null
+          ? {
+              columns: [
+                this.summaryBox(
+                  'Rasio LTV : CAC',
+                  `${unitEconomics.marketing.ltvCacRatio}x`,
+                ),
+                { text: '', width: '*' },
+                { text: '', width: '*' },
+              ],
+              columnGap: 12,
+              margin: [0, 0, 0, 18],
+            }
+          : { text: '', margin: [0, 0, 0, 18] },
 
         {
           text: 'Komposisi Pendapatan per Kategori Tindakan',
