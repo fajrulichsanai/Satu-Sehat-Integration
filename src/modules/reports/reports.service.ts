@@ -25,6 +25,8 @@ import {
 import { OperationalRecord } from '../operational-records/entities/operational-record.entity';
 import { Barang } from '../gudang/entities/barang.entity';
 import { StokTransaksi } from '../gudang/entities/stok-transaksi.entity';
+import { Patient } from '../patients/entities/patient.entity';
+import { PatientOriginGeocode } from './entities/patient-origin-geocode.entity';
 
 export interface DoctorFeeShareBreakdownItem {
   tarifId: number;
@@ -64,6 +66,10 @@ export class ReportsService {
     private readonly barangRepo: Repository<Barang>,
     @InjectRepository(StokTransaksi)
     private readonly stokTransaksiRepo: Repository<StokTransaksi>,
+    @InjectRepository(Patient)
+    private readonly patientRepo: Repository<Patient>,
+    @InjectRepository(PatientOriginGeocode)
+    private readonly patientOriginGeocodeRepo: Repository<PatientOriginGeocode>,
   ) {}
 
   async getDoctorFeeShareReport(
@@ -855,6 +861,131 @@ export class ReportsService {
         totalCost: parseFloat(r.totalCost || 0),
       })),
     };
+  }
+
+  /**
+   * Geocode satu kecamatan+kota via OpenStreetMap Nominatim (gratis, tanpa
+   * API key). Hasil selalu disimpan ke cache (termasuk kalau gagal, dengan
+   * resolved=false) supaya kecamatan yang sama tidak pernah di-request ulang
+   * ke Nominatim pada request berikutnya.
+   */
+  private async geocodeKecamatan(
+    kecamatan: string,
+    city: string,
+  ): Promise<PatientOriginGeocode> {
+    const existing = await this.patientOriginGeocodeRepo.findOne({
+      where: { kecamatan, city },
+    });
+    if (existing) return existing;
+
+    const record = this.patientOriginGeocodeRepo.create({
+      kecamatan,
+      city,
+      lat: null,
+      lng: null,
+      resolved: false,
+    });
+
+    try {
+      const q = encodeURIComponent(`${kecamatan}, ${city}, Indonesia`);
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${q}`,
+        {
+          headers: {
+            'User-Agent':
+              'ApexRecord-ClinicApp/1.0 (contact: support@apexrecord.my.id)',
+          },
+          signal: AbortSignal.timeout(5000),
+        },
+      );
+      if (res.ok) {
+        const results = (await res.json()) as Array<{
+          lat: string;
+          lon: string;
+        }>;
+        if (results.length > 0) {
+          record.lat = parseFloat(results[0].lat);
+          record.lng = parseFloat(results[0].lon);
+          record.resolved = true;
+        }
+      }
+    } catch {
+      // Gagal geocode (timeout/network) — biarkan resolved=false, tersimpan
+      // di cache supaya tidak dicoba ulang terus setiap laporan dibuka.
+    }
+
+    return this.patientOriginGeocodeRepo.save(record);
+  }
+
+  /**
+   * Sebaran asal pasien per kecamatan, untuk heatmap/bubble map di Laporan
+   * Keuangan Pro. Agregasi jumlah pasien dulu dari DB (murah), baru
+   * kecamatan yang belum pernah di-geocode di-resolve satu-satu ke Nominatim
+   * (dibatasi per request supaya tidak menggantung lama & menghormati rate
+   * limit Nominatim yaitu maks 1 request/detik).
+   */
+  async getPatientOriginMap(clinicId: number) {
+    const rows = await this.patientRepo.query(
+      `SELECT kecamatan, city, COUNT(*) AS count
+       FROM patients
+       WHERE clinic_id = ? AND kecamatan IS NOT NULL AND kecamatan != ''
+         AND city IS NOT NULL AND city != ''
+       GROUP BY kecamatan, city
+       ORDER BY count DESC`,
+      [clinicId],
+    );
+
+    const MAX_GEOCODE_PER_REQUEST = 15;
+    let geocodedThisRequest = 0;
+    const points: Array<{
+      kecamatan: string;
+      city: string;
+      count: number;
+      lat: number | null;
+      lng: number | null;
+      resolved: boolean;
+    }> = [];
+
+    for (const r of rows as Array<{
+      kecamatan: string;
+      city: string;
+      count: string;
+    }>) {
+      const cached = await this.patientOriginGeocodeRepo.findOne({
+        where: { kecamatan: r.kecamatan, city: r.city },
+      });
+
+      let geo = cached;
+      if (!geo) {
+        if (geocodedThisRequest >= MAX_GEOCODE_PER_REQUEST) {
+          points.push({
+            kecamatan: r.kecamatan,
+            city: r.city,
+            count: parseInt(r.count, 10),
+            lat: null,
+            lng: null,
+            resolved: false,
+          });
+          continue;
+        }
+        if (geocodedThisRequest > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 1100));
+        }
+        geo = await this.geocodeKecamatan(r.kecamatan, r.city);
+        geocodedThisRequest += 1;
+      }
+
+      points.push({
+        kecamatan: r.kecamatan,
+        city: r.city,
+        count: parseInt(r.count, 10),
+        lat: geo.lat !== null ? parseFloat(geo.lat as unknown as string) : null,
+        lng: geo.lng !== null ? parseFloat(geo.lng as unknown as string) : null,
+        resolved: geo.resolved,
+      });
+    }
+
+    return { data: points };
   }
 
   // ================= Metrik bisnis & keuangan lanjutan =================

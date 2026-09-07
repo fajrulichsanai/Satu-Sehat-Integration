@@ -110,6 +110,17 @@ export class ReportsController {
     res.end(pdfBuffer);
   }
 
+  @Get('financial-pro/patient-origin-map')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.OWNER)
+  @ApiOperation({
+    summary: 'Sebaran asal pasien per kecamatan untuk bubble map (owner only)',
+  })
+  async getPatientOriginMap(@ClinicId() clinicId: number) {
+    const result = await this.reportsService.getPatientOriginMap(clinicId);
+    return { success: true, data: result.data };
+  }
+
   @Get('investor/pdf')
   @UseGuards(RolesGuard)
   @Roles(UserRole.OWNER)

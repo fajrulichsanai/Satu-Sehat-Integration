@@ -10,6 +10,8 @@ import { OperationalRecord } from '../operational-records/entities/operational-r
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { Barang } from '../gudang/entities/barang.entity';
 import { StokTransaksi } from '../gudang/entities/stok-transaksi.entity';
+import { Patient } from '../patients/entities/patient.entity';
+import { PatientOriginGeocode } from './entities/patient-origin-geocode.entity';
 import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
 import { InvestorReportPdfService } from './investor-report-pdf.service';
@@ -28,6 +30,8 @@ import { FinancialReportPdfService } from './financial-report-pdf.service';
       Clinic,
       Barang,
       StokTransaksi,
+      Patient,
+      PatientOriginGeocode,
     ]),
   ],
   controllers: [ReportsController],
