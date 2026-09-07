@@ -45,7 +45,7 @@ export class PatientConsentsController {
     @ClinicId() clinicId: number,
   ) {
     const result = await this.patientConsentsService.findAll(clinicId, query);
-    return { success: true, ...result };
+    return { success: true, data: result };
   }
 
   @Get(':id')
