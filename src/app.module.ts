@@ -36,6 +36,8 @@ import { AuditLogModule } from './modules/audit-log/audit-log.module';
 import { GudangModule } from './modules/gudang/gudang.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { RecallsModule } from './modules/recalls/recalls.module';
+import { ConsentsModule } from './modules/consents/consents.module';
+import { MultiClinicModule } from './modules/multi-clinic/multi-clinic.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.guard';
 
@@ -105,6 +107,8 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     GudangModule,
     SubscriptionsModule,
     RecallsModule,
+    ConsentsModule,
+    MultiClinicModule,
   ],
   controllers: [AppController],
   providers: [
