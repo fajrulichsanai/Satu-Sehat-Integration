@@ -121,19 +121,6 @@ export class PatientsController {
     return { success: true, data };
   }
 
-  @Get(':id/timeline')
-  @ApiOperation({
-    summary:
-      'Get patient activity timeline (kunjungan, billing, foto, treatment plan, recall)',
-  })
-  async getTimeline(
-    @Param('id', ParseIntPipe) id: number,
-    @ClinicId() clinicId: number,
-  ) {
-    const data = await this.patientsService.getTimeline(id, clinicId);
-    return { success: true, data };
-  }
-
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   @Audit('Patient', AuditActionType.DELETE)

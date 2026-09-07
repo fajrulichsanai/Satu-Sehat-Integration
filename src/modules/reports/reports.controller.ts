@@ -11,7 +11,6 @@ import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ReportsService } from './reports.service';
 import { InvestorReportPdfService } from './investor-report-pdf.service';
-import { FinancialReportPdfService } from './financial-report-pdf.service';
 import {
   DoctorFeeShareReportQueryDto,
   FinancialReportQueryDto,
@@ -35,7 +34,6 @@ export class ReportsController {
   constructor(
     private readonly reportsService: ReportsService,
     private readonly investorReportPdfService: InvestorReportPdfService,
-    private readonly financialReportPdfService: FinancialReportPdfService,
   ) {}
 
   @Get('visits')
@@ -66,48 +64,6 @@ export class ReportsController {
       query,
     );
     return { success: true, data: result.data };
-  }
-
-  @Get('financial-pro')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.OWNER)
-  @ApiOperation({
-    summary:
-      'Financial report Pro — laba kotor, tren bulanan, laba per dokter, heatmap kunjungan, laporan stok (owner only)',
-  })
-  async getFinancialPro(
-    @ClinicId() clinicId: number,
-    @Query() query: FinancialReportQueryDto,
-  ) {
-    const result = await this.reportsService.getFinancialReportPro(
-      clinicId,
-      query,
-    );
-    return { success: true, data: result.data };
-  }
-
-  @Get('financial-pro/pdf')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.OWNER)
-  @ApiOperation({
-    summary:
-      'Download laporan keuangan siap print/kirim ke akuntan sebagai PDF (owner only)',
-  })
-  async downloadFinancialProPdf(
-    @ClinicId() clinicId: number,
-    @Query() query: FinancialReportQueryDto,
-    @Res() res: Response,
-  ) {
-    const pdfBuffer = await this.financialReportPdfService.generate(
-      clinicId,
-      query,
-    );
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="laporan-keuangan-${query.dateFrom}_${query.dateTo}.pdf"`,
-    );
-    res.end(pdfBuffer);
   }
 
   @Get('investor/pdf')

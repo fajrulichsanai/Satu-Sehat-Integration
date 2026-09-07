@@ -315,7 +315,6 @@ export class UsersService {
     const roles = this.isSuperAdmin(currentUser)
       ? [
           { value: UserRole.SUPER_ADMIN, label: 'Super Admin' },
-          { value: UserRole.MULTI_CLINIC_OWNER, label: 'Multi-Klinik Owner' },
           { value: UserRole.OWNER, label: 'Owner' },
           { value: UserRole.ADMIN, label: 'Admin' },
           { value: UserRole.DOKTER, label: 'Dokter' },
@@ -489,26 +488,19 @@ export class UsersService {
 
     this.assertCanAssignRole(currentUser, dto.role);
 
-    const clinicLessRoles: UserRole[] = [
-      UserRole.SUPER_ADMIN,
-      UserRole.MULTI_CLINIC_OWNER,
-    ];
-
     let clinicId: number | null;
     if (this.isSuperAdmin(currentUser)) {
-      if (!clinicLessRoles.includes(dto.role) && !dto.clinicId) {
+      if (dto.role !== UserRole.SUPER_ADMIN && !dto.clinicId) {
         throw new BadRequestException({
           success: false,
           error: {
             code: 'CLINIC_ID_REQUIRED',
-            message:
-              'clinicId wajib diisi untuk role selain super admin/multi-klinik owner',
+            message: 'clinicId wajib diisi untuk role selain super admin',
           },
         });
       }
-      clinicId = clinicLessRoles.includes(dto.role)
-        ? null
-        : (dto.clinicId as number);
+      clinicId =
+        dto.role === UserRole.SUPER_ADMIN ? null : (dto.clinicId as number);
     } else {
       clinicId = currentUser.clinicId;
     }

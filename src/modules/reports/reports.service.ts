@@ -23,8 +23,6 @@ import {
   FeeType,
 } from '../doctor-fee/entities/doctor-fee-config.entity';
 import { OperationalRecord } from '../operational-records/entities/operational-record.entity';
-import { Barang } from '../gudang/entities/barang.entity';
-import { StokTransaksi } from '../gudang/entities/stok-transaksi.entity';
 
 export interface DoctorFeeShareBreakdownItem {
   tarifId: number;
@@ -60,10 +58,6 @@ export class ReportsService {
     private readonly doctorFeeConfigRepo: Repository<DoctorFeeConfig>,
     @InjectRepository(OperationalRecord)
     private readonly operationalRecordRepo: Repository<OperationalRecord>,
-    @InjectRepository(Barang)
-    private readonly barangRepo: Repository<Barang>,
-    @InjectRepository(StokTransaksi)
-    private readonly stokTransaksiRepo: Repository<StokTransaksi>,
   ) {}
 
   async getDoctorFeeShareReport(
@@ -673,190 +667,6 @@ export class ReportsService {
     };
   }
 
-  // ================= Laporan Keuangan Pro (PRD 5.14) =================
-  // Konten "Pro" — laporan ke akuntan/investor, laporan stok, dan analitik
-  // tambahan — sengaja dipisah dari getFinancialReport (basic) supaya
-  // halaman basic tetap ringan dan hanya berisi tabel + export Excel.
-
-  /**
-   * Laporan keuangan versi Pro: superset dari basic ditambah laba kotor,
-   * tren bulanan (6 bulan), laba bersih per dokter, ranking tindakan
-   * paling sering didiskon, heatmap jam kunjungan, dan laporan stok
-   * (integrasi Gudang).
-   */
-  async getFinancialReportPro(
-    clinicId: number,
-    query: FinancialReportQueryDto,
-  ) {
-    const base = await this.getFinancialReport(clinicId, query);
-
-    const monthKeys = this.getTrailingMonthKeys(6);
-    const [monthlyTrend, byDoctorProfit, visitHeatmap, stockReport] =
-      await Promise.all([
-        this.computeMonthlyTrend(clinicId, monthKeys),
-        this.computeByDoctorProfit(clinicId, query.dateFrom, query.dateTo),
-        this.computeVisitHeatmap(clinicId, query.dateFrom, query.dateTo),
-        this.computeStockReport(clinicId, query.dateFrom, query.dateTo),
-      ]);
-
-    const discountRanking = [...base.data.tindakanTerlaris]
-      .filter((t) => t.totalDiskon > 0)
-      .sort((a, b) => b.totalDiskon - a.totalDiskon)
-      .slice(0, 10);
-
-    const labaKotor = base.data.summary.totalPaid - base.data.ringkasan.modal;
-
-    return {
-      data: {
-        ...base.data,
-        labaKotor,
-        monthlyTrend,
-        byDoctorProfit,
-        discountRanking,
-        visitHeatmap,
-        stockReport,
-      },
-    };
-  }
-
-  /**
-   * Laba bersih per dokter (pendapatan - modal - fee dokter), untuk chart
-   * "Revenue per Dokter" di Laporan Keuangan Pro. Terpisah dari byDoctor di
-   * getFinancialReport karena butuh modal per tindakan per dokter juga.
-   */
-  private async computeByDoctorProfit(
-    clinicId: number,
-    dateFrom: string,
-    dateTo: string,
-  ) {
-    const rows = await this.billingItemRepo.query(
-      `SELECT
-         pr.id AS practitionerId,
-         pr.name AS practitionerName,
-         t.harga_pokok AS hargaPokok,
-         t.harga_jual AS hargaJual,
-         SUM(bi.quantity) AS qty,
-         SUM(bi.subtotal) AS revenue,
-         dfc.fee_type AS feeType,
-         dfc.fee_value AS feeValue
-       FROM billing_items bi
-       JOIN billings b ON bi.billing_id = b.id
-       JOIN encounters e ON b.encounter_id = e.id
-       JOIN practitioners pr ON e.practitioner_id = pr.id
-       JOIN tarifs t ON bi.tarif_id = t.id
-       LEFT JOIN doctor_fee_configs dfc
-         ON dfc.tarif_id = t.id AND dfc.clinic_id = b.clinic_id
-       WHERE b.clinic_id = ? AND DATE(b.created_at) BETWEEN ? AND ?
-         AND b.status != 'cancelled'
-       GROUP BY pr.id, pr.name, t.id, t.harga_pokok, t.harga_jual, dfc.fee_type, dfc.fee_value`,
-      [clinicId, dateFrom, dateTo],
-    );
-
-    const byPractitioner = new Map<
-      number,
-      {
-        practitionerName: string;
-        revenue: number;
-        modal: number;
-        feeShare: number;
-      }
-    >();
-    for (const r of rows as any[]) {
-      const qty = parseInt(r.qty, 10);
-      const revenue = parseFloat(r.revenue || 0);
-      const hargaPokok = parseFloat(r.hargaPokok || 0);
-      const hargaJual = parseFloat(r.hargaJual || 0);
-      const feeType: FeeType = r.feeType || FeeType.PERCENTAGE;
-      const feeValue = parseFloat(r.feeValue || 0);
-      const modal = hargaPokok * qty;
-      const feeShare =
-        feeType === FeeType.FIXED
-          ? qty * feeValue
-          : qty * (hargaJual * (feeValue / 100));
-
-      const existing = byPractitioner.get(r.practitionerId) ?? {
-        practitionerName: r.practitionerName,
-        revenue: 0,
-        modal: 0,
-        feeShare: 0,
-      };
-      existing.revenue += revenue;
-      existing.modal += modal;
-      existing.feeShare += feeShare;
-      byPractitioner.set(r.practitionerId, existing);
-    }
-
-    return Array.from(byPractitioner.values())
-      .map((d) => ({
-        practitionerName: d.practitionerName,
-        revenue: d.revenue,
-        doctorFeeShare: d.feeShare,
-        labaBersih: d.revenue - d.modal - d.feeShare,
-      }))
-      .sort((a, b) => b.revenue - a.revenue);
-  }
-
-  /** Jumlah kunjungan per hari-dalam-minggu x jam, untuk heatmap jam tersibuk. */
-  private async computeVisitHeatmap(
-    clinicId: number,
-    dateFrom: string,
-    dateTo: string,
-  ) {
-    const rows = await this.encounterRepo.query(
-      `SELECT DAYOFWEEK(arrived_time) AS dayOfWeek, HOUR(arrived_time) AS hour, COUNT(*) AS count
-       FROM encounters
-       WHERE clinic_id = ? AND DATE(arrived_time) BETWEEN ? AND ?
-       GROUP BY dayOfWeek, hour`,
-      [clinicId, dateFrom, dateTo],
-    );
-    return (rows as any[]).map((r) => ({
-      dayOfWeek: parseInt(r.dayOfWeek, 10),
-      hour: parseInt(r.hour, 10),
-      count: parseInt(r.count, 10),
-    }));
-  }
-
-  /**
-   * Laporan Stok (integrasi Gudang) — total nilai inventory saat ini, dan
-   * pemakaian bahan (transaksi keluar) pada periode terpilih diurutkan dari
-   * biaya tertinggi (sekaligus menjawab "bahan dengan biaya tertinggi").
-   */
-  private async computeStockReport(
-    clinicId: number,
-    dateFrom: string,
-    dateTo: string,
-  ) {
-    const [inventoryRow] = await this.barangRepo.query(
-      `SELECT SUM(stok_saat_ini * harga_beli) AS totalValue, COUNT(*) AS totalItems
-       FROM barang WHERE clinic_id = ? AND is_active = 1`,
-      [clinicId],
-    );
-
-    const usageRows = await this.stokTransaksiRepo.query(
-      `SELECT b.id AS barangId, b.name AS barangName, b.satuan_pakai AS satuan,
-         SUM(st.qty) AS qtyUsed,
-         SUM(st.qty * COALESCE(st.harga_beli, b.harga_beli)) AS totalCost
-       FROM stok_transaksi st
-       JOIN barang b ON st.barang_id = b.id
-       WHERE st.clinic_id = ? AND st.type = 'out' AND st.tanggal BETWEEN ? AND ?
-       GROUP BY b.id, b.name, b.satuan_pakai
-       ORDER BY totalCost DESC`,
-      [clinicId, dateFrom, dateTo],
-    );
-
-    return {
-      totalInventoryValue: parseFloat(inventoryRow?.totalValue || 0),
-      totalActiveItems: parseInt(inventoryRow?.totalItems || 0, 10),
-      usage: (usageRows as any[]).map((r) => ({
-        barangId: r.barangId,
-        barangName: r.barangName,
-        satuan: r.satuan,
-        qtyUsed: parseInt(r.qtyUsed, 10),
-        totalCost: parseFloat(r.totalCost || 0),
-      })),
-    };
-  }
-
   // ================= Metrik bisnis & keuangan lanjutan =================
   // Dipakai baik oleh laporan keuangan interaktif (getFinancialReport) maupun
   // laporan investor (getInvestorReportData) supaya definisinya konsisten.
@@ -1123,10 +933,10 @@ export class ReportsService {
     };
   }
 
-  private getTrailingMonthKeys(monthCount: number): string[] {
+  private getTrailing12MonthKeys(): string[] {
     const keys: string[] = [];
     const now = new Date();
-    for (let i = monthCount - 1; i >= 0; i--) {
+    for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       keys.push(
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
@@ -1136,13 +946,15 @@ export class ReportsService {
   }
 
   /**
-   * Tren pendapatan/modal/pengeluaran/laba per bulan untuk sekumpulan
-   * bulan (monthKeys, format YYYY-MM) — dipakai baik oleh Laporan Investor
-   * (trailing 12 bulan) maupun chart "Pendapatan vs Pengeluaran per Bulan"
-   * di Laporan Keuangan Pro (trailing 6 bulan), supaya definisinya konsisten.
+   * Data untuk Laporan Investor: tren 12 bulan terakhir + unit economics,
+   * dipakai untuk render PDF (lihat InvestorReportPdfService). Selalu
+   * trailing 12 bulan dari bulan berjalan — tidak terikat filter tanggal
+   * halaman laporan keuangan, karena investor melihat tren, bukan snapshot.
    */
-  private async computeMonthlyTrend(clinicId: number, monthKeys: string[]) {
+  async getInvestorReportData(clinicId: number) {
+    const monthKeys = this.getTrailing12MonthKeys();
     const startDate = `${monthKeys[0]}-01`;
+    const dateTo = new Date().toISOString().slice(0, 10);
 
     const revenueRows = await this.billingRepo.query(
       `SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, SUM(paid_amount) AS revenue
@@ -1191,7 +1003,7 @@ export class ReportsService {
       return found ? parseFloat(found[field] || 0) : 0;
     };
 
-    return monthKeys.map((month) => {
+    const monthly = monthKeys.map((month) => {
       const revenue = findMonth(revenueRows, month, 'revenue');
       const modal = findMonth(modalRows, month, 'modal');
       const expense = findMonth(expenseRows, month, 'expense');
@@ -1212,20 +1024,6 @@ export class ReportsService {
         ),
       };
     });
-  }
-
-  /**
-   * Data untuk Laporan Investor: tren 12 bulan terakhir + unit economics,
-   * dipakai untuk render PDF (lihat InvestorReportPdfService). Selalu
-   * trailing 12 bulan dari bulan berjalan — tidak terikat filter tanggal
-   * halaman laporan keuangan, karena investor melihat tren, bukan snapshot.
-   */
-  async getInvestorReportData(clinicId: number) {
-    const monthKeys = this.getTrailingMonthKeys(12);
-    const startDate = `${monthKeys[0]}-01`;
-    const dateTo = new Date().toISOString().slice(0, 10);
-
-    const monthly = await this.computeMonthlyTrend(clinicId, monthKeys);
 
     const totalRevenue12mo = monthly.reduce((sum, m) => sum + m.revenue, 0);
     const totalNetProfit12mo = monthly.reduce((sum, m) => sum + m.netProfit, 0);
