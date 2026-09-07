@@ -24,10 +24,10 @@ export class PatientRecall extends BaseEntity {
   @Column({ name: 'patient_id' })
   patientId: number;
 
-  @Column({ name: 'tarif_id', nullable: true })
+  @Column({ name: 'tarif_id', type: 'int', nullable: true })
   tarifId: number | null;
 
-  @Column({ name: 'billing_item_id', nullable: true })
+  @Column({ name: 'billing_item_id', type: 'int', nullable: true })
   billingItemId: number | null;
 
   @Column({ name: 'due_date', type: 'date' })
