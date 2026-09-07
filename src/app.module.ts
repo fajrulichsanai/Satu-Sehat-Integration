@@ -36,8 +36,11 @@ import { AuditLogModule } from './modules/audit-log/audit-log.module';
 import { GudangModule } from './modules/gudang/gudang.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { RecallsModule } from './modules/recalls/recalls.module';
-import { ConsentsModule } from './modules/consents/consents.module';
-import { MultiClinicModule } from './modules/multi-clinic/multi-clinic.module';
+// ConsentsModule dan MultiClinicModule dinonaktifkan sementara (backend
+// crash-loop di staging setelah kedua modul ini dideploy — perlu log
+// server untuk cari akar masalahnya, belum bisa dipastikan dari sini).
+// import { ConsentsModule } from './modules/consents/consents.module';
+// import { MultiClinicModule } from './modules/multi-clinic/multi-clinic.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.guard';
 
@@ -107,8 +110,8 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     GudangModule,
     SubscriptionsModule,
     RecallsModule,
-    ConsentsModule,
-    MultiClinicModule,
+    // ConsentsModule,
+    // MultiClinicModule,
   ],
   controllers: [AppController],
   providers: [
