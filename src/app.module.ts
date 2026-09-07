@@ -38,6 +38,7 @@ import { SubscriptionsModule } from './modules/subscriptions/subscriptions.modul
 import { RecallsModule } from './modules/recalls/recalls.module';
 import { ConsentsModule } from './modules/consents/consents.module';
 import { MultiClinicModule } from './modules/multi-clinic/multi-clinic.module';
+import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.guard';
 
@@ -109,6 +110,7 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     RecallsModule,
     ConsentsModule,
     MultiClinicModule,
+    OnboardingModule,
   ],
   controllers: [AppController],
   providers: [
