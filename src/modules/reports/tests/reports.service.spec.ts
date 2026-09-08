@@ -204,6 +204,26 @@ describe('ReportsService', () => {
       } as any);
       expect(result.data).toEqual([]);
     });
+
+    it('appends a practitioner filter to the SQL and params when practitionerId is given (positive)', async () => {
+      billingItemRepo.query.mockResolvedValue([]);
+
+      await service.getDoctorFeeShareReport(1, { year: 2026, month: 1 } as any, 42);
+
+      const [sql, params] = billingItemRepo.query.mock.calls[0];
+      expect(sql).toContain('AND pr.id = ?');
+      expect(params).toEqual([1, 2026, 1, 42]);
+    });
+
+    it('does not filter by practitioner when practitionerId is omitted (positive/edge)', async () => {
+      billingItemRepo.query.mockResolvedValue([]);
+
+      await service.getDoctorFeeShareReport(1, { year: 2026, month: 1 } as any);
+
+      const [sql, params] = billingItemRepo.query.mock.calls[0];
+      expect(sql).not.toContain('AND pr.id = ?');
+      expect(params).toEqual([1, 2026, 1]);
+    });
   });
 
   describe('getTrailingMonthKeys (private)', () => {
