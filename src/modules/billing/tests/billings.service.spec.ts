@@ -307,6 +307,7 @@ describe('BillingsService', () => {
         totalDiscount: 0,
         additionalFee: 0,
         paidAmount: 100000,
+        outstandingAmount: 0,
         notes: null,
       };
       manager.findOne.mockResolvedValueOnce(billing).mockResolvedValueOnce({
@@ -329,6 +330,7 @@ describe('BillingsService', () => {
         totalDiscount: 0,
         additionalFee: 0,
         paidAmount: 30000,
+        outstandingAmount: 0,
         notes: null,
       };
       manager.findOne.mockResolvedValueOnce(billing).mockResolvedValueOnce(billing);

@@ -95,14 +95,14 @@ describe('LocationsService', () => {
 
   describe('update', () => {
     it('updates fields without re-checking name uniqueness when unchanged (positive)', async () => {
-      repo.findOne.mockResolvedValueOnce({ id: 1, clinicId: 1, name: 'Ruang 1' });
+      repo.findOne.mockResolvedValueOnce({ id: 1, clinicId: 1, name: 'Ruang 1', type: 'ROOM' });
       const result = await service.update(
         1,
-        { description: 'Baru' } as any,
+        { type: 'DEPT' } as any,
         1,
         9,
       );
-      expect(result.data.description).toBe('Baru');
+      expect(result.data.type).toBe('DEPT');
       expect(repo.findOne).toHaveBeenCalledTimes(1);
     });
 
