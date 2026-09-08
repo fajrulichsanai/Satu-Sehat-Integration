@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import {
   PatientRecall,
   PatientRecallStatus,
@@ -11,10 +11,16 @@ import {
   UpdatePatientRecallDto,
 } from './dto/patient-recall.dto';
 import { PaginatedResult } from '../../common/dto/pagination.dto';
+import { Reservation } from '../reservations/entities/reservation.entity';
+import { ReservationStatus } from '../../enums';
 
 interface BillingItemForRecall {
   tarifId: number | null;
   billingItemId: number;
+}
+
+export interface PatientRecallWithReservation extends PatientRecall {
+  upcomingReservation: { id: number; reservationDate: string } | null;
 }
 
 @Injectable()
@@ -24,13 +30,46 @@ export class PatientRecallsService {
   constructor(
     @InjectRepository(PatientRecall)
     private readonly patientRecallRepository: Repository<PatientRecall>,
+    @InjectRepository(Reservation)
+    private readonly reservationRepository: Repository<Reservation>,
     private readonly recallIntervalsService: RecallIntervalsService,
   ) {}
+
+  /**
+   * Cek reservasi aktif (belum dibatalkan/selesai) per pasien, supaya tombol
+   * "Sudah Booking" di daftar recall bisa langsung terhubung ke reservasi
+   * yang benar-benar ada, bukan cuma status yang ditandai manual.
+   */
+  private async findUpcomingReservationsByPatient(
+    clinicId: number,
+    patientIds: number[],
+  ): Promise<Map<number, { id: number; reservationDate: string }>> {
+    const map = new Map<number, { id: number; reservationDate: string }>();
+    if (patientIds.length === 0) return map;
+
+    const reservations = await this.reservationRepository.find({
+      where: {
+        clinicId,
+        patientId: In(patientIds),
+        status: In([ReservationStatus.PENDING, ReservationStatus.CONFIRMED]),
+      },
+      order: { reservationDate: 'ASC' },
+    });
+
+    for (const r of reservations) {
+      if (!r.patientId || map.has(r.patientId)) continue;
+      map.set(r.patientId, {
+        id: r.id,
+        reservationDate: r.reservationDate,
+      });
+    }
+    return map;
+  }
 
   async findAll(
     clinicId: number,
     query: PatientRecallQueryDto,
-  ): Promise<PaginatedResult<PatientRecall>> {
+  ): Promise<PaginatedResult<PatientRecallWithReservation>> {
     const qb = this.patientRecallRepository
       .createQueryBuilder('r')
       .leftJoinAndSelect('r.patient', 'patient')
@@ -45,10 +84,20 @@ export class PatientRecallsService {
 
     const page = query.page || 1;
     const limit = query.limit || 20;
-    const [data, total] = await qb
+    const [recalls, total] = await qb
       .skip((page - 1) * limit)
       .take(limit)
       .getManyAndCount();
+
+    const patientIds = [...new Set(recalls.map((r) => r.patientId))];
+    const reservationByPatient = await this.findUpcomingReservationsByPatient(
+      clinicId,
+      patientIds,
+    );
+    const data: PatientRecallWithReservation[] = recalls.map((r) => ({
+      ...r,
+      upcomingReservation: reservationByPatient.get(r.patientId) ?? null,
+    }));
 
     return {
       data,
