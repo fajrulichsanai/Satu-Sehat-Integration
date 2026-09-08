@@ -1,8 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { UsersService } from '../users.service';
 import { User } from '../entities/user.entity';
+import { Practitioner } from '../../practitioners/entities/practitioner.entity';
 
 const mockRepo = {
   find: jest.fn(),
@@ -15,6 +16,13 @@ const mockRepo = {
   getMany: jest.fn().mockResolvedValue([]),
 };
 
+const mockPractitionerRepo = {
+  find: jest.fn(),
+  findOne: jest.fn(),
+  create: jest.fn(),
+  save: jest.fn(),
+};
+
 describe('UsersService', () => {
   let service: UsersService;
 
@@ -23,6 +31,10 @@ describe('UsersService', () => {
       providers: [
         UsersService,
         { provide: getRepositoryToken(User), useValue: mockRepo },
+        {
+          provide: getRepositoryToken(Practitioner),
+          useValue: mockPractitionerRepo,
+        },
       ],
     }).compile();
     service = module.get<UsersService>(UsersService);
