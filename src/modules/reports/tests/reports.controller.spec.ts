@@ -82,6 +82,32 @@ describe('ReportsController', () => {
       );
     });
 
+    it('returns exactly what the service resolves for a DOKTER’s own scoped report, unmodified (positive, integration)', async () => {
+      // Guards against the controller re-shaping or dropping fields on the
+      // way out — the earlier tests only assert on the call *args*.
+      const scopedReport = {
+        success: true,
+        data: [
+          {
+            practitionerId: 42,
+            practitionerName: 'Dr. Own',
+            breakdown: [{ tarifId: 7, tarifName: 'Scaling', count: 2, feeType: 'percentage', feeValue: 15, totalShare: 60000 }],
+            totalTindakan: 2,
+            totalShareFee: 60000,
+          },
+        ],
+      };
+      reportsService.getDoctorFeeShareReport.mockResolvedValue(scopedReport);
+
+      const result = await controller.getDoctorFeeShare(1, query, {
+        userId: 5,
+        role: UserRole.DOKTER,
+        practitionerId: 42,
+      });
+
+      expect(result).toBe(scopedReport);
+    });
+
     it('returns an empty report without querying at all when a DOKTER has no linked practitioner yet (negative/edge)', async () => {
       const result = await controller.getDoctorFeeShare(1, query, {
         userId: 5,

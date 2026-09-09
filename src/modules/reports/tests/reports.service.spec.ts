@@ -215,6 +215,35 @@ describe('ReportsService', () => {
       expect(params).toEqual([1, 2026, 1, 42]);
     });
 
+    it('maps the filtered row through to a full, correct breakdown when practitionerId is given (positive, end-to-end)', async () => {
+      // Guards against a regression where the SQL filter is appended but the
+      // result-mapping logic silently drops or mis-scopes the filtered row —
+      // i.e. this checks the actual DATA returned, not just the query args.
+      billingItemRepo.query.mockResolvedValue([
+        {
+          practitionerId: 42,
+          practitionerName: 'Dr. Own',
+          tarifId: 7,
+          tarifName: 'Scaling',
+          hargaJual: '200000',
+          count: '2',
+          feeType: FeeType.PERCENTAGE,
+          feeValue: '15',
+        },
+      ]);
+
+      const result = await service.getDoctorFeeShareReport(1, { year: 2026, month: 1 } as any, 42);
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].practitionerId).toBe(42);
+      expect(result.data[0].practitionerName).toBe('Dr. Own');
+      expect(result.data[0].totalTindakan).toBe(2);
+      expect(result.data[0].totalShareFee).toBe(2 * (200000 * 0.15));
+      expect(result.data[0].breakdown).toEqual([
+        expect.objectContaining({ tarifId: 7, tarifName: 'Scaling', count: 2, feeType: FeeType.PERCENTAGE }),
+      ]);
+    });
+
     it('does not filter by practitioner when practitionerId is omitted (positive/edge)', async () => {
       billingItemRepo.query.mockResolvedValue([]);
 
