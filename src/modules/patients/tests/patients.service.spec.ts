@@ -10,6 +10,9 @@ import { PatientsService } from '../patients.service';
 import { Patient } from '../entities/patient.entity';
 import { Encounter } from '../../encounters/entities/encounter.entity';
 import { EncounterSoapNote } from '../../encounter-soap-notes/entities/encounter-soap-note.entity';
+import { PhysicalExamination } from '../../physical-examination/entities/physical-examination.entity';
+import { DentalExamination } from '../../dental-examination/entities/dental-examination.entity';
+import { PrescriptionItem } from '../../prescriptions/entities/prescription-item.entity';
 import { Billing } from '../../billing/entities/billing.entity';
 import {
   SupportingExamImage,
@@ -49,6 +52,9 @@ describe('PatientsService', () => {
   };
   let encounterRepo: { find: jest.Mock };
   let soapRepo: { find: jest.Mock };
+  let physicalExamRepo: { find: jest.Mock };
+  let dentalExamRepo: { find: jest.Mock };
+  let prescriptionRepo: { find: jest.Mock };
   let billingRepo: { find: jest.Mock };
   let imageRepo: { find: jest.Mock };
   let recallRepo: { find: jest.Mock };
@@ -73,6 +79,9 @@ describe('PatientsService', () => {
     };
     encounterRepo = { find: jest.fn().mockResolvedValue([]) };
     soapRepo = { find: jest.fn().mockResolvedValue([]) };
+    physicalExamRepo = { find: jest.fn().mockResolvedValue([]) };
+    dentalExamRepo = { find: jest.fn().mockResolvedValue([]) };
+    prescriptionRepo = { find: jest.fn().mockResolvedValue([]) };
     billingRepo = { find: jest.fn().mockResolvedValue([]) };
     imageRepo = { find: jest.fn().mockResolvedValue([]) };
     recallRepo = { find: jest.fn().mockResolvedValue([]) };
@@ -89,6 +98,9 @@ describe('PatientsService', () => {
         { provide: getRepositoryToken(Patient), useValue: patientRepo },
         { provide: getRepositoryToken(Encounter), useValue: encounterRepo },
         { provide: getRepositoryToken(EncounterSoapNote), useValue: soapRepo },
+        { provide: getRepositoryToken(PhysicalExamination), useValue: physicalExamRepo },
+        { provide: getRepositoryToken(DentalExamination), useValue: dentalExamRepo },
+        { provide: getRepositoryToken(PrescriptionItem), useValue: prescriptionRepo },
         { provide: getRepositoryToken(Billing), useValue: billingRepo },
         { provide: getRepositoryToken(SupportingExamImage), useValue: imageRepo },
         { provide: getRepositoryToken(PatientRecall), useValue: recallRepo },

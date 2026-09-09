@@ -4,6 +4,8 @@ import { Patient } from './entities/patient.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import { EncounterSoapNote } from '../encounter-soap-notes/entities/encounter-soap-note.entity';
 import { PhysicalExamination } from '../physical-examination/entities/physical-examination.entity';
+import { DentalExamination } from '../dental-examination/entities/dental-examination.entity';
+import { PrescriptionItem } from '../prescriptions/entities/prescription-item.entity';
 import { Billing } from '../billing/entities/billing.entity';
 import { SupportingExamImage } from '../supporting-exam/entities/supporting-exam-image.entity';
 import { PatientRecall } from '../recalls/entities/patient-recall.entity';
@@ -20,6 +22,8 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
       Encounter,
       EncounterSoapNote,
       PhysicalExamination,
+      DentalExamination,
+      PrescriptionItem,
       Billing,
       SupportingExamImage,
       PatientRecall,
