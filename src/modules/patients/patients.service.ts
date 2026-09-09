@@ -11,6 +11,7 @@ import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { Patient } from './entities/patient.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import { EncounterSoapNote } from '../encounter-soap-notes/entities/encounter-soap-note.entity';
+import { PhysicalExamination } from '../physical-examination/entities/physical-examination.entity';
 import { Billing } from '../billing/entities/billing.entity';
 import {
   SupportingExamImage,
@@ -37,6 +38,8 @@ export class PatientsService {
     private readonly encounterRepository: Repository<Encounter>,
     @InjectRepository(EncounterSoapNote)
     private readonly encounterSoapNoteRepository: Repository<EncounterSoapNote>,
+    @InjectRepository(PhysicalExamination)
+    private readonly physicalExaminationRepository: Repository<PhysicalExamination>,
     @InjectRepository(Billing)
     private readonly billingRepository: Repository<Billing>,
     @InjectRepository(SupportingExamImage)
@@ -171,6 +174,79 @@ export class PatientsService {
   async findTreatmentPlans(patientId: number, clinicId: number) {
     await this.findOne(patientId, clinicId);
     return this.treatmentPlansService.findByPatient(patientId, clinicId);
+  }
+
+  /**
+   * Rekam Medis pasien — satu baris CPPT per kunjungan (encounter), digabung
+   * dengan tanda vital pemeriksaan fisik hari itu. Read-only, agregasi dari
+   * data yang sudah ada (bukan form terpisah).
+   */
+  async getMedicalRecord(patientId: number, clinicId: number) {
+    await this.findOne(patientId, clinicId);
+
+    const encounters = await this.encounterRepository.find({
+      where: { patientId, clinicId },
+      relations: { practitioner: true },
+      order: { arrivedTime: 'DESC' },
+    });
+    const encounterIds = encounters.map((e) => e.id);
+
+    const [soapNotes, physicalExams] = await Promise.all([
+      encounterIds.length
+        ? this.encounterSoapNoteRepository.find({
+            where: { encounterId: In(encounterIds) },
+          })
+        : Promise.resolve([]),
+      encounterIds.length
+        ? this.physicalExaminationRepository.find({
+            where: { encounterId: In(encounterIds) },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const soapByEncounter = new Map(soapNotes.map((s) => [s.encounterId, s]));
+    const examByEncounter = new Map(
+      physicalExams.map((p) => [p.encounterId, p]),
+    );
+
+    return encounters.map((e) => {
+      const soap = soapByEncounter.get(e.id);
+      const exam = examByEncounter.get(e.id);
+      return {
+        encounter: {
+          id: e.id,
+          status: e.status,
+          serviceType: e.serviceType,
+          chiefComplaint: e.chiefComplaint,
+          arrivedTime: e.arrivedTime,
+          finishedTime: e.finishedTime,
+          practitionerName: e.practitioner?.name,
+        },
+        vitals: exam
+          ? {
+              bloodPressureSystolic: exam.bloodPressureSystolic,
+              bloodPressureDiastolic: exam.bloodPressureDiastolic,
+              pulseRate: exam.pulseRate,
+              respiratoryRate: exam.respiratoryRate,
+              temperature: exam.temperature,
+              oxygenSaturation: exam.oxygenSaturation,
+              weight: exam.weight,
+              height: exam.height,
+            }
+          : null,
+        soap: soap
+          ? {
+              subjective: soap.subjective,
+              objective: soap.objective,
+              assessment: soap.assessment,
+              treatment: soap.treatment,
+              plan: soap.plan,
+              controlPlan: soap.controlPlan,
+              signature: soap.signature,
+            }
+          : null,
+      };
+    });
   }
 
   /**

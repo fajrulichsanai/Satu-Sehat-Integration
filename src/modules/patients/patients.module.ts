@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Patient } from './entities/patient.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import { EncounterSoapNote } from '../encounter-soap-notes/entities/encounter-soap-note.entity';
+import { PhysicalExamination } from '../physical-examination/entities/physical-examination.entity';
 import { Billing } from '../billing/entities/billing.entity';
 import { SupportingExamImage } from '../supporting-exam/entities/supporting-exam-image.entity';
 import { PatientRecall } from '../recalls/entities/patient-recall.entity';
@@ -18,6 +19,7 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
       Patient,
       Encounter,
       EncounterSoapNote,
+      PhysicalExamination,
       Billing,
       SupportingExamImage,
       PatientRecall,

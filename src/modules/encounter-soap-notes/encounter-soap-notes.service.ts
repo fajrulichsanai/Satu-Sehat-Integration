@@ -42,6 +42,7 @@ export class EncounterSoapNotesService {
         assessment: dto.assessment,
         treatment: dto.treatment,
         plan: dto.plan,
+        controlPlan: dto.controlPlan,
         signature: dto.signature,
         createdBy: userId,
       });
@@ -52,6 +53,7 @@ export class EncounterSoapNotesService {
         assessment: dto.assessment ?? note.assessment,
         treatment: dto.treatment ?? note.treatment,
         plan: dto.plan ?? note.plan,
+        controlPlan: dto.controlPlan ?? note.controlPlan,
         signature: dto.signature ?? note.signature,
         updatedBy: userId,
       });
