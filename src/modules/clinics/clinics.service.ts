@@ -145,7 +145,8 @@ export class ClinicsService {
       });
     }
 
-    const ext = file.originalname.split('.').pop() || 'jpg';
+    const nameParts = file.originalname.split('.');
+    const ext = nameParts.length > 1 ? nameParts.pop() || 'jpg' : 'jpg';
     const key = `clinics/${clinicId}/logo-${Date.now()}.${ext}`;
     const logoUrl = await this.s3StorageService.uploadBuffer(
       key,

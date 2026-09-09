@@ -175,12 +175,32 @@ export class ReportsController {
 
   @Get('doctor-fee-share')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
-  @ApiOperation({ summary: 'Monthly doctor fee share report' })
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DOKTER)
+  @ApiOperation({
+    summary:
+      'Monthly doctor fee share report (dokter sees only their own share)',
+  })
   async getDoctorFeeShare(
     @ClinicId() clinicId: number,
     @Query() query: DoctorFeeShareReportQueryDto,
+    @CurrentUser() user: any,
   ) {
+    if (user.role === UserRole.DOKTER) {
+      // A dokter must never see a colleague's fee breakdown. Force the
+      // filter to their own linked practitioner row rather than trusting a
+      // query param — there isn't one exposed for this on purpose. If the
+      // account has no linked practitioner yet (role just assigned, sync
+      // pending), return an empty report instead of accidentally falling
+      // through to the unfiltered (all-practitioners) query.
+      if (!user.practitionerId) {
+        return { success: true, data: [] };
+      }
+      return this.reportsService.getDoctorFeeShareReport(
+        clinicId,
+        query,
+        user.practitionerId,
+      );
+    }
     return this.reportsService.getDoctorFeeShareReport(clinicId, query);
   }
 

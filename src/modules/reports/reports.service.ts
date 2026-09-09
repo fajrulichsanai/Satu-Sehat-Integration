@@ -75,7 +75,18 @@ export class ReportsService {
   async getDoctorFeeShareReport(
     clinicId: number,
     query: DoctorFeeShareReportQueryDto,
+    practitionerId?: number,
   ) {
+    const params: unknown[] = [clinicId, query.year, query.month];
+    // Scoping filter for the DOKTER self-service view (see ReportsController) —
+    // applied in SQL, not just filtered out of the result, so a doctor's own
+    // report never even pulls colleagues' fee rows into memory.
+    let practitionerFilter = '';
+    if (practitionerId) {
+      practitionerFilter = 'AND pr.id = ?';
+      params.push(practitionerId);
+    }
+
     const rows = await this.billingItemRepo.query(
       `SELECT
          pr.id AS practitionerId,
@@ -97,9 +108,10 @@ export class ReportsService {
          AND b.status != 'cancelled'
          AND YEAR(b.created_at) = ?
          AND MONTH(b.created_at) = ?
+         ${practitionerFilter}
        GROUP BY pr.id, pr.name, t.id, t.name, t.harga_jual, dfc.fee_type, dfc.fee_value
        ORDER BY pr.id ASC`,
-      [clinicId, query.year, query.month],
+      params,
     );
 
     const byPractitioner = new Map<number, DoctorFeeShareEntry>();
