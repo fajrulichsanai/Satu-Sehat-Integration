@@ -100,7 +100,12 @@ export class InvestorReportPdfService {
         ? ` Biaya akuisisi pasien baru (CAC) rata-rata ${formatRupiah(unitEconomics.marketing.cac)}${unitEconomics.marketing.ltvCacRatio !== null ? `, dengan rasio LTV:CAC sebesar ${unitEconomics.marketing.ltvCacRatio}x` : ''}.`
         : '';
 
-    const narrative = `${clinic?.name || 'Klinik ini'} mencatatkan total pendapatan kumulatif sebesar ${formatRupiah(summary.totalRevenue12mo)} sepanjang 12 bulan terakhir, dengan rata-rata ${formatRupiah(summary.avgMonthlyRevenue)} per bulan. Pendapatan tiga bulan terakhir ${growthLabel} dibandingkan tiga bulan sebelumnya. Margin keuntungan bersih rata-rata tercatat ${summary.avgMarginPercent}%, yang ${marginNarrative}. Klinik melayani ${summary.totalPatients12mo} pasien unik dengan total ${summary.totalVisits12mo} kunjungan sepanjang periode ini, di mana ${summary.totalNewPatients12mo} di antaranya adalah pasien baru. Dari pasien yang bertransaksi pada paruh pertama periode, ${retentionLabel} kembali bertransaksi pada paruh kedua — mengindikasikan tingkat retensi pasien.${cacSentence}`;
+    const avgMonthlyLabel =
+      summary.activeMonths12mo < 12
+        ? `dengan rata-rata ${formatRupiah(summary.avgMonthlyRevenue)} per bulan (dihitung dari ${summary.activeMonths12mo} bulan operasional dengan pendapatan tercatat, karena klinik belum genap 12 bulan berjalan)`
+        : `dengan rata-rata ${formatRupiah(summary.avgMonthlyRevenue)} per bulan`;
+
+    const narrative = `${clinic?.name || 'Klinik ini'} mencatatkan total pendapatan kumulatif sebesar ${formatRupiah(summary.totalRevenue12mo)} sepanjang 12 bulan terakhir, ${avgMonthlyLabel}. Pendapatan tiga bulan terakhir ${growthLabel} dibandingkan tiga bulan sebelumnya. Margin keuntungan bersih rata-rata tercatat ${summary.avgMarginPercent}%, yang ${marginNarrative}. Klinik melayani ${summary.totalPatients12mo} pasien unik dengan total ${summary.totalVisits12mo} kunjungan sepanjang periode ini, di mana ${summary.totalNewPatients12mo} di antaranya adalah pasien baru. Dari pasien yang bertransaksi pada paruh pertama periode, ${retentionLabel} kembali bertransaksi pada paruh kedua — mengindikasikan tingkat retensi pasien.${cacSentence}`;
 
     const monthlyTableBody: any[] = [
       [
@@ -267,7 +272,9 @@ export class InvestorReportPdfService {
               formatRupiah(summary.totalRevenue12mo),
             ),
             this.summaryBox(
-              'Rata-rata Pendapatan / Bulan',
+              summary.activeMonths12mo < 12
+                ? `Rata-rata Pendapatan / Bulan (${summary.activeMonths12mo} bln aktif)`
+                : 'Rata-rata Pendapatan / Bulan',
               formatRupiah(summary.avgMonthlyRevenue),
             ),
             this.summaryBox(
