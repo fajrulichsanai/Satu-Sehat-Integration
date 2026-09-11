@@ -565,6 +565,12 @@ export class ReportsService {
       doctorFeeShare: shareByPractitioner.get(r.practitionerId) || 0,
     }));
 
+    // bi.subtotal is per-item, pre billing-level discount — a billing-level
+    // discount/additional fee (billings.total_discount / additional_fee)
+    // never lands on any single item, so raw SUM(bi.subtotal) overstates
+    // revenue whenever a billing has one. Scale each item by that billing's
+    // grand_total/subtotal ratio so tindakan-level totals foot back to the
+    // clinic's actual (billing.grand_total-based) revenue.
     const tindakanRows = await this.billingItemRepo.query(
       `SELECT
          t.id AS tarifId,
@@ -573,7 +579,7 @@ export class ReportsService {
          t.harga_jual AS hargaJual,
          SUM(bi.quantity) AS frekuensi,
          SUM(bi.discount) AS totalDiskon,
-         SUM(bi.subtotal) AS totalSubtotal
+         SUM(bi.subtotal * (b.grand_total / NULLIF(b.subtotal, 0))) AS totalSubtotal
        FROM billing_items bi
        JOIN billings b ON bi.billing_id = b.id
        JOIN tarifs t ON bi.tarif_id = t.id
@@ -747,6 +753,10 @@ export class ReportsService {
     dateFrom: string,
     dateTo: string,
   ) {
+    // See tindakanRows above for why bi.subtotal needs prorating by the
+    // billing's grand_total/subtotal ratio before it can be summed as
+    // "revenue" — otherwise a doctor's total can come out higher than the
+    // clinic's actual total revenue whenever billings carry a discount.
     const rows = await this.billingItemRepo.query(
       `SELECT
          pr.id AS practitionerId,
@@ -754,7 +764,7 @@ export class ReportsService {
          t.harga_pokok AS hargaPokok,
          t.harga_jual AS hargaJual,
          SUM(bi.quantity) AS qty,
-         SUM(bi.subtotal) AS revenue,
+         SUM(bi.subtotal * (b.grand_total / NULLIF(b.subtotal, 0))) AS revenue,
          dfc.fee_type AS feeType,
          dfc.fee_value AS feeValue
        FROM billing_items bi
@@ -1163,11 +1173,12 @@ export class ReportsService {
     dateFrom: string,
     dateTo: string,
   ) {
+    // Same billing-level-discount prorating as tindakanRows/computeByDoctorProfit.
     const rows = await this.billingItemRepo.query(
       `SELECT
          t.kategori AS kategori,
          SUM(bi.quantity) AS frekuensi,
-         SUM(bi.subtotal) AS pendapatan,
+         SUM(bi.subtotal * (b.grand_total / NULLIF(b.subtotal, 0))) AS pendapatan,
          SUM(t.harga_pokok * bi.quantity) AS modal
        FROM billing_items bi
        JOIN billings b ON bi.billing_id = b.id
@@ -1377,7 +1388,12 @@ export class ReportsService {
       (sum, m) => sum + m.newPatients,
       0,
     );
-    const avgMonthlyRevenue = totalRevenue12mo / 12;
+    // A clinic younger than the 12-month window has mostly-empty leading
+    // months in `monthly` (no data yet, not zero revenue) — dividing by a
+    // flat 12 understates the average for a new clinic. Divide by the
+    // number of months that actually have recorded revenue instead.
+    const activeMonths12mo = monthly.filter((m) => m.revenue > 0).length || 1;
+    const avgMonthlyRevenue = totalRevenue12mo / activeMonths12mo;
     const avgMarginPercent =
       totalRevenue12mo > 0
         ? parseFloat(((totalNetProfit12mo / totalRevenue12mo) * 100).toFixed(1))
@@ -1454,6 +1470,7 @@ export class ReportsService {
         totalRevenue12mo,
         totalNetProfit12mo,
         avgMonthlyRevenue,
+        activeMonths12mo,
         avgMarginPercent,
         totalVisits12mo,
         totalNewPatients12mo,

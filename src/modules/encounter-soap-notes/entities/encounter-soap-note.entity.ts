@@ -25,6 +25,11 @@ export class EncounterSoapNote extends BaseEntity {
   @Column({ type: 'text', nullable: true })
   plan: string;
 
+  // Rencana kontrol/kunjungan ulang berikutnya (bagian dari CPPT) — terpisah
+  // dari `plan` karena ditampilkan sebagai baris sendiri di lembar CPPT.
+  @Column({ name: 'control_plan', type: 'text', nullable: true })
+  controlPlan: string;
+
   @Column({ type: 'mediumtext', nullable: true })
   signature: string;
 

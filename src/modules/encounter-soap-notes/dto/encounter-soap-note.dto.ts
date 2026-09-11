@@ -32,6 +32,13 @@ export class UpsertEncounterSoapNoteDto {
   plan?: string;
 
   @ApiPropertyOptional({
+    description: 'Kontrol - rencana kontrol/kunjungan ulang berikutnya',
+  })
+  @IsOptional()
+  @IsString()
+  controlPlan?: string;
+
+  @ApiPropertyOptional({
     description: 'Tanda tangan dokter (base64 PNG data URL)',
   })
   @IsOptional()

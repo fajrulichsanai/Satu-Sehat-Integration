@@ -121,6 +121,18 @@ export class PatientsController {
     return { success: true, data };
   }
 
+  @Get(':id/medical-record')
+  @ApiOperation({
+    summary: 'Get patient medical record (CPPT + vitals per encounter)',
+  })
+  async getMedicalRecord(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+  ) {
+    const data = await this.patientsService.getMedicalRecord(id, clinicId);
+    return { success: true, data };
+  }
+
   @Get(':id/timeline')
   @ApiOperation({
     summary:

@@ -11,6 +11,9 @@ import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { Patient } from './entities/patient.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import { EncounterSoapNote } from '../encounter-soap-notes/entities/encounter-soap-note.entity';
+import { PhysicalExamination } from '../physical-examination/entities/physical-examination.entity';
+import { DentalExamination } from '../dental-examination/entities/dental-examination.entity';
+import { PrescriptionItem } from '../prescriptions/entities/prescription-item.entity';
 import { Billing } from '../billing/entities/billing.entity';
 import {
   SupportingExamImage,
@@ -37,6 +40,12 @@ export class PatientsService {
     private readonly encounterRepository: Repository<Encounter>,
     @InjectRepository(EncounterSoapNote)
     private readonly encounterSoapNoteRepository: Repository<EncounterSoapNote>,
+    @InjectRepository(PhysicalExamination)
+    private readonly physicalExaminationRepository: Repository<PhysicalExamination>,
+    @InjectRepository(DentalExamination)
+    private readonly dentalExaminationRepository: Repository<DentalExamination>,
+    @InjectRepository(PrescriptionItem)
+    private readonly prescriptionItemRepository: Repository<PrescriptionItem>,
     @InjectRepository(Billing)
     private readonly billingRepository: Repository<Billing>,
     @InjectRepository(SupportingExamImage)
@@ -171,6 +180,141 @@ export class PatientsService {
   async findTreatmentPlans(patientId: number, clinicId: number) {
     await this.findOne(patientId, clinicId);
     return this.treatmentPlansService.findByPatient(patientId, clinicId);
+  }
+
+  /**
+   * Rekam Medis pasien — satu baris per kunjungan (encounter) berisi semua
+   * form yang diisi hari itu (TTV, CPPT/SOAP, pemeriksaan gigi lanjutan,
+   * resep, pemeriksaan penunjang). Read-only, agregasi dari data yang sudah
+   * ada (bukan form terpisah). Odontogram & Informed Consent TIDAK ada di
+   * sini — odontogram adalah chart hidup per-pasien (lihat
+   * GET /patients/:id/odontogram) dan informed consent sudah punya listing
+   * sendiri per-pasien (lihat GET /patient-consents?patientId=).
+   */
+  async getMedicalRecord(patientId: number, clinicId: number) {
+    await this.findOne(patientId, clinicId);
+
+    const encounters = await this.encounterRepository.find({
+      where: { patientId, clinicId },
+      relations: { practitioner: true },
+      order: { arrivedTime: 'DESC' },
+    });
+    const encounterIds = encounters.map((e) => e.id);
+
+    const [soapNotes, physicalExams, dentalExams, prescriptions, supportingExamImages] =
+      await Promise.all([
+        encounterIds.length
+          ? this.encounterSoapNoteRepository.find({
+              where: { encounterId: In(encounterIds) },
+            })
+          : Promise.resolve([]),
+        encounterIds.length
+          ? this.physicalExaminationRepository.find({
+              where: { encounterId: In(encounterIds) },
+            })
+          : Promise.resolve([]),
+        encounterIds.length
+          ? this.dentalExaminationRepository.find({
+              where: { encounterId: In(encounterIds) },
+            })
+          : Promise.resolve([]),
+        encounterIds.length
+          ? this.prescriptionItemRepository.find({
+              where: { encounterId: In(encounterIds) },
+              order: { sortOrder: 'ASC' },
+            })
+          : Promise.resolve([]),
+        encounterIds.length
+          ? this.supportingExamImageRepository.find({
+              where: { encounterId: In(encounterIds) },
+              order: { createdAt: 'ASC' },
+            })
+          : Promise.resolve([]),
+      ]);
+
+    const soapByEncounter = new Map(soapNotes.map((s) => [s.encounterId, s]));
+    const examByEncounter = new Map(
+      physicalExams.map((p) => [p.encounterId, p]),
+    );
+    const dentalExamByEncounter = new Map(
+      dentalExams.map((d) => [d.encounterId, d]),
+    );
+    const prescriptionsByEncounter = new Map<number, PrescriptionItem[]>();
+    for (const rx of prescriptions) {
+      const list = prescriptionsByEncounter.get(rx.encounterId) ?? [];
+      list.push(rx);
+      prescriptionsByEncounter.set(rx.encounterId, list);
+    }
+    const imagesByEncounter = new Map<
+      number,
+      { id: number; fileUrl: string; imageType: string; category: string | null }[]
+    >();
+    for (const img of supportingExamImages) {
+      const list = imagesByEncounter.get(img.encounterId) ?? [];
+      list.push({
+        id: img.id,
+        fileUrl: img.fileUrl,
+        imageType: img.imageType,
+        category: img.category ?? null,
+      });
+      imagesByEncounter.set(img.encounterId, list);
+    }
+
+    return encounters.map((e) => {
+      const soap = soapByEncounter.get(e.id);
+      const exam = examByEncounter.get(e.id);
+      const dentalExam = dentalExamByEncounter.get(e.id);
+      return {
+        encounter: {
+          id: e.id,
+          status: e.status,
+          serviceType: e.serviceType,
+          chiefComplaint: e.chiefComplaint,
+          arrivedTime: e.arrivedTime,
+          finishedTime: e.finishedTime,
+          practitionerName: e.practitioner?.name,
+        },
+        vitals: exam
+          ? {
+              bloodPressureSystolic: exam.bloodPressureSystolic,
+              bloodPressureDiastolic: exam.bloodPressureDiastolic,
+              pulseRate: exam.pulseRate,
+              respiratoryRate: exam.respiratoryRate,
+              temperature: exam.temperature,
+              oxygenSaturation: exam.oxygenSaturation,
+              weight: exam.weight,
+              height: exam.height,
+            }
+          : null,
+        soap: soap
+          ? {
+              subjective: soap.subjective,
+              objective: soap.objective,
+              assessment: soap.assessment,
+              treatment: soap.treatment,
+              plan: soap.plan,
+              controlPlan: soap.controlPlan,
+              signature: soap.signature,
+            }
+          : null,
+        dentalExam: dentalExam
+          ? {
+              ohisDebris: dentalExam.ohisDebris,
+              ohisCalculus: dentalExam.ohisCalculus,
+              gingivalIndex: dentalExam.gingivalIndex,
+              plaqueSurfacesWithPlaque: dentalExam.plaqueSurfacesWithPlaque,
+              plaqueSurfacesExamined: dentalExam.plaqueSurfacesExamined,
+            }
+          : null,
+        prescriptions: (prescriptionsByEncounter.get(e.id) ?? []).map((rx) => ({
+          drugName: rx.drugName,
+          dosage: rx.dosage,
+          frequency: rx.frequency,
+          quantity: rx.quantity,
+        })),
+        supportingExamImages: imagesByEncounter.get(e.id) ?? [],
+      };
+    });
   }
 
   /**
