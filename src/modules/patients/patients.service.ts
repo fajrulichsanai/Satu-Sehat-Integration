@@ -308,7 +308,11 @@ export class PatientsService {
     return items;
   }
 
-  async create(clinicId: number, dto: CreatePatientDto): Promise<Patient> {
+  async create(
+    clinicId: number,
+    dto: CreatePatientDto,
+    noRmOverride?: string,
+  ): Promise<Patient> {
     this.logger.log(
       `[CREATE] Membuat pasien baru | clinicId=${clinicId}, name=${dto.name}, nik=${dto.nik || 'bayi'}`,
     );
@@ -316,7 +320,7 @@ export class PatientsService {
       await this.checkDuplicateNik(dto.nik, clinicId);
     }
 
-    const saved = await this.createWithNoRmRetry(clinicId, dto);
+    const saved = await this.createWithNoRmRetry(clinicId, dto, noRmOverride);
 
     this.logger.log(
       `[CREATE] Pasien berhasil dibuat | id=${saved.id}, noRm=${saved.noRm}, clinicId=${clinicId}`,
@@ -327,11 +331,17 @@ export class PatientsService {
   private async createWithNoRmRetry(
     clinicId: number,
     dto: CreatePatientDto,
+    noRmOverride?: string,
     attempt = 1,
   ): Promise<Patient> {
     try {
       return await this.dataSource.transaction(async (manager) => {
-        const noRm = await this.generateNoRm(manager, clinicId);
+        // Data migration (see PatientImportService) passes noRmOverride to
+        // preserve a clinic's existing RM numbers instead of renumbering —
+        // generateNoRm's own scan already excludes non-numeric/legacy-style
+        // no_rm values for exactly this reason, so the two schemes coexist
+        // without colliding on the sequence.
+        const noRm = noRmOverride || (await this.generateNoRm(manager, clinicId));
         const patient = manager.create(Patient, {
           clinicId,
           noRm,
@@ -387,8 +397,17 @@ export class PatientsService {
         String((err as { sqlMessage?: string }).sqlMessage || '').includes(
           'no_rm',
         );
-      if (isDuplicateNoRm && attempt < 5) {
-        return this.createWithNoRmRetry(clinicId, dto, attempt + 1);
+      // An explicit noRmOverride colliding is never auto-regenerated — the
+      // caller asked for that specific number (data migration preserving a
+      // clinic's existing RM), so silently picking a different one instead
+      // would defeat the point. Surface it as a clear conflict.
+      if (isDuplicateNoRm && noRmOverride) {
+        throw new ConflictException(
+          `No. RM "${noRmOverride}" sudah digunakan oleh pasien lain di klinik ini`,
+        );
+      }
+      if (isDuplicateNoRm && !noRmOverride && attempt < 5) {
+        return this.createWithNoRmRetry(clinicId, dto, undefined, attempt + 1);
       }
       throw err;
     }

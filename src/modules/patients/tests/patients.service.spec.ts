@@ -232,6 +232,34 @@ describe('PatientsService', () => {
       await expect(service.create(clinicId, dto)).rejects.toThrow();
       expect(manager.save).toHaveBeenCalledTimes(5);
     });
+
+    it('uses the given noRmOverride verbatim instead of generating one, for data migration (positive)', async () => {
+      patientRepo.createQueryBuilder.mockReturnValue(
+        buildQb({ getOne: jest.fn().mockResolvedValue(null) }),
+      );
+
+      const result = await service.create(clinicId, dto, 'LEGACY-0042');
+
+      expect(result.noRm).toBe('LEGACY-0042');
+      expect(manager.query).not.toHaveBeenCalled(); // generateNoRm's SELECT is skipped entirely
+    });
+
+    it('throws a clear ConflictException, without retrying, when the noRmOverride is already taken (negative)', async () => {
+      patientRepo.createQueryBuilder.mockReturnValue(
+        buildQb({ getOne: jest.fn().mockResolvedValue(null) }),
+      );
+      const dupError = Object.assign(
+        new QueryFailedError('insert', [], new Error('dup') as any),
+        { code: 'ER_DUP_ENTRY', sqlMessage: "Duplicate entry 'LEGACY-0042' for key 'no_rm'" },
+      );
+      manager.save.mockRejectedValue(dupError);
+
+      await expect(
+        service.create(clinicId, dto, 'LEGACY-0042'),
+      ).rejects.toThrow(ConflictException);
+      // Never silently picks a different number instead of the one the caller asked for.
+      expect(manager.save).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('update', () => {

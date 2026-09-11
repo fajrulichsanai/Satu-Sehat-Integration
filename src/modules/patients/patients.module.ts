@@ -8,6 +8,8 @@ import { SupportingExamImage } from '../supporting-exam/entities/supporting-exam
 import { PatientRecall } from '../recalls/entities/patient-recall.entity';
 import { PatientsController } from './patients.controller';
 import { PatientsService } from './patients.service';
+import { PatientImportController } from './patient-import.controller';
+import { PatientImportService } from './patient-import.service';
 import { SatusehatModule } from '../satusehat/satusehat.module';
 import { TreatmentPlansModule } from '../treatment-plans/treatment-plans.module';
 import { AuditLogModule } from '../audit-log/audit-log.module';
@@ -26,8 +28,8 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
     TreatmentPlansModule,
     AuditLogModule,
   ],
-  controllers: [PatientsController],
-  providers: [PatientsService],
+  controllers: [PatientsController, PatientImportController],
+  providers: [PatientsService, PatientImportService],
   exports: [PatientsService],
 })
 export class PatientsModule {}
