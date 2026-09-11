@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Clinic } from '../clinics/entities/clinic.entity';
+import { Practitioner } from '../practitioners/entities/practitioner.entity';
 import { ReservationsService } from '../reservations/reservations.service';
 import {
   PublicAvailableSlotsQueryDto,
@@ -21,11 +22,25 @@ const DAY_KEYS = [
 
 const SLOT_INTERVAL_MINUTES = 30;
 
+/**
+ * The DB connection timezone is fixed at +07:00 (WIB, see data-source
+ * config), so "now" for comparing against a date/time-only slot must be
+ * computed on that same offset — the server this runs on may be in UTC,
+ * which would make every slot in the morning look "already past" to a
+ * naive `new Date()` comparison.
+ */
+function nowInClinicTimezone(): { date: string; time: string } {
+  const wib = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString();
+  return { date: wib.slice(0, 10), time: wib.slice(11, 16) };
+}
+
 @Injectable()
 export class PublicService {
   constructor(
     @InjectRepository(Clinic)
     private readonly clinicRepository: Repository<Clinic>,
+    @InjectRepository(Practitioner)
+    private readonly practitionerRepository: Repository<Practitioner>,
     private readonly reservationsService: ReservationsService,
   ) {}
 
@@ -46,7 +61,14 @@ export class PublicService {
     if (!clinic) {
       throw new NotFoundException('Klinik tidak ditemukan atau belum aktif');
     }
-    return clinic;
+
+    const practitioners = await this.practitionerRepository.find({
+      where: { clinicId, isActive: true },
+      select: { id: true, name: true, specialization: true },
+      order: { id: 'ASC' },
+    });
+
+    return { ...clinic, practitioners };
   }
 
   async createReservation(dto: PublicCreateReservationDto) {
@@ -56,12 +78,32 @@ export class PublicService {
       reservationDate: reservation.reservationDate,
       jamSlot: reservation.jamSlot,
       patientName: reservation.patientName,
+      practitionerId: reservation.practitionerId,
       status: reservation.status,
     };
   }
 
   async getReservationStatus(query: PublicReservationStatusQueryDto) {
-    return this.reservationsService.getStatusByToken(query.token);
+    const reservation = await this.reservationsService.getStatusByToken(
+      query.token,
+    );
+    return {
+      token: reservation.token,
+      patientName: reservation.patientName,
+      reservationDate: reservation.reservationDate,
+      jamSlot: reservation.jamSlot,
+      status: reservation.status,
+      practitionerId: reservation.practitionerId,
+      practitionerName: reservation.practitioner?.name ?? null,
+    };
+  }
+
+  async cancelReservation(token: string) {
+    const reservation = await this.reservationsService.cancelByToken(token);
+    return {
+      token: reservation.token,
+      status: reservation.status,
+    };
   }
 
   async getAvailableSlots(query: PublicAvailableSlotsQueryDto) {
@@ -89,10 +131,17 @@ export class PublicService {
       query.practitionerId,
     );
 
+    let slots = allSlots.filter((slot) => !bookedSlots.includes(slot));
+
+    const { date: todayWib, time: nowWib } = nowInClinicTimezone();
+    if (query.date === todayWib) {
+      slots = slots.filter((slot) => slot > nowWib);
+    }
+
     return {
       date: query.date,
       isOpen: true,
-      slots: allSlots.filter((slot) => !bookedSlots.includes(slot)),
+      slots,
     };
   }
 
