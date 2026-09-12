@@ -1,6 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { MultiClinicService } from '../multi-clinic.service';
 import { OwnerClinicLink } from '../entities/owner-clinic-link.entity';
 import { User } from '../../users/entities/user.entity';
@@ -123,6 +127,35 @@ describe('MultiClinicService', () => {
     it('deletes the link (positive)', async () => {
       await service.unlinkClinic(1, 10);
       expect(linkRepo.delete).toHaveBeenCalledWith({ ownerId: 1, clinicId: 10 });
+    });
+  });
+
+  describe('assertOwnsClinic', () => {
+    it('resolves without error when the clinic is linked to the owner (positive)', async () => {
+      linkRepo.findOne.mockResolvedValue({ id: 1, ownerId: 5, clinicId: 10 });
+      await expect(service.assertOwnsClinic(5, 10)).resolves.toBeUndefined();
+    });
+
+    it('throws ForbiddenException when the clinic is not linked to the owner (negative)', async () => {
+      linkRepo.findOne.mockResolvedValue(null);
+      await expect(service.assertOwnsClinic(5, 999)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('does not let one multi-klinik owner touch a clinic linked only to a different owner (negative/security)', async () => {
+      // The repo is queried with both ownerId AND clinicId — a clinic linked
+      // to owner 6 must not pass the check when owner 5 asks for it.
+      linkRepo.findOne.mockImplementation(({ where }) =>
+        Promise.resolve(
+          where.ownerId === 6 && where.clinicId === 10
+            ? { id: 1, ownerId: 6, clinicId: 10 }
+            : null,
+        ),
+      );
+      await expect(service.assertOwnsClinic(5, 10)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 

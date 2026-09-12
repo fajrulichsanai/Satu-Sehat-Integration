@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -95,6 +96,26 @@ export class MultiClinicService {
       order: { id: 'ASC' },
     });
     return links.map((l) => l.clinic);
+  }
+
+  /**
+   * Guard for the per-clinic Info Klinik routes below — a multi-klinik owner
+   * has no single clinicId (unlike OWNER/ADMIN), so every by-id endpoint must
+   * verify the requested clinic is actually one of theirs before touching it.
+   */
+  async assertOwnsClinic(ownerId: number, clinicId: number): Promise<void> {
+    const link = await this.linkRepository.findOne({
+      where: { ownerId, clinicId },
+    });
+    if (!link) {
+      throw new ForbiddenException({
+        success: false,
+        error: {
+          code: 'CLINIC_NOT_OWNED',
+          message: 'Klinik ini bukan milik akun Anda',
+        },
+      });
+    }
   }
 
   /** Multi-klinik owner: dashboard ringkasan gabungan lintas klinik miliknya. */
