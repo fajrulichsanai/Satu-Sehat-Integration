@@ -26,6 +26,17 @@ export class CreateSubscriptionPaymentDto {
   notes?: string;
 }
 
+export class ClaimOwnerSubscriptionPaymentDto {
+  @Type(() => Number)
+  @IsInt()
+  planId: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
 export class ReviewSubscriptionPaymentDto {
   @ApiPropertyOptional()
   @IsOptional()

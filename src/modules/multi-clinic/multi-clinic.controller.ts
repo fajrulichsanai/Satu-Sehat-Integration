@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Post,
   Put,
+  Query,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -18,6 +19,12 @@ import { LinkClinicDto } from './dto/owner-clinic-link.dto';
 import { ClinicsService } from '../clinics/clinics.service';
 import { UpdateClinicDto } from '../clinics/dto/clinic.dto';
 import { clinicLogoUploadOptions } from '../clinics/upload/clinic-logo.upload';
+import { SubscriptionPaymentsService } from '../subscriptions/subscription-payments.service';
+import {
+  ClaimOwnerSubscriptionPaymentDto,
+  SubscriptionPaymentQueryDto,
+} from '../subscriptions/dto/subscription-payment.dto';
+import { paymentProofUploadOptions } from '../subscriptions/upload/payment-proof.storage';
 import { JwtAuthGuard, RolesGuard } from '../auth/guards';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -31,6 +38,7 @@ export class MultiClinicController {
   constructor(
     private readonly multiClinicService: MultiClinicService,
     private readonly clinicsService: ClinicsService,
+    private readonly subscriptionPaymentsService: SubscriptionPaymentsService,
   ) {}
 
   @Get('my-clinics')
@@ -135,5 +143,43 @@ export class MultiClinicController {
   ) {
     await this.multiClinicService.assertOwnsClinic(user.userId, clinicId);
     return this.clinicsService.uploadLogo(clinicId, file);
+  }
+
+  @Post('payments/claim')
+  @Roles(UserRole.MULTI_CLINIC_OWNER)
+  @UseInterceptors(FileInterceptor('proof', paymentProofUploadOptions))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary:
+      'Bayar sekali untuk semua klinik yang terhubung ke akun ini (Multi-Klinik Owner)',
+  })
+  async claimPayment(
+    @Body() dto: ClaimOwnerSubscriptionPaymentDto,
+    @CurrentUser() user: any,
+    @UploadedFile() proof?: Express.Multer.File,
+  ) {
+    const clinics = await this.multiClinicService.getMyClinics(user.userId);
+    return this.subscriptionPaymentsService.claimForOwner(
+      user.userId,
+      clinics.map((c) => c.id),
+      dto,
+      user.userId,
+      proof,
+    );
+  }
+
+  @Get('payments/mine')
+  @Roles(UserRole.MULTI_CLINIC_OWNER)
+  @ApiOperation({
+    summary: 'Riwayat pembayaran akun multi-klinik owner ini',
+  })
+  listMyPayments(
+    @CurrentUser() user: any,
+    @Query() query: SubscriptionPaymentQueryDto,
+  ) {
+    return this.subscriptionPaymentsService.listMineForOwner(
+      user.userId,
+      query,
+    );
   }
 }

@@ -1,8 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, BadRequestException } from '@nestjs/common';
 import { MultiClinicController } from '../multi-clinic.controller';
 import { MultiClinicService } from '../multi-clinic.service';
 import { ClinicsService } from '../../clinics/clinics.service';
+import { SubscriptionPaymentsService } from '../../subscriptions/subscription-payments.service';
 
 describe('MultiClinicController', () => {
   let controller: MultiClinicController;
@@ -18,6 +19,10 @@ describe('MultiClinicController', () => {
     findOne: jest.Mock;
     update: jest.Mock;
     uploadLogo: jest.Mock;
+  };
+  let subscriptionPaymentsService: {
+    claimForOwner: jest.Mock;
+    listMineForOwner: jest.Mock;
   };
 
   const user = { userId: 5 };
@@ -36,12 +41,20 @@ describe('MultiClinicController', () => {
       update: jest.fn(),
       uploadLogo: jest.fn(),
     };
+    subscriptionPaymentsService = {
+      claimForOwner: jest.fn(),
+      listMineForOwner: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [MultiClinicController],
       providers: [
         { provide: MultiClinicService, useValue: multiClinicService },
         { provide: ClinicsService, useValue: clinicsService },
+        {
+          provide: SubscriptionPaymentsService,
+          useValue: subscriptionPaymentsService,
+        },
       ],
     }).compile();
 
@@ -118,6 +131,66 @@ describe('MultiClinicController', () => {
         controller.uploadClinicLogo(999, file, user),
       ).rejects.toThrow(ForbiddenException);
       expect(clinicsService.uploadLogo).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('claimPayment', () => {
+    it('claims for the owner using their own currently-linked clinic ids (positive)', async () => {
+      multiClinicService.getMyClinics.mockResolvedValue([
+        { id: 10 },
+        { id: 11 },
+      ]);
+      const dto = { planId: 2 } as any;
+      const proof = { filename: 'proof.jpg' } as Express.Multer.File;
+      subscriptionPaymentsService.claimForOwner.mockResolvedValue({ id: 1 });
+
+      const result = await controller.claimPayment(dto, user, proof);
+
+      expect(multiClinicService.getMyClinics).toHaveBeenCalledWith(5);
+      expect(subscriptionPaymentsService.claimForOwner).toHaveBeenCalledWith(
+        5,
+        [10, 11],
+        dto,
+        5,
+        proof,
+      );
+      expect(result).toEqual({ id: 1 });
+    });
+
+    it('propagates BadRequestException from the service without ever resolving to undefined (negative)', async () => {
+      multiClinicService.getMyClinics.mockResolvedValue([]);
+      subscriptionPaymentsService.claimForOwner.mockRejectedValue(
+        new BadRequestException(),
+      );
+
+      await expect(
+        controller.claimPayment({ planId: 2 } as any, user),
+      ).rejects.toThrow(BadRequestException);
+      expect(subscriptionPaymentsService.claimForOwner).toHaveBeenCalledWith(
+        5,
+        [],
+        { planId: 2 },
+        5,
+        undefined,
+      );
+    });
+  });
+
+  describe('listMyPayments', () => {
+    it('lists the calling owner\'s own payment history (positive)', async () => {
+      const query = { status: 'pending' } as any;
+      subscriptionPaymentsService.listMineForOwner.mockResolvedValue({
+        data: [],
+        meta: { total: 0, page: 1, limit: 20, totalPages: 1 },
+      });
+
+      const result = await controller.listMyPayments(user, query);
+
+      expect(subscriptionPaymentsService.listMineForOwner).toHaveBeenCalledWith(
+        5,
+        query,
+      );
+      expect(result.data).toEqual([]);
     });
   });
 });
