@@ -1,6 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { ReservationsService } from '../reservations.service';
 import { Reservation } from '../entities/reservation.entity';
 import { Clinic } from '../../clinics/entities/clinic.entity';
@@ -11,6 +16,7 @@ function buildQb(overrides: Partial<Record<string, any>> = {}) {
   return {
     select: jest.fn().mockReturnThis(),
     leftJoinAndSelect: jest.fn().mockReturnThis(),
+    setLock: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
@@ -19,6 +25,16 @@ function buildQb(overrides: Partial<Record<string, any>> = {}) {
     take: jest.fn().mockReturnThis(),
     getRawMany: jest.fn().mockResolvedValue([]),
     getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+    getOne: jest.fn().mockResolvedValue(null),
+    ...overrides,
+  };
+}
+
+function buildManager(overrides: Partial<Record<string, any>> = {}) {
+  return {
+    createQueryBuilder: jest.fn(() => buildQb()),
+    create: jest.fn((_entity, data) => data),
+    save: jest.fn((_entity, data) => Promise.resolve({ id: 1, ...data })),
     ...overrides,
   };
 }
@@ -34,6 +50,8 @@ describe('ReservationsService', () => {
   };
   let clinicRepo: { findOne: jest.Mock };
   let patientRepo: { findOne: jest.Mock };
+  let manager: ReturnType<typeof buildManager>;
+  let dataSource: { transaction: jest.Mock };
 
   const clinicId = 1;
 
@@ -47,6 +65,10 @@ describe('ReservationsService', () => {
     };
     clinicRepo = { findOne: jest.fn() };
     patientRepo = { findOne: jest.fn() };
+    manager = buildManager();
+    dataSource = {
+      transaction: jest.fn((cb: (manager: unknown) => unknown) => cb(manager)),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -54,6 +76,7 @@ describe('ReservationsService', () => {
         { provide: getRepositoryToken(Reservation), useValue: reservationRepo },
         { provide: getRepositoryToken(Clinic), useValue: clinicRepo },
         { provide: getRepositoryToken(Patient), useValue: patientRepo },
+        { provide: DataSource, useValue: dataSource },
       ],
     }).compile();
 
@@ -91,9 +114,12 @@ describe('ReservationsService', () => {
 
       await service.getBookedSlots(clinicId, '2026-06-15', 5);
 
-      expect(qb.andWhere).toHaveBeenCalledWith('r.practitionerId = :practitionerId', {
-        practitionerId: 5,
-      });
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'r.practitionerId = :practitionerId',
+        {
+          practitionerId: 5,
+        },
+      );
     });
   });
 
@@ -177,16 +203,21 @@ describe('ReservationsService', () => {
 
   describe('createPublic', () => {
     it('creates a WEBSITE-sourced reservation for an active clinic (positive)', async () => {
-      clinicRepo.findOne.mockResolvedValue({ id: clinicId, setupComplete: true });
+      clinicRepo.findOne.mockResolvedValue({
+        id: clinicId,
+        setupComplete: true,
+      });
 
       const result = await service.createPublic({
         clinicId,
         patientName: 'Budi',
         patientPhone: '0812',
         reservationDate: '2026-06-15',
+        jamSlot: '09:00',
       } as any);
 
       expect(result.source).toBe(ReservationSource.WEBSITE);
+      expect(dataSource.transaction).toHaveBeenCalled();
     });
 
     it('throws NotFoundException for an inactive/missing clinic (negative)', async () => {
@@ -194,6 +225,139 @@ describe('ReservationsService', () => {
       await expect(
         service.createPublic({ clinicId: 999 } as any),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws BadRequestException when no phone number is given (negative)', async () => {
+      clinicRepo.findOne.mockResolvedValue({
+        id: clinicId,
+        setupComplete: true,
+      });
+      await expect(
+        service.createPublic({
+          clinicId,
+          patientName: 'Budi',
+          reservationDate: '2026-06-15',
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('locks the matching slot row and rejects when it is already taken (negative)', async () => {
+      clinicRepo.findOne.mockResolvedValue({
+        id: clinicId,
+        setupComplete: true,
+      });
+      const conflictQb = buildQb({
+        getOne: jest.fn().mockResolvedValue({ id: 42 }),
+      });
+      manager.createQueryBuilder.mockReturnValue(conflictQb);
+
+      await expect(
+        service.createPublic({
+          clinicId,
+          patientName: 'Budi',
+          patientPhone: '0812',
+          reservationDate: '2026-06-15',
+          jamSlot: '09:00',
+        } as any),
+      ).rejects.toThrow(ConflictException);
+
+      expect(conflictQb.setLock).toHaveBeenCalledWith('pessimistic_write');
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+
+    it('filters the slot-conflict check by practitionerId when one is given (positive/edge)', async () => {
+      clinicRepo.findOne.mockResolvedValue({
+        id: clinicId,
+        setupComplete: true,
+      });
+      const conflictQb = buildQb();
+      manager.createQueryBuilder.mockReturnValue(conflictQb);
+
+      await service.createPublic({
+        clinicId,
+        patientName: 'Budi',
+        patientPhone: '0812',
+        reservationDate: '2026-06-15',
+        jamSlot: '09:00',
+        practitionerId: 5,
+      } as any);
+
+      expect(conflictQb.andWhere).toHaveBeenCalledWith(
+        'r.practitionerId = :practitionerId',
+        { practitionerId: 5 },
+      );
+    });
+
+    it('skips the slot-conflict check when no jamSlot is given (edge)', async () => {
+      clinicRepo.findOne.mockResolvedValue({
+        id: clinicId,
+        setupComplete: true,
+      });
+
+      await service.createPublic({
+        clinicId,
+        patientName: 'Budi',
+        patientPhone: '0812',
+        reservationDate: '2026-06-15',
+      } as any);
+
+      expect(manager.createQueryBuilder).not.toHaveBeenCalled();
+      expect(manager.save).toHaveBeenCalled();
+    });
+  });
+
+  describe('cancelByToken', () => {
+    it('cancels a PENDING reservation and records the reason (positive)', async () => {
+      reservationRepo.findOne.mockResolvedValue({
+        id: 1,
+        token: 'TOK123',
+        status: ReservationStatus.PENDING,
+      });
+
+      const result = await service.cancelByToken('TOK123');
+
+      expect(result.status).toBe(ReservationStatus.CANCELLED);
+      expect(result.cancelledReason).toBe('Dibatalkan oleh pasien');
+    });
+
+    it('cancels a CONFIRMED reservation (positive)', async () => {
+      reservationRepo.findOne.mockResolvedValue({
+        id: 1,
+        token: 'TOK123',
+        status: ReservationStatus.CONFIRMED,
+      });
+
+      const result = await service.cancelByToken('TOK123');
+      expect(result.status).toBe(ReservationStatus.CANCELLED);
+    });
+
+    it('throws NotFoundException for an unknown token (negative)', async () => {
+      reservationRepo.findOne.mockResolvedValue(null);
+      await expect(service.cancelByToken('UNKNOWN')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('throws BadRequestException for an already COMPLETED reservation (negative)', async () => {
+      reservationRepo.findOne.mockResolvedValue({
+        id: 1,
+        token: 'TOK123',
+        status: ReservationStatus.COMPLETED,
+      });
+      await expect(service.cancelByToken('TOK123')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('throws BadRequestException for an already CANCELLED reservation (negative)', async () => {
+      reservationRepo.findOne.mockResolvedValue({
+        id: 1,
+        token: 'TOK123',
+        status: ReservationStatus.CANCELLED,
+      });
+      await expect(service.cancelByToken('TOK123')).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -281,7 +445,9 @@ describe('ReservationsService', () => {
         status: ReservationStatus.CANCELLED,
       });
       await expect(
-        service.reschedule(1, clinicId, { reservationDate: '2026-06-20' } as any),
+        service.reschedule(1, clinicId, {
+          reservationDate: '2026-06-20',
+        } as any),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -292,7 +458,9 @@ describe('ReservationsService', () => {
         status: ReservationStatus.COMPLETED,
       });
       await expect(
-        service.reschedule(1, clinicId, { reservationDate: '2026-06-20' } as any),
+        service.reschedule(1, clinicId, {
+          reservationDate: '2026-06-20',
+        } as any),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -304,7 +472,9 @@ describe('ReservationsService', () => {
         clinicId,
         status: ReservationStatus.PENDING,
       });
-      const result = await service.linkPatient(1, clinicId, { patientId: 5 } as any);
+      const result = await service.linkPatient(1, clinicId, {
+        patientId: 5,
+      } as any);
       expect(result.patientId).toBe(5);
     });
 
@@ -358,7 +528,9 @@ describe('ReservationsService', () => {
     });
 
     it('generates different tokens across calls with overwhelming probability (edge)', () => {
-      const tokens = new Set(Array.from({ length: 20 }, () => service.generateToken()));
+      const tokens = new Set(
+        Array.from({ length: 20 }, () => service.generateToken()),
+      );
       expect(tokens.size).toBeGreaterThan(1);
     });
   });

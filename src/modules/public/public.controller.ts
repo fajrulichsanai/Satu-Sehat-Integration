@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Patch,
   Post,
   Body,
   Query,
@@ -11,6 +12,7 @@ import { Throttle } from '@nestjs/throttler';
 import { PublicService } from './public.service';
 import {
   PublicAvailableSlotsQueryDto,
+  PublicCancelReservationDto,
   PublicCreateReservationDto,
   PublicReservationStatusQueryDto,
 } from '../reservations/dto/reservation.dto';
@@ -54,5 +56,18 @@ export class PublicController {
   async getReservationStatus(@Query() query: PublicReservationStatusQueryDto) {
     const data = await this.publicService.getReservationStatus(query);
     return { success: true, data };
+  }
+
+  @Patch('reservations/cancel')
+  @ApiOperation({
+    summary: 'Cancel a pending/confirmed reservation via token (self-service)',
+  })
+  async cancelReservation(@Body() dto: PublicCancelReservationDto) {
+    const data = await this.publicService.cancelReservation(dto.token);
+    return {
+      success: true,
+      message: 'Reservasi berhasil dibatalkan',
+      data,
+    };
   }
 }

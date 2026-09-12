@@ -159,6 +159,13 @@ export class PublicReservationStatusQueryDto {
   token: string;
 }
 
+export class PublicCancelReservationDto {
+  @ApiProperty({ example: 'AB12CD34' })
+  @IsNotEmpty()
+  @IsString()
+  token: string;
+}
+
 export class PublicAvailableSlotsQueryDto {
   @ApiProperty()
   @Type(() => Number)

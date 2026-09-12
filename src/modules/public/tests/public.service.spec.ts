@@ -3,29 +3,38 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { PublicService } from '../public.service';
 import { Clinic } from '../../clinics/entities/clinic.entity';
+import { Practitioner } from '../../practitioners/entities/practitioner.entity';
 import { ReservationsService } from '../../reservations/reservations.service';
 
 describe('PublicService', () => {
   let service: PublicService;
   let clinicRepo: { findOne: jest.Mock };
+  let practitionerRepo: { find: jest.Mock };
   let reservationsService: {
     createPublic: jest.Mock;
     getStatusByToken: jest.Mock;
     getBookedSlots: jest.Mock;
+    cancelByToken: jest.Mock;
   };
 
   beforeEach(async () => {
     clinicRepo = { findOne: jest.fn() };
+    practitionerRepo = { find: jest.fn().mockResolvedValue([]) };
     reservationsService = {
       createPublic: jest.fn(),
       getStatusByToken: jest.fn(),
       getBookedSlots: jest.fn().mockResolvedValue([]),
+      cancelByToken: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PublicService,
         { provide: getRepositoryToken(Clinic), useValue: clinicRepo },
+        {
+          provide: getRepositoryToken(Practitioner),
+          useValue: practitionerRepo,
+        },
         { provide: ReservationsService, useValue: reservationsService },
       ],
     }).compile();
@@ -36,10 +45,17 @@ describe('PublicService', () => {
   it('should be defined', () => expect(service).toBeDefined());
 
   describe('getClinicInfo', () => {
-    it('returns the clinic when active/setup-complete (positive)', async () => {
+    it('returns the clinic with its active practitioners when active/setup-complete (positive)', async () => {
       clinicRepo.findOne.mockResolvedValue({ id: 1, name: 'Klinik A' });
+      practitionerRepo.find.mockResolvedValue([{ id: 2, name: 'drg. Budi' }]);
+
       const result = await service.getClinicInfo(1);
+
       expect(result.name).toBe('Klinik A');
+      expect(result.practitioners).toEqual([{ id: 2, name: 'drg. Budi' }]);
+      expect(practitionerRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { clinicId: 1, isActive: true } }),
+      );
     });
 
     it('throws NotFoundException when clinic is missing or not set up (negative)', async () => {
@@ -62,6 +78,7 @@ describe('PublicService', () => {
         reservationDate: '2026-06-15',
         jamSlot: '09:00',
         patientName: 'Budi',
+        practitionerId: 2,
         status: 'pending',
         internalField: 'should not leak',
       });
@@ -73,16 +90,69 @@ describe('PublicService', () => {
         reservationDate: '2026-06-15',
         jamSlot: '09:00',
         patientName: 'Budi',
+        practitionerId: 2,
         status: 'pending',
       });
     });
   });
 
   describe('getReservationStatus', () => {
-    it('delegates to reservationsService by token (positive)', async () => {
-      reservationsService.getStatusByToken.mockResolvedValue({ status: 'confirmed' });
-      const result = await service.getReservationStatus({ token: 'TOK123' } as any);
-      expect(result.status).toBe('confirmed');
+    it('shapes the response and resolves the practitioner name from the relation (positive)', async () => {
+      reservationsService.getStatusByToken.mockResolvedValue({
+        token: 'TOK123',
+        patientName: 'Budi',
+        reservationDate: '2026-06-15',
+        jamSlot: '09:00',
+        status: 'confirmed',
+        practitionerId: 2,
+        practitioner: { id: 2, name: 'drg. Budi' },
+      });
+
+      const result = await service.getReservationStatus({
+        token: 'TOK123',
+      } as any);
+
+      expect(result).toEqual({
+        token: 'TOK123',
+        patientName: 'Budi',
+        reservationDate: '2026-06-15',
+        jamSlot: '09:00',
+        status: 'confirmed',
+        practitionerId: 2,
+        practitionerName: 'drg. Budi',
+      });
+    });
+
+    it('reports a null practitionerName when no practitioner is linked (edge)', async () => {
+      reservationsService.getStatusByToken.mockResolvedValue({
+        token: 'TOK123',
+        patientName: 'Budi',
+        reservationDate: '2026-06-15',
+        jamSlot: '09:00',
+        status: 'pending',
+        practitionerId: null,
+        practitioner: null,
+      });
+
+      const result = await service.getReservationStatus({
+        token: 'TOK123',
+      } as any);
+      expect(result.practitionerName).toBeNull();
+    });
+  });
+
+  describe('cancelReservation', () => {
+    it('delegates to reservationsService and returns token/status (positive)', async () => {
+      reservationsService.cancelByToken.mockResolvedValue({
+        token: 'TOK123',
+        status: 'cancelled',
+        internalField: 'should not leak',
+      });
+
+      const result = await service.cancelReservation('TOK123');
+
+      expect(reservationsService.cancelByToken).toHaveBeenCalledWith('TOK123');
+      expect(result).toEqual({ token: 'TOK123', status: 'cancelled' });
     });
   });
 
@@ -170,6 +240,45 @@ describe('PublicService', () => {
         '2026-06-15',
         5,
       );
+    });
+
+    describe('past-time filtering for today', () => {
+      beforeEach(() => {
+        // 2026-06-15T10:30:00Z = 17:30 WIB (Monday)
+        jest.useFakeTimers().setSystemTime(new Date('2026-06-15T10:30:00Z'));
+      });
+
+      afterEach(() => {
+        jest.useRealTimers();
+      });
+
+      it("excludes slots already past in the clinic's timezone for today (edge)", async () => {
+        clinicRepo.findOne.mockResolvedValue({
+          id: 1,
+          operationalHours: { senin: '08:00-20:00' },
+        });
+
+        const result = await service.getAvailableSlots({
+          clinicId: 1,
+          date: '2026-06-15',
+        } as any);
+
+        expect(result.slots).toEqual(['18:00', '18:30', '19:00', '19:30']);
+      });
+
+      it('does not filter slots for a future date (edge)', async () => {
+        clinicRepo.findOne.mockResolvedValue({
+          id: 1,
+          operationalHours: { selasa: '08:00-09:00' },
+        });
+
+        const result = await service.getAvailableSlots({
+          clinicId: 1,
+          date: '2026-06-16',
+        } as any);
+
+        expect(result.slots).toEqual(['08:00', '08:30']);
+      });
     });
   });
 });

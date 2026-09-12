@@ -1,11 +1,12 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Reservation } from './entities/reservation.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { Patient } from '../patients/entities/patient.entity';
@@ -46,6 +47,7 @@ export class ReservationsService {
     private readonly clinicRepository: Repository<Clinic>,
     @InjectRepository(Patient)
     private readonly patientRepository: Repository<Patient>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async getBookedSlots(
@@ -192,7 +194,96 @@ export class ReservationsService {
       throw new NotFoundException('Klinik tidak ditemukan atau belum aktif');
     }
 
-    return this.create(dto.clinicId, dto, ReservationSource.WEBSITE);
+    const patientPhone = dto.patientPhone?.trim();
+    if (!patientPhone) {
+      throw new BadRequestException('Nomor telepon wajib diisi');
+    }
+
+    // Website bookings pick a specific slot, so the same slot must not be
+    // handed out to two people who submit at the same time. The check and
+    // the insert run inside one transaction with a row/gap lock on the
+    // matching slot so a concurrent request either sees the just-created
+    // row (and gets rejected) or is blocked until this one commits.
+    return this.dataSource.transaction(async (manager) => {
+      if (dto.jamSlot) {
+        const conflictQb = manager
+          .createQueryBuilder(Reservation, 'r')
+          .setLock('pessimistic_write')
+          .where('r.clinicId = :clinicId', { clinicId: dto.clinicId })
+          .andWhere('r.reservationDate = :date', {
+            date: dto.reservationDate,
+          })
+          .andWhere('r.jamSlot = :jamSlot', { jamSlot: dto.jamSlot })
+          .andWhere('r.status != :cancelled', {
+            cancelled: ReservationStatus.CANCELLED,
+          });
+
+        if (dto.practitionerId) {
+          conflictQb.andWhere('r.practitionerId = :practitionerId', {
+            practitionerId: dto.practitionerId,
+          });
+        }
+
+        const conflict = await conflictQb.getOne();
+        if (conflict) {
+          this.logger.warn(
+            `[CREATE-PUBLIC] Slot bentrok | clinicId=${dto.clinicId}, date=${dto.reservationDate}, jamSlot=${dto.jamSlot}`,
+          );
+          throw new ConflictException(
+            'Jam yang dipilih baru saja dipesan orang lain, silakan pilih jam lain',
+          );
+        }
+      }
+
+      const reservation = manager.create(Reservation, {
+        clinicId: dto.clinicId,
+        patientId: dto.patientId,
+        patientName: dto.patientName,
+        patientPhone,
+        patientNik: dto.patientNik,
+        practitionerId: dto.practitionerId,
+        serviceType: dto.serviceType,
+        reservationDate: dto.reservationDate,
+        jamSlot: dto.jamSlot,
+        notes: dto.notes,
+        source: ReservationSource.WEBSITE,
+        status: ReservationStatus.PENDING,
+        token: this.generateToken(),
+      });
+
+      const saved = await manager.save(Reservation, reservation);
+      this.logger.log(
+        `[CREATE-PUBLIC] Reservasi publik berhasil dibuat | id=${saved.id}, token=${saved.token}, clinicId=${dto.clinicId}`,
+      );
+      return saved;
+    });
+  }
+
+  async cancelByToken(token: string): Promise<Reservation> {
+    const reservation = await this.reservationRepository.findOne({
+      where: { token },
+    });
+    if (!reservation) {
+      throw new NotFoundException(
+        'Reservasi dengan token tersebut tidak ditemukan',
+      );
+    }
+
+    const allowed = STATUS_TRANSITIONS[reservation.status] ?? [];
+    if (!allowed.includes(ReservationStatus.CANCELLED)) {
+      throw new BadRequestException(
+        `Reservasi berstatus ${reservation.status} tidak bisa dibatalkan`,
+      );
+    }
+
+    reservation.status = ReservationStatus.CANCELLED;
+    reservation.cancelledReason = 'Dibatalkan oleh pasien';
+
+    const updated = await this.reservationRepository.save(reservation);
+    this.logger.log(
+      `[CANCEL-PUBLIC] Reservasi dibatalkan oleh pasien | id=${updated.id}, token=${token}`,
+    );
+    return updated;
   }
 
   async updateStatus(
@@ -305,6 +396,7 @@ export class ReservationsService {
   async getStatusByToken(token: string) {
     const reservation = await this.reservationRepository.findOne({
       where: { token },
+      relations: { practitioner: true },
       select: {
         id: true,
         token: true,
@@ -313,6 +405,7 @@ export class ReservationsService {
         jamSlot: true,
         status: true,
         practitionerId: true,
+        practitioner: { id: true, name: true },
       },
     });
     if (!reservation) {
