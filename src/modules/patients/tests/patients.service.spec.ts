@@ -21,6 +21,9 @@ import {
 import { PatientRecall } from '../../recalls/entities/patient-recall.entity';
 import { SatusehatClientService } from '../../satusehat/satusehat-client.service';
 import { TreatmentPlansService } from '../../treatment-plans/treatment-plans.service';
+import { hashNik } from '../nik-crypto.util';
+
+process.env.PATIENT_DATA_ENCRYPTION_KEY ??= 'test-key-not-for-production';
 
 function buildQb(overrides: Partial<Record<string, any>> = {}) {
   const qb: any = {
@@ -156,7 +159,7 @@ describe('PatientsService', () => {
 
       expect(qb.andWhere).toHaveBeenCalledWith(
         expect.stringContaining('p.name LIKE'),
-        { search: '%Budi%', nik: 'Budi' },
+        { search: '%Budi%', nikHash: hashNik('Budi') },
       );
     });
   });
