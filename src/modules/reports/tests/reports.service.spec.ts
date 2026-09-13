@@ -921,6 +921,37 @@ describe('ReportsService', () => {
     });
   });
 
+  describe('getPatientOriginByKelurahan', () => {
+    it('aggregates patient counts by kelurahan without geocoding (positive)', async () => {
+      patientRepo.query.mockResolvedValue([
+        { kelurahan: 'Balai Nan Duo', kecamatan: 'Payakumbuh Barat', city: 'Kota Payakumbuh', count: '9' },
+        { kelurahan: 'Sungai Durian', kecamatan: 'Payakumbuh Utara', city: 'Kota Payakumbuh', count: '4' },
+      ]);
+
+      const result = await service.getPatientOriginByKelurahan(1);
+
+      expect(result.data).toEqual([
+        { kelurahan: 'Balai Nan Duo', kecamatan: 'Payakumbuh Barat', city: 'Kota Payakumbuh', count: 9 },
+        { kelurahan: 'Sungai Durian', kecamatan: 'Payakumbuh Utara', city: 'Kota Payakumbuh', count: 4 },
+      ]);
+    });
+
+    it('scopes the query to the given clinic and excludes blank kelurahan (positive)', async () => {
+      patientRepo.query.mockResolvedValue([]);
+      await service.getPatientOriginByKelurahan(7);
+      expect(patientRepo.query).toHaveBeenCalledWith(
+        expect.stringContaining("kelurahan IS NOT NULL AND kelurahan != ''"),
+        [7],
+      );
+    });
+
+    it('returns an empty list when the clinic has no patients with a recorded kelurahan (negative/edge)', async () => {
+      patientRepo.query.mockResolvedValue([]);
+      const result = await service.getPatientOriginByKelurahan(1);
+      expect(result.data).toEqual([]);
+    });
+  });
+
   describe('getVisitReport', () => {
     const dokter = { userId: 2, role: UserRole.DOKTER };
     const admin = { userId: 1, role: UserRole.ADMIN };

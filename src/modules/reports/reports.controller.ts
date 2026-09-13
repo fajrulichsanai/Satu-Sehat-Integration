@@ -121,6 +121,18 @@ export class ReportsController {
     return { success: true, data: result.data };
   }
 
+  @Get('financial-pro/patient-origin-kelurahan')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.OWNER)
+  @ApiOperation({
+    summary: 'Sebaran asal pasien per kelurahan, breakdown tabel (owner only)',
+  })
+  async getPatientOriginByKelurahan(@ClinicId() clinicId: number) {
+    const result =
+      await this.reportsService.getPatientOriginByKelurahan(clinicId);
+    return { success: true, data: result.data };
+  }
+
   @Get('investor/pdf')
   @UseGuards(RolesGuard)
   @Roles(UserRole.OWNER)

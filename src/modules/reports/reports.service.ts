@@ -1010,6 +1010,40 @@ export class ReportsService {
     return { data: points };
   }
 
+  /**
+   * Sebaran asal pasien per kelurahan — pelengkap `getPatientOriginMap`
+   * (yang berhenti di level kecamatan). Kelurahan jauh lebih kecil/spesifik
+   * daripada kecamatan sehingga jarang dikenali Nominatim, jadi di sini kita
+   * cuma agregasi jumlah pasien dari DB tanpa mencoba geocode — cukup untuk
+   * tabel breakdown, tidak untuk dipetakan.
+   */
+  async getPatientOriginByKelurahan(clinicId: number) {
+    const rows = await this.patientRepo.query(
+      `SELECT kelurahan, kecamatan, city, COUNT(*) AS count
+       FROM patients
+       WHERE clinic_id = ? AND kelurahan IS NOT NULL AND kelurahan != ''
+       GROUP BY kelurahan, kecamatan, city
+       ORDER BY count DESC`,
+      [clinicId],
+    );
+
+    return {
+      data: (
+        rows as Array<{
+          kelurahan: string;
+          kecamatan: string | null;
+          city: string | null;
+          count: string;
+        }>
+      ).map((r) => ({
+        kelurahan: r.kelurahan,
+        kecamatan: r.kecamatan,
+        city: r.city,
+        count: parseInt(r.count, 10),
+      })),
+    };
+  }
+
   // ================= Metrik bisnis & keuangan lanjutan =================
   // Dipakai baik oleh laporan keuangan interaktif (getFinancialReport) maupun
   // laporan investor (getInvestorReportData) supaya definisinya konsisten.
