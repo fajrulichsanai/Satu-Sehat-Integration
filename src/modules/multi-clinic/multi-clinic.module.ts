@@ -6,11 +6,15 @@ import { Clinic } from '../clinics/entities/clinic.entity';
 import { MultiClinicService } from './multi-clinic.service';
 import { MultiClinicController } from './multi-clinic.controller';
 import { DashboardModule } from '../dashboard/dashboard.module';
+import { ClinicsModule } from '../clinics/clinics.module';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([OwnerClinicLink, User, Clinic]),
     DashboardModule,
+    ClinicsModule,
+    SubscriptionsModule,
   ],
   controllers: [MultiClinicController],
   providers: [MultiClinicService],
