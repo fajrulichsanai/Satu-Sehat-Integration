@@ -18,10 +18,13 @@ import { RegisterDto, LoginDto } from './dto/auth.dto';
 import { UserRole } from '../../enums';
 import { OwnerCodeService } from '../owner-code/owner-code.service';
 import { ClinicSubscriptionsService } from '../subscriptions/clinic-subscriptions.service';
+import { MfaService } from './mfa.service';
 import {
   hashPassword,
   comparePassword,
 } from '../../common/utils/password.util';
+
+const MFA_CHALLENGE_TYPE = 'mfa_challenge';
 
 @Injectable()
 export class AuthService {
@@ -36,6 +39,7 @@ export class AuthService {
     private configService: ConfigService,
     private ownerCodeService: OwnerCodeService,
     private clinicSubscriptionsService: ClinicSubscriptionsService,
+    private mfaService: MfaService,
   ) {
     this.resend = new Resend(this.configService.get<string>('RESEND_API_KEY'));
   }
@@ -224,7 +228,50 @@ export class AuthService {
       });
     }
 
-    // Generate JWT token
+    if (user.mfaEnabled) {
+      const mfaToken = this.jwtService.sign(
+        { sub: user.id, type: MFA_CHALLENGE_TYPE },
+        { expiresIn: '5m' },
+      );
+      return {
+        success: true,
+        data: { mfaRequired: true, mfaToken },
+      };
+    }
+
+    return this.buildLoginResponse(user);
+  }
+
+  /**
+   * Second step of login when the account has MFA enabled: exchanges the
+   * short-lived challenge token from login() plus a TOTP/backup code for the
+   * real access token.
+   */
+  async verifyMfaLogin(mfaToken: string, code: string) {
+    let payload: { sub: number; type: string };
+    try {
+      payload = this.jwtService.verify(mfaToken);
+    } catch {
+      throw new UnauthorizedException({
+        success: false,
+        error: {
+          code: 'MFA_TOKEN_INVALID',
+          message: 'Sesi login MFA sudah kedaluwarsa, silakan login ulang',
+        },
+      });
+    }
+    if (payload.type !== MFA_CHALLENGE_TYPE) {
+      throw new UnauthorizedException({
+        success: false,
+        error: { code: 'MFA_TOKEN_INVALID', message: 'Token tidak valid' },
+      });
+    }
+
+    const user = await this.mfaService.verifyLoginCode(payload.sub, code);
+    return this.buildLoginResponse(user);
+  }
+
+  private async buildLoginResponse(user: User) {
     const payload = {
       sub: user.id,
       email: user.email,

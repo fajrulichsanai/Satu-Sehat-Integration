@@ -18,6 +18,22 @@ export class User extends BaseEntity {
   @Column({ name: 'password_hash', length: 255 })
   passwordHash: string;
 
+  // Encrypted TOTP secret (see mfa.util) — set as soon as setup starts, but
+  // only "live" (gating login) once mfaEnabled is true.
+  @Column({ name: 'mfa_secret', length: 255, nullable: true })
+  mfaSecret: string | null;
+
+  @Column({ name: 'mfa_enabled', default: false })
+  mfaEnabled: boolean;
+
+  @Column({ name: 'mfa_enabled_at', nullable: true })
+  mfaEnabledAt: Date | null;
+
+  // SHA-256 hashes of single-use recovery codes, shown to the user once at
+  // enable time. Each is removed from the array as it's consumed.
+  @Column({ name: 'mfa_backup_codes', type: 'json', nullable: true })
+  mfaBackupCodes: string[] | null;
+
   @Column({ length: 100 })
   name: string;
 

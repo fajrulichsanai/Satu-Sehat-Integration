@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { MfaService } from './mfa.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { User } from '../users/entities/user.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
@@ -31,7 +32,7 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
     SubscriptionsModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, MfaService, JwtStrategy],
   exports: [AuthService, JwtModule, JwtStrategy],
 })
 export class AuthModule {}
