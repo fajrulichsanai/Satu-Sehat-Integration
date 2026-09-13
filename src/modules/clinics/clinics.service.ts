@@ -5,29 +5,20 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
 import { Clinic } from './entities/clinic.entity';
 import { UpdateClinicDto } from './dto/clinic.dto';
-import { encrypt } from '../../common/utils/crypto.util';
 import { S3StorageService } from '../../common/storage/s3-storage.service';
 
 @Injectable()
 export class ClinicsService {
   private readonly logger = new Logger(ClinicsService.name);
-  private readonly encryptionKey: string;
 
   constructor(
     @InjectRepository(Clinic)
     private clinicRepository: Repository<Clinic>,
-    private readonly configService: ConfigService,
     private readonly s3StorageService: S3StorageService,
-  ) {
-    this.encryptionKey = this.configService.get<string>(
-      'ENCRYPTION_KEY',
-      'default-key-32-chars-padded!!!!!',
-    );
-  }
+  ) {}
 
   async findAllForSuperAdmin() {
     this.logger.log('[GET-ALL] Mengambil semua klinik (Super Admin)');

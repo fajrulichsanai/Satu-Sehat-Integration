@@ -19,10 +19,7 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>(
-          'JWT_SECRET',
-          'your-secret-key-change-in-production',
-        ),
+        secret: configService.getOrThrow<string>('JWT_SECRET'),
         signOptions: {
           expiresIn: '24h',
         },

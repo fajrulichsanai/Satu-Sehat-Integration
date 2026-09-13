@@ -10,7 +10,6 @@ import * as crypto from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import { User } from '../users/entities/user.entity';
@@ -19,6 +18,10 @@ import { RegisterDto, LoginDto } from './dto/auth.dto';
 import { UserRole } from '../../enums';
 import { OwnerCodeService } from '../owner-code/owner-code.service';
 import { ClinicSubscriptionsService } from '../subscriptions/clinic-subscriptions.service';
+import {
+  hashPassword,
+  comparePassword,
+} from '../../common/utils/password.util';
 
 @Injectable()
 export class AuthService {
@@ -84,7 +87,7 @@ export class AuthService {
     }
 
     // Hash password
-    const passwordHash = await bcrypt.hash(dto.password!, 10);
+    const passwordHash = await hashPassword(dto.password!);
 
     // Create clinic for owner (only if owner code is valid)
     let clinic: Clinic | null = null;
@@ -184,7 +187,7 @@ export class AuthService {
     }
 
     // Verify password
-    const isPasswordValid = await bcrypt.compare(
+    const isPasswordValid = await comparePassword(
       dto.password!,
       user.passwordHash,
     );
@@ -579,7 +582,7 @@ export class AuthService {
       throw new BadRequestException('Token reset telah kadaluarsa');
     }
 
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await hashPassword(newPassword);
 
     await this.userRepository.update(user.id, {
       passwordHash,

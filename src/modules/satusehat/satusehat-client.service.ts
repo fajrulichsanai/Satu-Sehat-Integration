@@ -4,11 +4,9 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { SatusehatEnvironment } from '../../enums/satusehat-environment.enum';
-import { decrypt } from '../../common/utils/crypto.util';
 
 const SATUSEHAT_BASE: Record<SatusehatEnvironment, string> = {
   [SatusehatEnvironment.SANDBOX]: 'https://api-satusehat-stg.dto.kemkes.go.id',
@@ -26,18 +24,10 @@ const AUTH_URL: Record<SatusehatEnvironment, string> = {
 export class SatusehatClientService {
   private readonly logger = new Logger(SatusehatClientService.name);
 
-  private readonly encryptionKey: string;
-
   constructor(
     @InjectRepository(Clinic)
     private readonly clinicRepository: Repository<Clinic>,
-    private readonly configService: ConfigService,
-  ) {
-    this.encryptionKey = this.configService.get<string>(
-      'ENCRYPTION_KEY',
-      'default-key-32-chars-padded!!!!!',
-    );
-  }
+  ) {}
 
   async getAccessToken(clinicId: number): Promise<string> {
     throw new ServiceUnavailableException(
