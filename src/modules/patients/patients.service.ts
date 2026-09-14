@@ -28,7 +28,7 @@ import {
 import { paginate, PaginatedResult } from '../../common/dto/pagination.dto';
 import { SatusehatClientService } from '../satusehat/satusehat-client.service';
 import { TreatmentPlansService } from '../treatment-plans/treatment-plans.service';
-import { hashNik, maskNik } from './nik-crypto.util';
+import { hashNik, maskNik } from '../../common/utils/nik-crypto.util';
 
 @Injectable()
 export class PatientsService {

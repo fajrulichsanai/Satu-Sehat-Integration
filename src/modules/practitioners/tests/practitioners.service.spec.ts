@@ -1,3 +1,5 @@
+process.env.PATIENT_DATA_ENCRYPTION_KEY ??= 'test-key-not-for-production';
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConflictException, NotFoundException } from '@nestjs/common';
@@ -62,20 +64,24 @@ describe('PractitionersService', () => {
   });
 
   describe('create', () => {
-    it('registers a new practitioner (positive)', async () => {
+    it('registers a new practitioner and stores a NIK hash for the duplicate check (positive)', async () => {
       repo.findOne.mockResolvedValue(null);
       const result = await service.create(
-        { nik: '123', name: 'Dr. A' } as any,
+        { nik: '3201012312310001', name: 'Dr. A' } as any,
         1,
         9,
       );
-      expect(result.data.nik).toBe('123');
+      expect(result.data.nik).toBe('3201012312310001');
+      expect(result.data.nikHash).toEqual(expect.any(String));
+      expect(repo.findOne).toHaveBeenCalledWith({
+        where: { nikHash: result.data.nikHash, clinicId: 1 },
+      });
     });
 
     it('throws ConflictException for a duplicate NIK within the clinic (negative)', async () => {
-      repo.findOne.mockResolvedValue({ id: 2, nik: '123' });
+      repo.findOne.mockResolvedValue({ id: 2, nik: '3201012312310001' });
       await expect(
-        service.create({ nik: '123' } as any, 1, 9),
+        service.create({ nik: '3201012312310001' } as any, 1, 9),
       ).rejects.toThrow(ConflictException);
     });
   });

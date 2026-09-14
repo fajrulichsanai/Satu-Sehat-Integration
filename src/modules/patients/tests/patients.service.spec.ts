@@ -21,7 +21,7 @@ import {
 import { PatientRecall } from '../../recalls/entities/patient-recall.entity';
 import { SatusehatClientService } from '../../satusehat/satusehat-client.service';
 import { TreatmentPlansService } from '../../treatment-plans/treatment-plans.service';
-import { hashNik } from '../nik-crypto.util';
+import { hashNik } from '../../../common/utils/nik-crypto.util';
 
 process.env.PATIENT_DATA_ENCRYPTION_KEY ??= 'test-key-not-for-production';
 

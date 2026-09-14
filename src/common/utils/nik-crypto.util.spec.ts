@@ -6,7 +6,7 @@ import {
   hashNik,
   maskNik,
   nikColumnTransformer,
-} from '../nik-crypto.util';
+} from './nik-crypto.util';
 
 describe('nik-crypto.util', () => {
   describe('encryptNik / decryptNik', () => {

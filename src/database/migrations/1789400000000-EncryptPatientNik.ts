@@ -3,7 +3,7 @@ import {
   encryptNik,
   decryptNik,
   hashNik,
-} from '../../modules/patients/nik-crypto.util';
+} from '../../common/utils/nik-crypto.util';
 
 // A value already in `<32-hex-iv>:<hex-ciphertext>` shape was almost
 // certainly already encrypted by this migration (or a prior partial run of

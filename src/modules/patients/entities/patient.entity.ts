@@ -1,6 +1,6 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { BaseEntity } from '../../../common/base.entity';
-import { nikColumnTransformer } from '../nik-crypto.util';
+import { nikColumnTransformer } from '../../../common/utils/nik-crypto.util';
 import {
   Gender,
   SyncStatus,
