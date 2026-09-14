@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ToothCondition } from './entities/tooth-condition.entity';
@@ -8,6 +12,7 @@ import {
   UpsertToothConditionDto,
   CreateDentalBridgeDto,
 } from './dto/odontogram.dto';
+import { isValidToothNumber } from './odontogram.constants';
 
 const SURFACE_FIELDS: (keyof UpsertToothConditionDto)[] = [
   'surfaceMesial',
@@ -50,6 +55,12 @@ export class OdontogramService {
     dto: UpsertToothConditionDto,
     userId: number,
   ): Promise<ToothCondition> {
+    if (!isValidToothNumber(toothNumber)) {
+      throw new BadRequestException(
+        `Nomor gigi ${toothNumber} tidak valid (harus notasi FDI 11-48 atau 51-85)`,
+      );
+    }
+
     await this.assertPatientExists(patientId, clinicId);
 
     let tooth = await this.toothRepository.findOne({
@@ -60,14 +71,18 @@ export class OdontogramService {
       tooth = this.toothRepository.create({
         patientId,
         toothNumber,
-        wholeCondition: dto.wholeCondition,
+        teksAtas: dto.teksAtas,
+        teksBawah: dto.teksBawah,
+        rct: dto.rct ?? false,
         notes: dto.notes,
         createdBy: userId,
         ...this.pickSurfaces(dto),
       });
     } else {
       Object.assign(tooth, {
-        wholeCondition: dto.wholeCondition ?? tooth.wholeCondition,
+        teksAtas: dto.teksAtas ?? tooth.teksAtas,
+        teksBawah: dto.teksBawah ?? tooth.teksBawah,
+        rct: dto.rct ?? tooth.rct,
         notes: dto.notes ?? tooth.notes,
         updatedBy: userId,
         ...this.pickSurfaces(dto, tooth),

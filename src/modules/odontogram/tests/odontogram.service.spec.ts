@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { OdontogramService } from '../odontogram.service';
 import { ToothCondition } from '../entities/tooth-condition.entity';
 import { DentalBridge } from '../entities/dental-bridge.entity';
@@ -70,19 +70,21 @@ describe('OdontogramService', () => {
         1,
         1,
         11,
-        { wholeCondition: 'caries', surfaceMesial: 'filled' } as any,
+        { teksAtas: 'ANO', rct: true, surfaceMesial: 'karies' } as any,
         9,
       );
 
       expect(toothRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           toothNumber: 11,
-          wholeCondition: 'caries',
-          surfaceMesial: 'filled',
+          teksAtas: 'ANO',
+          rct: true,
+          surfaceMesial: 'karies',
           createdBy: 9,
         }),
       );
-      expect(result.wholeCondition).toBe('caries');
+      expect(result.teksAtas).toBe('ANO');
+      expect(result.rct).toBe(true);
     });
 
     it('merges into an existing tooth, preserving surfaces not provided (positive)', async () => {
@@ -90,23 +92,47 @@ describe('OdontogramService', () => {
       toothRepo.findOne.mockResolvedValue({
         id: 5,
         toothNumber: 11,
-        wholeCondition: 'sound',
-        surfaceMesial: 'filled',
-        surfaceDistal: 'sound',
+        teksAtas: 'SOU',
+        rct: true,
+        surfaceMesial: 'komposit',
+        surfaceDistal: null,
       });
 
       const result = await service.upsertTooth(
         1,
         1,
         11,
-        { surfaceDistal: 'caries' } as any,
+        { surfaceDistal: 'karies' } as any,
         9,
       );
 
-      expect(result.surfaceMesial).toBe('filled'); // preserved
-      expect(result.surfaceDistal).toBe('caries');
-      expect(result.wholeCondition).toBe('sound'); // preserved
+      expect(result.surfaceMesial).toBe('komposit'); // preserved
+      expect(result.surfaceDistal).toBe('karies');
+      expect(result.teksAtas).toBe('SOU'); // preserved
+      expect(result.rct).toBe(true); // preserved
       expect(result.updatedBy).toBe(9);
+    });
+
+    it('throws BadRequestException for an invalid tooth number (negative)', async () => {
+      await expect(service.upsertTooth(1, 1, 99, {} as any, 9)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('accepts a valid deciduous tooth number (positive)', async () => {
+      patientRepo.findOne.mockResolvedValue({ id: 1, clinicId: 1 });
+      toothRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.upsertTooth(
+        1,
+        1,
+        55,
+        { teksBawah: 'MISSING' } as any,
+        9,
+      );
+
+      expect(result.toothNumber).toBe(55);
+      expect(result.teksBawah).toBe('MISSING');
     });
 
     it('throws NotFoundException when patient does not exist (negative)', async () => {
