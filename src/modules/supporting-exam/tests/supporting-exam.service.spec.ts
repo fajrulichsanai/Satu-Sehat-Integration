@@ -38,7 +38,10 @@ describe('SupportingExamService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SupportingExamService,
-        { provide: getRepositoryToken(SupportingExamImage), useValue: imageRepo },
+        {
+          provide: getRepositoryToken(SupportingExamImage),
+          useValue: imageRepo,
+        },
         { provide: getRepositoryToken(Encounter), useValue: encounterRepo },
       ],
     }).compile();
@@ -76,7 +79,9 @@ describe('SupportingExamService', () => {
         9,
       );
 
-      expect(result.fileUrl).toBe('/uploads/supporting-exam/x.jpg');
+      expect(result.fileUrl).toBe(
+        '/encounters/1/supporting-exam-images/1/file',
+      );
       expect(result.createdBy).toBe(9);
     });
 
@@ -149,7 +154,44 @@ describe('SupportingExamService', () => {
 
     it('throws NotFoundException for an encounter outside the clinic (negative)', async () => {
       encounterRepo.findOne.mockResolvedValue(null);
-      await expect(service.remove(1, 99, 5)).rejects.toThrow(
+      await expect(service.remove(1, 99, 5)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('getFilePath', () => {
+    it('resolves the absolute path for an existing image (positive)', async () => {
+      encounterRepo.findOne.mockResolvedValue({ id: 1, clinicId: 1 });
+      imageRepo.findOne.mockResolvedValue({
+        id: 5,
+        encounterId: 1,
+        fileUrl: '/uploads/supporting-exam/x.jpg',
+        originalName: 'x.jpg',
+      });
+      (existsSync as jest.Mock).mockReturnValue(true);
+
+      const result = await service.getFilePath(1, 1, 5);
+
+      expect(result.absolutePath).toContain('uploads/supporting-exam/x.jpg');
+      expect(result.originalName).toBe('x.jpg');
+    });
+
+    it('throws NotFoundException when the file no longer exists on disk (negative)', async () => {
+      encounterRepo.findOne.mockResolvedValue({ id: 1, clinicId: 1 });
+      imageRepo.findOne.mockResolvedValue({
+        id: 5,
+        encounterId: 1,
+        fileUrl: '/uploads/supporting-exam/missing.jpg',
+      });
+      (existsSync as jest.Mock).mockReturnValue(false);
+
+      await expect(service.getFilePath(1, 1, 5)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('throws NotFoundException for an encounter outside the clinic (negative)', async () => {
+      encounterRepo.findOne.mockResolvedValue(null);
+      await expect(service.getFilePath(1, 99, 5)).rejects.toThrow(
         NotFoundException,
       );
     });

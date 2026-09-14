@@ -16,6 +16,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
+import { MfaService } from './mfa.service';
 import {
   RegisterDto,
   LoginDto,
@@ -24,9 +25,13 @@ import {
   ActivationStatusResponseDto,
   ForgotPasswordDto,
   ResetPasswordDto,
+  MfaVerifyLoginDto,
+  MfaEnableDto,
+  MfaDisableDto,
 } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { SkipMfaEnforcement } from './guards/mfa-enforcement.guard';
 import { Roles } from './decorators/roles.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
@@ -42,6 +47,7 @@ import {
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
+    private readonly mfaService: MfaService,
     private readonly auditLogService: AuditLogService,
   ) {}
 
@@ -69,7 +75,7 @@ export class AuthController {
     console.log(`Received login request for email: ${dto.email}`);
     try {
       const result = await this.authService.login(dto);
-      const loggedInUser = result?.data?.user;
+      const loggedInUser = (result?.data as { user?: any })?.user;
       void this.auditLogService.record({
         clinicId: loggedInUser?.clinicId ?? null,
         actorId: loggedInUser?.id ?? null,
@@ -99,7 +105,125 @@ export class AuthController {
     }
   }
 
+  @Public()
+  @Post('mfa/verify-login')
+  @ApiOperation({
+    summary:
+      'Second step of login for accounts with MFA enabled: exchange the mfaToken from /auth/login plus a code for the real access token',
+  })
+  @ApiResponse({ status: 200, type: LoginResponseDto })
+  @ApiResponse({ status: 401, description: 'Invalid code or expired token' })
+  async verifyMfaLogin(@Body() dto: MfaVerifyLoginDto, @Req() req: any) {
+    try {
+      const result = await this.authService.verifyMfaLogin(
+        dto.mfaToken!,
+        dto.code!,
+      );
+      const loggedInUser = result?.data?.user;
+      void this.auditLogService.record({
+        clinicId: loggedInUser?.clinicId ?? null,
+        actorId: loggedInUser?.id ?? null,
+        actorName: loggedInUser?.name ?? 'Unknown',
+        actorRole: loggedInUser?.role ?? 'unknown',
+        actionType: AuditActionType.LOGIN,
+        entityType: 'Auth',
+        entityLabel: 'MFA',
+        status: AuditStatus.SUCCESS,
+        ipAddress: req.ip,
+        userAgent: req.headers?.['user-agent'],
+      });
+      return result;
+    } catch (err) {
+      void this.auditLogService.record({
+        clinicId: null,
+        actorId: null,
+        actorName: 'Unknown',
+        actorRole: 'unknown',
+        actionType: AuditActionType.LOGIN,
+        entityType: 'Auth',
+        entityLabel: 'MFA',
+        status: AuditStatus.FAILED,
+        failureReason: (err as Error)?.message?.slice(0, 255),
+        ipAddress: req.ip,
+        userAgent: req.headers?.['user-agent'],
+      });
+      throw err;
+    }
+  }
+
+  @Get('mfa/status')
+  @SkipMfaEnforcement()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Whether MFA is currently enabled for the caller' })
+  async getMfaStatus(@CurrentUser() user: any) {
+    const data = await this.mfaService.getStatus(user.userId);
+    return { success: true, data };
+  }
+
+  @Post('mfa/setup')
+  @SkipMfaEnforcement()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary:
+      'Starts MFA enrollment: generates a new secret and returns a QR code to scan with an authenticator app',
+  })
+  async setupMfa(@CurrentUser() user: any) {
+    const data = await this.mfaService.setup(user.userId);
+    return { success: true, data };
+  }
+
+  @Post('mfa/enable')
+  @SkipMfaEnforcement()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary:
+      'Confirms MFA enrollment with a code from the authenticator app and turns MFA on; returns one-time backup codes',
+  })
+  async enableMfa(@CurrentUser() user: any, @Body() dto: MfaEnableDto, @Req() req: any) {
+    const data = await this.mfaService.enable(user.userId, dto.code!);
+    void this.auditLogService.record({
+      clinicId: user.clinicId ?? null,
+      actorId: user.userId,
+      actorName: user.name ?? user.email ?? 'Unknown',
+      actorRole: user.role,
+      actionType: AuditActionType.UPDATE,
+      entityType: 'User',
+      entityId: user.userId,
+      entityLabel: 'MFA enabled',
+      status: AuditStatus.SUCCESS,
+      ipAddress: req.ip,
+      userAgent: req.headers?.['user-agent'],
+    });
+    return { success: true, data };
+  }
+
+  @Post('mfa/disable')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Disables MFA after confirming the password' })
+  async disableMfa(@CurrentUser() user: any, @Body() dto: MfaDisableDto, @Req() req: any) {
+    await this.mfaService.disable(user.userId, dto.password!);
+    void this.auditLogService.record({
+      clinicId: user.clinicId ?? null,
+      actorId: user.userId,
+      actorName: user.name ?? user.email ?? 'Unknown',
+      actorRole: user.role,
+      actionType: AuditActionType.UPDATE,
+      entityType: 'User',
+      entityId: user.userId,
+      entityLabel: 'MFA disabled',
+      status: AuditStatus.SUCCESS,
+      ipAddress: req.ip,
+      userAgent: req.headers?.['user-agent'],
+    });
+    return { success: true };
+  }
+
   @Get('me')
+  @SkipMfaEnforcement()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get current user profile' })
@@ -137,6 +261,7 @@ export class AuthController {
   }
 
   @Post('logout')
+  @SkipMfaEnforcement()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Logout (client should discard token)' })

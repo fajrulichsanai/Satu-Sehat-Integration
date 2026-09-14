@@ -12,6 +12,17 @@ import { Encounter } from '../encounters/entities/encounter.entity';
 import { CreateSupportingExamImageDto } from './dto/supporting-exam-image.dto';
 import { supportingExamFileToUrl } from './upload/supporting-exam-image.storage';
 
+function toApiUrl(
+  encounterId: number,
+  image: SupportingExamImage,
+): SupportingExamImage {
+  if (!image.fileUrl) return image;
+  return {
+    ...image,
+    fileUrl: `/encounters/${encounterId}/supporting-exam-images/${image.id}/file`,
+  };
+}
+
 @Injectable()
 export class SupportingExamService {
   constructor(
@@ -26,10 +37,11 @@ export class SupportingExamService {
     clinicId: number,
   ): Promise<SupportingExamImage[]> {
     await this.assertEncounterExists(encounterId, clinicId);
-    return this.imageRepository.find({
+    const images = await this.imageRepository.find({
       where: { encounterId },
       order: { id: 'DESC' },
     });
+    return images.map((image) => toApiUrl(encounterId, image));
   }
 
   async create(
@@ -53,7 +65,8 @@ export class SupportingExamService {
       notes: dto.notes,
       createdBy: userId,
     });
-    return this.imageRepository.save(image);
+    const saved = await this.imageRepository.save(image);
+    return toApiUrl(encounterId, saved);
   }
 
   async remove(
@@ -75,6 +88,27 @@ export class SupportingExamService {
     if (existsSync(filePath)) {
       unlinkSync(filePath);
     }
+  }
+
+  async getFilePath(
+    encounterId: number,
+    clinicId: number,
+    imageId: number,
+  ): Promise<{ absolutePath: string; originalName: string | null }> {
+    await this.assertEncounterExists(encounterId, clinicId);
+    const image = await this.imageRepository.findOne({
+      where: { id: imageId, encounterId },
+    });
+    if (!image) {
+      throw new NotFoundException(
+        `Gambar dengan ID ${imageId} tidak ditemukan`,
+      );
+    }
+    const absolutePath = join(process.cwd(), image.fileUrl.replace(/^\//, ''));
+    if (!existsSync(absolutePath)) {
+      throw new NotFoundException('File gambar tidak ditemukan');
+    }
+    return { absolutePath, originalName: image.originalName };
   }
 
   private async assertEncounterExists(

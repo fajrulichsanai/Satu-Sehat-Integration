@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { existsSync } from 'fs';
+import { join } from 'path';
 import {
   SubscriptionPayment,
   SubscriptionPaymentStatus,
@@ -22,6 +24,14 @@ import {
 } from './dto/subscription-payment.dto';
 import { PaginatedResult, paginate } from '../../common/dto/pagination.dto';
 import { proofFileToUrl } from './upload/payment-proof.storage';
+
+function toApiUrl(payment: SubscriptionPayment): SubscriptionPayment {
+  if (!payment.proofUrl) return payment;
+  return {
+    ...payment,
+    proofUrl: `/subscription-payments/${payment.id}/proof-file`,
+  };
+}
 
 @Injectable()
 export class SubscriptionPaymentsService {
@@ -60,7 +70,8 @@ export class SubscriptionPaymentsService {
       proofUrl: proofFileToUrl(proof),
       createdBy,
     });
-    return this.paymentRepository.save(payment);
+    const saved = await this.paymentRepository.save(payment);
+    return toApiUrl(saved);
   }
 
   /**
@@ -135,7 +146,8 @@ export class SubscriptionPaymentsService {
     clinicId: number,
     query: SubscriptionPaymentQueryDto,
   ): Promise<PaginatedResult<SubscriptionPayment>> {
-    return paginate(this.buildQuery(query, clinicId), query);
+    const result = await paginate(this.buildQuery(query, clinicId), query);
+    return { ...result, data: result.data.map(toApiUrl) };
   }
 
   async listMineForOwner(
@@ -182,12 +194,49 @@ export class SubscriptionPaymentsService {
     return {
       ...result,
       data: result.data.map((p) => ({
-        ...p,
+        ...toApiUrl(p),
         clinicName:
           typeof p.clinicId === 'number' ? clinicNameById.get(p.clinicId) : undefined,
         ownerName: typeof p.ownerId === 'number' ? ownerNameById.get(p.ownerId) : undefined,
       })),
     };
+  }
+
+  async getProofFilePath(id: number, clinicId: number | null): Promise<string> {
+    const payment = await this.paymentRepository.findOne({ where: { id } });
+    if (!payment || !payment.proofUrl) {
+      throw new NotFoundException({
+        success: false,
+        error: {
+          code: 'PAYMENT_PROOF_NOT_FOUND',
+          message: 'Bukti pembayaran tidak ditemukan',
+        },
+      });
+    }
+    // clinicId === null identifies a SUPER_ADMIN caller, who may view any clinic's proof.
+    if (clinicId !== null && payment.clinicId !== clinicId) {
+      throw new NotFoundException({
+        success: false,
+        error: {
+          code: 'PAYMENT_PROOF_NOT_FOUND',
+          message: 'Bukti pembayaran tidak ditemukan',
+        },
+      });
+    }
+    const absolutePath = join(
+      process.cwd(),
+      payment.proofUrl.replace(/^\//, ''),
+    );
+    if (!existsSync(absolutePath)) {
+      throw new NotFoundException({
+        success: false,
+        error: {
+          code: 'PAYMENT_PROOF_NOT_FOUND',
+          message: 'File bukti pembayaran tidak ditemukan',
+        },
+      });
+    }
+    return absolutePath;
   }
 
   private async findPendingOrThrow(id: number): Promise<SubscriptionPayment> {

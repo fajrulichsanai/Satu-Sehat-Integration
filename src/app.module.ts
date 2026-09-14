@@ -40,6 +40,7 @@ import { ConsentsModule } from './modules/consents/consents.module';
 import { MultiClinicModule } from './modules/multi-clinic/multi-clinic.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
+import { MfaEnforcementGuard } from './modules/auth/guards/mfa-enforcement.guard';
 import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.guard';
 
 @Module({
@@ -64,7 +65,7 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
           host: configService.get('DB_HOST', 'localhost'),
           port: parseInt(configService.get('DB_PORT', '3306')),
           username: configService.get('DB_USERNAME', 'root'),
-          password: configService.get('DB_PASSWORD', 'root'),
+          password: configService.getOrThrow('DB_PASSWORD'),
           database: configService.get('DB_DATABASE', 'dental_clinic'),
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
           synchronize,
@@ -119,6 +120,12 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    // Global MFA enforcement for privileged roles — see MfaEnforcementGuard
+    // for the exemptions (@SkipMfaEnforcement routes).
+    {
+      provide: APP_GUARD,
+      useClass: MfaEnforcementGuard,
     },
     // Global subscription-expiry gate on every mutating request — see
     // SubscriptionGuard for the exemptions (SUPER_ADMIN, @SkipSubscriptionCheck routes).

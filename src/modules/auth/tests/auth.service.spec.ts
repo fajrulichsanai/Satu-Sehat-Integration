@@ -14,6 +14,7 @@ import { User } from '../../users/entities/user.entity';
 import { Clinic } from '../../clinics/entities/clinic.entity';
 import { OwnerCodeService } from '../../owner-code/owner-code.service';
 import { ClinicSubscriptionsService } from '../../subscriptions/clinic-subscriptions.service';
+import { MfaService } from '../mfa.service';
 import { UserRole } from '../../../enums';
 
 jest.mock('resend', () => ({
@@ -36,9 +37,10 @@ describe('AuthService', () => {
     update: jest.Mock;
   };
   let clinicRepo: { create: jest.Mock; save: jest.Mock };
-  let jwtService: { sign: jest.Mock };
+  let jwtService: { sign: jest.Mock; verify: jest.Mock };
   let ownerCodeService: { validate: jest.Mock; markAsUsed: jest.Mock };
   let subscriptionsService: { provisionTrialForNewClinic: jest.Mock };
+  let mfaService: { verifyLoginCode: jest.Mock };
 
   beforeEach(async () => {
     userRepo = {
@@ -57,7 +59,10 @@ describe('AuthService', () => {
         return Promise.resolve(data);
       }),
     };
-    jwtService = { sign: jest.fn().mockReturnValue('signed.jwt.token') };
+    jwtService = {
+      sign: jest.fn().mockReturnValue('signed.jwt.token'),
+      verify: jest.fn(),
+    };
     ownerCodeService = {
       validate: jest.fn(),
       markAsUsed: jest.fn().mockResolvedValue(undefined),
@@ -65,6 +70,7 @@ describe('AuthService', () => {
     subscriptionsService = {
       provisionTrialForNewClinic: jest.fn().mockResolvedValue(undefined),
     };
+    mfaService = { verifyLoginCode: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -81,6 +87,7 @@ describe('AuthService', () => {
           provide: ClinicSubscriptionsService,
           useValue: subscriptionsService,
         },
+        { provide: MfaService, useValue: mfaService },
       ],
     }).compile();
 
@@ -181,6 +188,23 @@ describe('AuthService', () => {
       );
     });
 
+    it('flags mfaSetupRequired for a privileged role without MFA enabled (positive/edge)', async () => {
+      // activeUser is UserRole.ADMIN, which is MFA-enforced.
+      userRepo.findOne.mockResolvedValue(activeUser);
+      const result = await service.login(dto);
+      expect(result.data.mfaSetupRequired).toBe(true);
+      expect(result.data.user.mfaEnabled).toBeFalsy();
+    });
+
+    it('does not flag mfaSetupRequired for a non-enforced role (positive/edge)', async () => {
+      userRepo.findOne.mockResolvedValue({
+        ...activeUser,
+        role: UserRole.DOKTER,
+      });
+      const result = await service.login(dto);
+      expect(result.data.mfaSetupRequired).toBe(false);
+    });
+
     it('throws UnauthorizedException when user does not exist (negative)', async () => {
       userRepo.findOne.mockResolvedValue(null);
       await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
@@ -203,6 +227,87 @@ describe('AuthService', () => {
     it('throws UnauthorizedException when user is not active (negative)', async () => {
       userRepo.findOne.mockResolvedValue({ ...activeUser, isActive: false });
       await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('returns an MFA challenge instead of an access token when MFA is enabled (positive/edge)', async () => {
+      userRepo.findOne.mockResolvedValue({ ...activeUser, mfaEnabled: true });
+
+      const result = await service.login(dto);
+
+      expect(result.data).toEqual({
+        mfaRequired: true,
+        mfaToken: 'signed.jwt.token',
+      });
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        { sub: 1, type: 'mfa_challenge' },
+        { expiresIn: '5m' },
+      );
+      // The real access token must not be issued yet, and last-login isn't
+      // recorded until the MFA step actually completes.
+      expect(userRepo.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('verifyMfaLogin', () => {
+    const mfaUser = {
+      id: 1,
+      email: 'a@x.com',
+      name: 'A',
+      role: UserRole.ADMIN,
+      clinicId: 1,
+      practitionerId: null,
+      isActive: true,
+      mfaEnabled: true,
+    };
+
+    it('issues the real access token for a valid challenge token and code (positive)', async () => {
+      jwtService.verify = jest
+        .fn()
+        .mockReturnValue({ sub: 1, type: 'mfa_challenge' });
+      mfaService.verifyLoginCode.mockResolvedValue(mfaUser);
+
+      const result = await service.verifyMfaLogin('challenge-token', '123456');
+
+      expect(mfaService.verifyLoginCode).toHaveBeenCalledWith(1, '123456');
+      expect(result.data.accessToken).toBe('signed.jwt.token');
+      expect(result.data.mfaSetupRequired).toBe(false);
+      expect(result.data.user.id).toBe(1);
+    });
+
+    it('throws UnauthorizedException for an expired/invalid challenge token (negative)', async () => {
+      jwtService.verify = jest.fn().mockImplementation(() => {
+        throw new Error('jwt expired');
+      });
+
+      await expect(
+        service.verifyMfaLogin('bad-token', '123456'),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mfaService.verifyLoginCode).not.toHaveBeenCalled();
+    });
+
+    it('throws UnauthorizedException when the token is not an MFA challenge (negative)', async () => {
+      // e.g. someone tries to replay a normal access token here instead.
+      jwtService.verify = jest
+        .fn()
+        .mockReturnValue({ sub: 1, email: 'a@x.com', role: 'admin' });
+
+      await expect(
+        service.verifyMfaLogin('normal-token', '123456'),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mfaService.verifyLoginCode).not.toHaveBeenCalled();
+    });
+
+    it('propagates the code-invalid error from MfaService (negative)', async () => {
+      jwtService.verify = jest
+        .fn()
+        .mockReturnValue({ sub: 1, type: 'mfa_challenge' });
+      mfaService.verifyLoginCode.mockRejectedValue(
+        new UnauthorizedException('Kode tidak valid'),
+      );
+
+      await expect(
+        service.verifyMfaLogin('challenge-token', '000000'),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 

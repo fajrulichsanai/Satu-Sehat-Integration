@@ -10,7 +10,6 @@ import * as crypto from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import { User } from '../users/entities/user.entity';
@@ -19,6 +18,14 @@ import { RegisterDto, LoginDto } from './dto/auth.dto';
 import { UserRole } from '../../enums';
 import { OwnerCodeService } from '../owner-code/owner-code.service';
 import { ClinicSubscriptionsService } from '../subscriptions/clinic-subscriptions.service';
+import { MfaService } from './mfa.service';
+import { MFA_ENFORCED_ROLES } from './guards/mfa-enforcement.guard';
+import {
+  hashPassword,
+  comparePassword,
+} from '../../common/utils/password.util';
+
+const MFA_CHALLENGE_TYPE = 'mfa_challenge';
 
 @Injectable()
 export class AuthService {
@@ -33,6 +40,7 @@ export class AuthService {
     private configService: ConfigService,
     private ownerCodeService: OwnerCodeService,
     private clinicSubscriptionsService: ClinicSubscriptionsService,
+    private mfaService: MfaService,
   ) {
     this.resend = new Resend(this.configService.get<string>('RESEND_API_KEY'));
   }
@@ -84,7 +92,7 @@ export class AuthService {
     }
 
     // Hash password
-    const passwordHash = await bcrypt.hash(dto.password!, 10);
+    const passwordHash = await hashPassword(dto.password!);
 
     // Create clinic for owner (only if owner code is valid)
     let clinic: Clinic | null = null;
@@ -184,7 +192,7 @@ export class AuthService {
     }
 
     // Verify password
-    const isPasswordValid = await bcrypt.compare(
+    const isPasswordValid = await comparePassword(
       dto.password!,
       user.passwordHash,
     );
@@ -221,7 +229,50 @@ export class AuthService {
       });
     }
 
-    // Generate JWT token
+    if (user.mfaEnabled) {
+      const mfaToken = this.jwtService.sign(
+        { sub: user.id, type: MFA_CHALLENGE_TYPE },
+        { expiresIn: '5m' },
+      );
+      return {
+        success: true,
+        data: { mfaRequired: true, mfaToken },
+      };
+    }
+
+    return this.buildLoginResponse(user);
+  }
+
+  /**
+   * Second step of login when the account has MFA enabled: exchanges the
+   * short-lived challenge token from login() plus a TOTP/backup code for the
+   * real access token.
+   */
+  async verifyMfaLogin(mfaToken: string, code: string) {
+    let payload: { sub: number; type: string };
+    try {
+      payload = this.jwtService.verify(mfaToken);
+    } catch {
+      throw new UnauthorizedException({
+        success: false,
+        error: {
+          code: 'MFA_TOKEN_INVALID',
+          message: 'Sesi login MFA sudah kedaluwarsa, silakan login ulang',
+        },
+      });
+    }
+    if (payload.type !== MFA_CHALLENGE_TYPE) {
+      throw new UnauthorizedException({
+        success: false,
+        error: { code: 'MFA_TOKEN_INVALID', message: 'Token tidak valid' },
+      });
+    }
+
+    const user = await this.mfaService.verifyLoginCode(payload.sub, code);
+    return this.buildLoginResponse(user);
+  }
+
+  private async buildLoginResponse(user: User) {
     const payload = {
       sub: user.id,
       email: user.email,
@@ -241,6 +292,8 @@ export class AuthService {
       success: true,
       data: {
         accessToken,
+        mfaSetupRequired:
+          MFA_ENFORCED_ROLES.includes(user.role) && !user.mfaEnabled,
         user: {
           id: user.id,
           email: user.email,
@@ -249,6 +302,7 @@ export class AuthService {
           clinicId: user.clinicId,
           practitionerId: user.practitionerId,
           isActive: user.isActive,
+          mfaEnabled: user.mfaEnabled,
         },
       },
     };
@@ -579,7 +633,7 @@ export class AuthService {
       throw new BadRequestException('Token reset telah kadaluarsa');
     }
 
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await hashPassword(newPassword);
 
     await this.userRepository.update(user.id, {
       passwordHash,

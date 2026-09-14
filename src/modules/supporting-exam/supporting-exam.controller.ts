@@ -6,10 +6,12 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
@@ -73,6 +75,25 @@ export class SupportingExamController {
       user.userId,
     );
     return { success: true, data };
+  }
+
+  @Get(':imageId/file')
+  @ApiOperation({
+    summary:
+      'Stream the image file for a supporting exam image (authenticated)',
+  })
+  async getFile(
+    @Param('encounterId', ParseIntPipe) encounterId: number,
+    @Param('imageId', ParseIntPipe) imageId: number,
+    @ClinicId() clinicId: number,
+    @Res() res: Response,
+  ) {
+    const { absolutePath } = await this.supportingExamService.getFilePath(
+      encounterId,
+      clinicId,
+      imageId,
+    );
+    res.sendFile(absolutePath);
   }
 
   @Delete(':imageId')

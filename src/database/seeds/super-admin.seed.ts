@@ -1,10 +1,14 @@
 import { DataSource } from 'typeorm';
-import * as bcrypt from 'bcrypt';
 import { UserRole } from '../../enums';
+import { hashPassword } from '../../common/utils/password.util';
 
 export async function seedSuperAdmin(dataSource: DataSource): Promise<void> {
   const email = process.env.SUPER_ADMIN_EMAIL || 'superadmin@apexrecord.local';
-  const password = process.env.SUPER_ADMIN_PASSWORD || 'ChangeMe123!';
+  const password = process.env.SUPER_ADMIN_PASSWORD;
+
+  if (!password) {
+    throw new Error('SUPER_ADMIN_PASSWORD environment variable is required');
+  }
 
   const queryRunner = dataSource.createQueryRunner();
 
@@ -19,7 +23,7 @@ export async function seedSuperAdmin(dataSource: DataSource): Promise<void> {
     return;
   }
 
-  const passwordHash = await bcrypt.hash(password, 10);
+  const passwordHash = await hashPassword(password);
 
   await queryRunner.query(
     `INSERT INTO users (email, password_hash, name, role, is_active, email_verified_at, created_at, updated_at)

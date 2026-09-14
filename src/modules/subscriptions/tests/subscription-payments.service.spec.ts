@@ -1,6 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+
+jest.mock('fs', () => ({
+  existsSync: jest.fn().mockReturnValue(true),
+  mkdirSync: jest.fn(),
+}));
+
+import { existsSync } from 'fs';
 import { SubscriptionPaymentsService } from '../subscription-payments.service';
 import {
   SubscriptionPayment,
@@ -52,7 +59,10 @@ describe('SubscriptionPaymentsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SubscriptionPaymentsService,
-        { provide: getRepositoryToken(SubscriptionPayment), useValue: paymentRepo },
+        {
+          provide: getRepositoryToken(SubscriptionPayment),
+          useValue: paymentRepo,
+        },
         { provide: getRepositoryToken(Clinic), useValue: clinicRepo },
         { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: SubscriptionPlansService, useValue: plansService },
@@ -76,11 +86,7 @@ describe('SubscriptionPaymentsService', () => {
         ownerFee: 50000,
       });
 
-      const result = await service.claim(
-        1,
-        { planId: 1, quantity: 5 } as any,
-        9,
-      );
+      const result = await service.claim(1, { planId: 1, quantity: 5 }, 9);
 
       // quantity should be ignored/forced to 1 for a non-MULTI_KLINIK plan
       expect(result.quantity).toBe(1);
@@ -95,11 +101,7 @@ describe('SubscriptionPaymentsService', () => {
         ownerFee: 0,
       });
 
-      const result = await service.claim(
-        1,
-        { planId: 2, quantity: 3 } as any,
-        9,
-      );
+      const result = await service.claim(1, { planId: 2, quantity: 3 }, 9);
 
       expect(result.quantity).toBe(3);
       expect(result.amount).toBe(600000);
@@ -113,11 +115,7 @@ describe('SubscriptionPaymentsService', () => {
         ownerFee: 0,
       });
 
-      const result = await service.claim(
-        1,
-        { planId: 2, quantity: 0 } as any,
-        9,
-      );
+      const result = await service.claim(1, { planId: 2, quantity: 0 }, 9);
 
       expect(result.quantity).toBe(1);
     });
@@ -130,14 +128,11 @@ describe('SubscriptionPaymentsService', () => {
         ownerFee: 0,
       });
 
-      const result = await service.claim(
-        1,
-        { planId: 1 } as any,
-        9,
-        { filename: 'proof-123.jpg' } as any,
-      );
+      const result = await service.claim(1, { planId: 1 }, 9, {
+        filename: 'proof-123.jpg',
+      } as any);
 
-      expect(result.proofUrl).toBe('/uploads/payment-proofs/proof-123.jpg');
+      expect(result.proofUrl).toBe('/subscription-payments/1/proof-file');
     });
 
     it('sets proofUrl to null when no file is uploaded (negative/edge)', async () => {
@@ -148,16 +143,16 @@ describe('SubscriptionPaymentsService', () => {
         ownerFee: 0,
       });
 
-      const result = await service.claim(1, { planId: 1 } as any, 9);
+      const result = await service.claim(1, { planId: 1 }, 9);
 
       expect(result.proofUrl).toBeNull();
     });
 
     it('propagates NotFoundException when the plan does not exist (negative)', async () => {
       plansService.findOne.mockRejectedValue(new NotFoundException());
-      await expect(
-        service.claim(1, { planId: 999 } as any, 9),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.claim(1, { planId: 999 } as any, 9)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -261,6 +256,56 @@ describe('SubscriptionPaymentsService', () => {
     });
   });
 
+  describe('getProofFilePath', () => {
+    it('resolves the path for the owning clinic (positive)', async () => {
+      paymentRepo.findOne.mockResolvedValue({
+        id: 1,
+        clinicId: 5,
+        proofUrl: '/uploads/payment-proofs/proof-123.jpg',
+      });
+      (existsSync as jest.Mock).mockReturnValue(true);
+
+      const result = await service.getProofFilePath(1, 5);
+
+      expect(result).toContain('uploads/payment-proofs/proof-123.jpg');
+    });
+
+    it('allows a SUPER_ADMIN (null clinicId) to view any clinic proof (positive)', async () => {
+      paymentRepo.findOne.mockResolvedValue({
+        id: 1,
+        clinicId: 5,
+        proofUrl: '/uploads/payment-proofs/proof-123.jpg',
+      });
+      (existsSync as jest.Mock).mockReturnValue(true);
+
+      await expect(service.getProofFilePath(1, null)).resolves.toBeDefined();
+    });
+
+    it('throws NotFoundException when another clinic requests the proof (negative)', async () => {
+      paymentRepo.findOne.mockResolvedValue({
+        id: 1,
+        clinicId: 5,
+        proofUrl: '/uploads/payment-proofs/proof-123.jpg',
+      });
+
+      await expect(service.getProofFilePath(1, 99)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('throws NotFoundException when the payment has no proof (negative)', async () => {
+      paymentRepo.findOne.mockResolvedValue({
+        id: 1,
+        clinicId: 5,
+        proofUrl: null,
+      });
+
+      await expect(service.getProofFilePath(1, 5)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
   describe('confirm', () => {
     it('extends the subscription and marks the payment CONFIRMED (positive)', async () => {
       paymentRepo.findOne.mockResolvedValue({
@@ -271,7 +316,7 @@ describe('SubscriptionPaymentsService', () => {
       });
       clinicSubsService.extendSubscription.mockResolvedValue({ id: 99 });
 
-      const result = await service.confirm(1, {} as any, 5);
+      const result = await service.confirm(1, {}, 5);
 
       expect(result.status).toBe(SubscriptionPaymentStatus.CONFIRMED);
       expect(result.subscriptionId).toBe(99);
@@ -347,7 +392,7 @@ describe('SubscriptionPaymentsService', () => {
         status: SubscriptionPaymentStatus.PENDING,
       });
 
-      const result = await service.reject(1, { notes: 'Bukti tidak valid' } as any, 5);
+      const result = await service.reject(1, { notes: 'Bukti tidak valid' }, 5);
 
       expect(result.status).toBe(SubscriptionPaymentStatus.REJECTED);
       expect(result.notes).toBe('Bukti tidak valid');

@@ -2,9 +2,10 @@ import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { BaseEntity } from '../../../common/base.entity';
 import { Gender } from '../../../enums';
 import { Clinic } from '../../clinics/entities/clinic.entity';
+import { nikColumnTransformer } from '../../../common/utils/nik-crypto.util';
 
 @Entity('practitioners')
-@Index(['nik', 'clinicId'], { unique: true })
+@Index(['nikHash', 'clinicId'], { unique: true })
 export class Practitioner extends BaseEntity {
   @Column({ name: 'clinic_id' })
   clinicId: number;
@@ -12,8 +13,18 @@ export class Practitioner extends BaseEntity {
   @Column({ name: 'user_id', nullable: true })
   userId: number;
 
-  @Column({ length: 16, nullable: true })
+  // Encrypted at rest (see nik-crypto.util) — never queried directly by
+  // value. Widened to fit ciphertext (iv:hex), which is longer than the
+  // plaintext 16-digit NIK.
+  @Column({ length: 255, nullable: true, transformer: nikColumnTransformer })
   nik: string;
+
+  // Deterministic HMAC of `nik`, maintained by PractitionersService
+  // alongside every write to `nik`. This — not `nik` — is what the
+  // duplicate check queries against, since the encrypted column can't
+  // support equality lookups.
+  @Column({ name: 'nik_hash', length: 64, nullable: true })
+  nikHash: string | null;
 
   @Column({ length: 100 })
   name: string;

@@ -28,6 +28,7 @@ import {
 import { paginate, PaginatedResult } from '../../common/dto/pagination.dto';
 import { SatusehatClientService } from '../satusehat/satusehat-client.service';
 import { TreatmentPlansService } from '../treatment-plans/treatment-plans.service';
+import { hashNik, maskNik } from '../../common/utils/nik-crypto.util';
 
 @Injectable()
 export class PatientsService {
@@ -70,8 +71,8 @@ export class PatientsService {
 
     if (query.search) {
       qb.andWhere(
-        '(p.name LIKE :search OR p.noRm LIKE :search OR p.nik = :nik)',
-        { search: `%${query.search}%`, nik: query.search },
+        '(p.name LIKE :search OR p.noRm LIKE :search OR p.nikHash = :nikHash)',
+        { search: `%${query.search}%`, nikHash: hashNik(query.search) },
       );
     }
 
@@ -458,7 +459,7 @@ export class PatientsService {
     noRmOverride?: string,
   ): Promise<Patient> {
     this.logger.log(
-      `[CREATE] Membuat pasien baru | clinicId=${clinicId}, name=${dto.name}, nik=${dto.nik || 'bayi'}`,
+      `[CREATE] Membuat pasien baru | clinicId=${clinicId}, name=${dto.name}, nik=${dto.nik ? maskNik(dto.nik) : 'bayi'}`,
     );
     if (dto.nik) {
       await this.checkDuplicateNik(dto.nik, clinicId);
@@ -490,6 +491,7 @@ export class PatientsService {
           clinicId,
           noRm,
           nik: dto.nik,
+          nikHash: dto.nik ? hashNik(dto.nik) : null,
           nikIbu: dto.nikIbu,
           namaWali: dto.namaWali,
           hubunganWali: dto.hubunganWali,
@@ -573,6 +575,7 @@ export class PatientsService {
 
     Object.assign(patient, {
       nik: dto.nik ?? patient.nik,
+      nikHash: dto.nik ? hashNik(dto.nik) : patient.nikHash,
       nikIbu: dto.nikIbu ?? patient.nikIbu,
       namaWali: dto.namaWali ?? patient.namaWali,
       hubunganWali: dto.hubunganWali ?? patient.hubunganWali,
@@ -632,9 +635,13 @@ export class PatientsService {
     clinicId: number,
     excludeId?: number,
   ): Promise<void> {
+    const nikHash = hashNik(nik);
     const qb = this.patientRepository
       .createQueryBuilder('p')
-      .where('p.nik = :nik AND p.clinicId = :clinicId', { nik, clinicId });
+      .where('p.nikHash = :nikHash AND p.clinicId = :clinicId', {
+        nikHash,
+        clinicId,
+      });
 
     if (excludeId) {
       qb.andWhere('p.id != :excludeId', { excludeId });
@@ -643,7 +650,7 @@ export class PatientsService {
     const existing = await qb.getOne();
     if (existing) {
       this.logger.warn(
-        `[CREATE] NIK duplikat ditemukan | nik=${nik}, clinicId=${clinicId}`,
+        `[CREATE] NIK duplikat ditemukan | nik=${maskNik(nik)}, clinicId=${clinicId}`,
       );
       throw new ConflictException(
         `Pasien dengan NIK ${nik} sudah terdaftar di klinik ini`,
@@ -692,7 +699,7 @@ export class PatientsService {
 
   async searchSatusehat(nik: string, clinicId: number) {
     this.logger.log(
-      `[SEARCH] Mencari pasien di SATUSEHAT | nik=${nik}, clinicId=${clinicId}`,
+      `[SEARCH] Mencari pasien di SATUSEHAT | nik=${maskNik(nik)}, clinicId=${clinicId}`,
     );
     if (!nik) {
       this.logger.warn(
