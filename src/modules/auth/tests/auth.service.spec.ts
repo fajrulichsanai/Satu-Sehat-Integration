@@ -188,6 +188,23 @@ describe('AuthService', () => {
       );
     });
 
+    it('flags mfaSetupRequired for a privileged role without MFA enabled (positive/edge)', async () => {
+      // activeUser is UserRole.ADMIN, which is MFA-enforced.
+      userRepo.findOne.mockResolvedValue(activeUser);
+      const result = await service.login(dto);
+      expect(result.data.mfaSetupRequired).toBe(true);
+      expect(result.data.user.mfaEnabled).toBeFalsy();
+    });
+
+    it('does not flag mfaSetupRequired for a non-enforced role (positive/edge)', async () => {
+      userRepo.findOne.mockResolvedValue({
+        ...activeUser,
+        role: UserRole.DOKTER,
+      });
+      const result = await service.login(dto);
+      expect(result.data.mfaSetupRequired).toBe(false);
+    });
+
     it('throws UnauthorizedException when user does not exist (negative)', async () => {
       userRepo.findOne.mockResolvedValue(null);
       await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
@@ -240,6 +257,7 @@ describe('AuthService', () => {
       clinicId: 1,
       practitionerId: null,
       isActive: true,
+      mfaEnabled: true,
     };
 
     it('issues the real access token for a valid challenge token and code (positive)', async () => {
@@ -252,6 +270,7 @@ describe('AuthService', () => {
 
       expect(mfaService.verifyLoginCode).toHaveBeenCalledWith(1, '123456');
       expect(result.data.accessToken).toBe('signed.jwt.token');
+      expect(result.data.mfaSetupRequired).toBe(false);
       expect(result.data.user.id).toBe(1);
     });
 

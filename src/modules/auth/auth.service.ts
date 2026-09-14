@@ -19,6 +19,7 @@ import { UserRole } from '../../enums';
 import { OwnerCodeService } from '../owner-code/owner-code.service';
 import { ClinicSubscriptionsService } from '../subscriptions/clinic-subscriptions.service';
 import { MfaService } from './mfa.service';
+import { MFA_ENFORCED_ROLES } from './guards/mfa-enforcement.guard';
 import {
   hashPassword,
   comparePassword,
@@ -291,6 +292,8 @@ export class AuthService {
       success: true,
       data: {
         accessToken,
+        mfaSetupRequired:
+          MFA_ENFORCED_ROLES.includes(user.role) && !user.mfaEnabled,
         user: {
           id: user.id,
           email: user.email,
@@ -299,6 +302,7 @@ export class AuthService {
           clinicId: user.clinicId,
           practitionerId: user.practitionerId,
           isActive: user.isActive,
+          mfaEnabled: user.mfaEnabled,
         },
       },
     };

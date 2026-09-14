@@ -31,6 +31,7 @@ import {
 } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { SkipMfaEnforcement } from './guards/mfa-enforcement.guard';
 import { Roles } from './decorators/roles.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
@@ -151,6 +152,7 @@ export class AuthController {
   }
 
   @Get('mfa/status')
+  @SkipMfaEnforcement()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Whether MFA is currently enabled for the caller' })
@@ -160,6 +162,7 @@ export class AuthController {
   }
 
   @Post('mfa/setup')
+  @SkipMfaEnforcement()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
@@ -172,6 +175,7 @@ export class AuthController {
   }
 
   @Post('mfa/enable')
+  @SkipMfaEnforcement()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
@@ -219,6 +223,7 @@ export class AuthController {
   }
 
   @Get('me')
+  @SkipMfaEnforcement()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get current user profile' })
@@ -256,6 +261,7 @@ export class AuthController {
   }
 
   @Post('logout')
+  @SkipMfaEnforcement()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Logout (client should discard token)' })

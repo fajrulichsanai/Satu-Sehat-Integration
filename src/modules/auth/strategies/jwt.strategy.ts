@@ -44,6 +44,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       role: payload.role,
       clinicId: payload.clinicId,
       practitionerId: payload.practitionerId,
+      // Read fresh off the user row (not the JWT) so MfaEnforcementGuard sees
+      // it flip to true the moment MFA is enabled, without needing a new
+      // token — validateUser above already fetches the row, so this is free.
+      mfaEnabled: user.mfaEnabled,
     };
   }
 }
