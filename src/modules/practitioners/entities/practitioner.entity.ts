@@ -23,7 +23,7 @@ export class Practitioner extends BaseEntity {
   // alongside every write to `nik`. This — not `nik` — is what the
   // duplicate check queries against, since the encrypted column can't
   // support equality lookups.
-  @Column({ name: 'nik_hash', length: 64, nullable: true })
+  @Column({ name: 'nik_hash', type: 'varchar', length: 64, nullable: true })
   nikHash: string | null;
 
   @Column({ length: 100 })
