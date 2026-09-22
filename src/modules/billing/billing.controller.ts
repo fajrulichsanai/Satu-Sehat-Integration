@@ -33,11 +33,14 @@ import { InvoiceService } from './invoice.service';
 import { Audit } from '../audit-log/decorators/audit.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
 import { AuditActionType } from '../audit-log/entities/audit-log.entity';
+import { Notify } from '../notifications/decorators/notify.decorator';
+import { NotificationInterceptor } from '../notifications/interceptors/notification.interceptor';
+import { NotificationType } from '../notifications/entities/notification.entity';
 
 @ApiTags('billing')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(ClinicContextGuard)
-@UseInterceptors(AuditInterceptor)
+@UseInterceptors(AuditInterceptor, NotificationInterceptor)
 @Controller()
 export class BillingController {
   constructor(
@@ -189,6 +192,7 @@ export class BillingController {
 
   @Post('billings/:id/payments')
   @Audit('Payment', AuditActionType.CREATE)
+  @Notify(NotificationType.PAYMENT_NEW, 'Pembayaran baru diterima', { labelField: 'amount' })
   @ApiOperation({ summary: 'Record payment for billing' })
   async createPayment(
     @Param('id', ParseIntPipe) id: number,

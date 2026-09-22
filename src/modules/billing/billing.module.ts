@@ -11,6 +11,7 @@ import { PaymentsService } from '../payments/payments.service';
 import { TarifsService } from './tarifs.service';
 import { InvoiceService } from './invoice.service';
 import { AuditLogModule } from '../audit-log/audit-log.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { GudangModule } from '../gudang/gudang.module';
 import { RecallsModule } from '../recalls/recalls.module';
 
@@ -18,6 +19,7 @@ import { RecallsModule } from '../recalls/recalls.module';
   imports: [
     TypeOrmModule.forFeature([Billing, BillingItem, Tarif, Payment, Encounter]),
     AuditLogModule,
+    NotificationsModule,
     GudangModule,
     RecallsModule,
   ],
