@@ -28,11 +28,14 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Audit } from '../audit-log/decorators/audit.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
 import { AuditActionType } from '../audit-log/entities/audit-log.entity';
+import { Notify } from '../notifications/decorators/notify.decorator';
+import { NotificationInterceptor } from '../notifications/interceptors/notification.interceptor';
+import { NotificationType } from '../notifications/entities/notification.entity';
 
 @ApiTags('patients')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(ClinicContextGuard)
-@UseInterceptors(AuditInterceptor)
+@UseInterceptors(AuditInterceptor, NotificationInterceptor)
 @Controller('patients')
 export class PatientsController {
   constructor(private readonly patientsService: PatientsService) {}
@@ -46,6 +49,7 @@ export class PatientsController {
 
   @Post()
   @Audit('Patient', AuditActionType.CREATE, { labelField: 'name' })
+  @Notify(NotificationType.PATIENT_NEW, 'Pasien baru terdaftar', { labelField: 'name' })
   @ApiOperation({ summary: 'Register new patient' })
   async create(@ClinicId() clinicId: number, @Body() dto: CreatePatientDto) {
     const patient = await this.patientsService.create(clinicId, dto);

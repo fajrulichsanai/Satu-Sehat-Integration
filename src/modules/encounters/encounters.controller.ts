@@ -25,11 +25,14 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Audit } from '../audit-log/decorators/audit.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
 import { AuditActionType } from '../audit-log/entities/audit-log.entity';
+import { Notify } from '../notifications/decorators/notify.decorator';
+import { NotificationInterceptor } from '../notifications/interceptors/notification.interceptor';
+import { NotificationType } from '../notifications/entities/notification.entity';
 
 @ApiTags('encounters')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(ClinicContextGuard)
-@UseInterceptors(AuditInterceptor)
+@UseInterceptors(AuditInterceptor, NotificationInterceptor)
 @Controller('encounters')
 export class EncountersController {
   constructor(private readonly encountersService: EncountersService) {}
@@ -47,6 +50,7 @@ export class EncountersController {
 
   @Post()
   @Audit('MedicalRecord', AuditActionType.CREATE)
+  @Notify(NotificationType.KUNJUNGAN_NEW, 'Kunjungan baru dibuat')
   @ApiOperation({ summary: 'Create encounter (from reservation check-in or walk-in)' })
   async create(
     @ClinicId() clinicId: number,

@@ -33,6 +33,7 @@ import { DentalExaminationModule } from './modules/dental-examination/dental-exa
 import { SupportingExamModule } from './modules/supporting-exam/supporting-exam.module';
 import { TreatmentPlansModule } from './modules/treatment-plans/treatment-plans.module';
 import { AuditLogModule } from './modules/audit-log/audit-log.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { GudangModule } from './modules/gudang/gudang.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { RecallsModule } from './modules/recalls/recalls.module';
@@ -106,6 +107,7 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     SupportingExamModule,
     TreatmentPlansModule,
     AuditLogModule,
+    NotificationsModule,
     GudangModule,
     SubscriptionsModule,
     RecallsModule,

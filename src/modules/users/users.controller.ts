@@ -37,11 +37,14 @@ import {
 import { Audit } from '../audit-log/decorators/audit.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
 import { AuditActionType } from '../audit-log/entities/audit-log.entity';
+import { Notify } from '../notifications/decorators/notify.decorator';
+import { NotificationInterceptor } from '../notifications/interceptors/notification.interceptor';
+import { NotificationType } from '../notifications/entities/notification.entity';
 
 @ApiTags('users')
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard, ClinicContextGuard)
-@UseInterceptors(AuditInterceptor)
+@UseInterceptors(AuditInterceptor, NotificationInterceptor)
 @ApiBearerAuth('JWT-auth')
 export class UsersController {
   private readonly logger = new Logger(UsersController.name);
@@ -128,6 +131,7 @@ export class UsersController {
 
   @Post('invite')
   @Audit('Staff', AuditActionType.CREATE, { labelField: 'email' })
+  @Notify(NotificationType.USER_JOINED, 'User baru bergabung ke klinik', { labelField: 'email' })
   @Roles(UserRole.OWNER, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Create/invite a new user directly with a role' })
   @ApiResponse({ status: 201, description: 'User created successfully' })

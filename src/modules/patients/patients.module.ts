@@ -16,6 +16,7 @@ import { PatientImportService } from './patient-import.service';
 import { SatusehatModule } from '../satusehat/satusehat.module';
 import { TreatmentPlansModule } from '../treatment-plans/treatment-plans.module';
 import { AuditLogModule } from '../audit-log/audit-log.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
     SatusehatModule,
     TreatmentPlansModule,
     AuditLogModule,
+    NotificationsModule,
   ],
   controllers: [PatientsController, PatientImportController],
   providers: [PatientsService, PatientImportService],
