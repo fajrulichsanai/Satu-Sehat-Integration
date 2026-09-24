@@ -11,6 +11,7 @@ import { User } from '../users/entities/user.entity';
 // setters — already initialized by prescription-pdf.service.ts on import;
 // calling the same setters again here is harmless (same values).
 import PdfMake = require('pdfmake');
+import { readLocalPublicFile } from '../../common/storage/s3-storage.service';
 
 const RELATION_LABEL: Record<string, string> = {
   self: 'Pasien sendiri',
@@ -118,6 +119,16 @@ export class PatientConsentPdfService {
   ): Promise<string | null> {
     if (!logoUrl) return null;
     try {
+      // Logo stored on local disk (S3 not configured): read it directly.
+      const local = await readLocalPublicFile(logoUrl);
+      if (local) {
+        const type = logoUrl.toLowerCase().endsWith('.png')
+          ? 'image/png'
+          : logoUrl.toLowerCase().endsWith('.webp')
+            ? 'image/webp'
+            : 'image/jpeg';
+        return `data:${type};base64,${local.toString('base64')}`;
+      }
       const res = await fetch(logoUrl, { signal: AbortSignal.timeout(4000) });
       if (!res.ok) return null;
       const contentType = res.headers.get('content-type') || 'image/png';

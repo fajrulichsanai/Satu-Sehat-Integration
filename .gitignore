@@ -50,3 +50,4 @@ playwright/.cache/
 .playwright/
 .playwright-mcp/
 /*.png
+uploads/public/
