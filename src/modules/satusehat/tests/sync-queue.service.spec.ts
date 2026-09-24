@@ -142,3 +142,24 @@ describe('SyncQueueService', () => {
     });
   });
 });
+
+describe('redactSyncError', () => {
+  // Imported lazily so this block stays self-contained within the file.
+  const { redactSyncError } = jest.requireActual(
+    '../sync/entities/satusehat-sync-log.entity',
+  );
+
+  it('masks NIK-like numbers and emails (positive)', () => {
+    expect(
+      redactSyncError('Patient 3201234567890001 (budi@mail.com) not found'),
+    ).toBe('Patient 3201************ ([email]) not found');
+  });
+
+  it('caps the length at 500 characters (edge)', () => {
+    expect(redactSyncError('x'.repeat(2000))).toHaveLength(500);
+  });
+
+  it('returns undefined for empty input (edge)', () => {
+    expect(redactSyncError(undefined)).toBeUndefined();
+  });
+});

@@ -4,6 +4,7 @@ import { Repository, LessThan } from 'typeorm';
 import {
   SatusehatSyncLog,
   SyncLogStatus,
+  redactSyncError,
 } from './entities/satusehat-sync-log.entity';
 import { SyncOrchestratorService } from './sync-orchestrator.service';
 
@@ -73,7 +74,7 @@ export class SyncQueueService {
             await this.syncLogRepo.update(item.id, {
               retryCount: (item.retryCount ?? 0) + 1,
               lastRetryAt: new Date(),
-              errorMessage: result.error,
+              errorMessage: redactSyncError(result.error),
             });
             failed++;
           }
@@ -85,7 +86,7 @@ export class SyncQueueService {
           await this.syncLogRepo.update(item.id, {
             retryCount: (item.retryCount ?? 0) + 1,
             lastRetryAt: new Date(),
-            errorMessage: err.message,
+            errorMessage: redactSyncError(err.message),
           });
           failed++;
           processed++;
