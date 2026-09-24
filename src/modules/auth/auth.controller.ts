@@ -15,6 +15,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { MfaService } from './mfa.service';
 import {
@@ -36,6 +37,7 @@ import { Roles } from './decorators/roles.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
 import { UserRole } from '../../enums';
+import { SkipSubscriptionCheck } from '../subscriptions/guards/subscription.guard';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import {
   AuditActionType,
@@ -52,6 +54,7 @@ export class AuthController {
   ) {}
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('register')
   @ApiOperation({ summary: 'Register new user' })
   @ApiResponse({ status: 201, description: 'User registered successfully' })
@@ -63,6 +66,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login')
   @ApiOperation({ summary: 'Login user' })
   @ApiResponse({
@@ -106,6 +110,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('mfa/verify-login')
   @ApiOperation({
     summary:
@@ -252,19 +257,22 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @SkipSubscriptionCheck()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Refresh access token' })
   @ApiResponse({ status: 200, description: 'New access token issued' })
   async refresh(@CurrentUser() user: any) {
-    return this.authService.refreshToken(user.userId);
+    return this.authService.refreshToken(user.tokenClaims);
   }
 
   @Post('logout')
+  // Ending a session must always work — never gated on MFA or billing.
   @SkipMfaEnforcement()
+  @SkipSubscriptionCheck()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Logout (client should discard token)' })
+  @ApiOperation({ summary: 'Logout: revokes the current access token' })
   @ApiResponse({ status: 200, description: 'Logged out' })
   async logout(@CurrentUser() user: any, @Req() req: any) {
     void this.auditLogService.record({
@@ -278,10 +286,11 @@ export class AuthController {
       ipAddress: req.ip,
       userAgent: req.headers?.['user-agent'],
     });
-    return this.authService.logout();
+    return this.authService.logout(user?.tokenClaims);
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('verify-email')
   @ApiOperation({ summary: 'Verify email with token sent to email' })
   async verifyEmail(@Query('token') token: string) {
@@ -289,6 +298,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('forgot-password')
   @ApiOperation({ summary: 'Request password reset link via email' })
   @ApiResponse({ status: 200, description: 'Reset link sent if email exists' })
@@ -297,6 +307,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('reset-password')
   @ApiOperation({ summary: 'Reset password with token sent to email' })
   @ApiResponse({ status: 200, description: 'Password reset successful' })

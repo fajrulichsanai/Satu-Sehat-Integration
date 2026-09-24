@@ -41,6 +41,7 @@ import { ConsentsModule } from './modules/consents/consents.module';
 import { MultiClinicModule } from './modules/multi-clinic/multi-clinic.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
+import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import { MfaEnforcementGuard } from './modules/auth/guards/mfa-enforcement.guard';
 import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.guard';
 
@@ -50,7 +51,22 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
       isGlobal: true,
       envFilePath: '.env',
     }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [
+          {
+            name: 'default',
+            ttl: 60_000,
+            // Per signed-in user (or per IP when anonymous) per minute. Auth
+            // and public endpoints set much lower limits with @Throttle.
+            limit: parseInt(config.get<string>('THROTTLE_LIMIT', '300'), 10),
+          },
+        ],
+        errorMessage: 'Terlalu banyak permintaan. Silakan coba lagi sebentar lagi.',
+      }),
+    }),
     ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -118,6 +134,12 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
   controllers: [AppController],
   providers: [
     AppService,
+    // Rate limiting runs first, so rejected floods never reach the DB-backed
+    // JWT validation. Per-user when signed in — see AppThrottlerGuard.
+    {
+      provide: APP_GUARD,
+      useClass: AppThrottlerGuard,
+    },
     // Global JWT guard (can be overridden with @Public() decorator)
     {
       provide: APP_GUARD,

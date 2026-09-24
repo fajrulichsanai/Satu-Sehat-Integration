@@ -9,10 +9,12 @@ import {
 import * as crypto from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { LessThan, Repository } from 'typeorm';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import { User } from '../users/entities/user.entity';
+import { RevokedToken } from './entities/revoked-token.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
 import { UserRole } from '../../enums';
@@ -27,6 +29,30 @@ import {
 
 const MFA_CHALLENGE_TYPE = 'mfa_challenge';
 
+/** Failed password attempts before an account is locked. */
+const MAX_FAILED_LOGINS = 5;
+const LOCKOUT_MINUTES = 15;
+/** Absolute session lifetime: /auth/refresh can't extend past this since login. */
+const MAX_SESSION_HOURS = 24;
+
+/** Claims every access token carries; see signAccessToken(). */
+export interface AccessTokenClaims {
+  sub: number;
+  email: string;
+  role: UserRole;
+  clinicId: number | null;
+  practitionerId: number | null;
+  /** Token id, for per-token revocation (logout/refresh). */
+  jti: string;
+  /** users.token_version at issue time; a bump revokes all older tokens. */
+  tv: number;
+  /** Original login time (epoch seconds), carried across refreshes. */
+  at: number;
+  /** Set on Super Admin impersonation tokens. */
+  imp?: boolean;
+  exp?: number;
+}
+
 @Injectable()
 export class AuthService {
   private resend: Resend;
@@ -36,6 +62,8 @@ export class AuthService {
     private userRepository: Repository<User>,
     @InjectRepository(Clinic)
     private clinicRepository: Repository<Clinic>,
+    @InjectRepository(RevokedToken)
+    private revokedTokenRepository: Repository<RevokedToken>,
     private jwtService: JwtService,
     private configService: ConfigService,
     private ownerCodeService: OwnerCodeService,
@@ -191,18 +219,40 @@ export class AuthService {
       });
     }
 
+    if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+      const minutesLeft = Math.max(
+        1,
+        Math.round((user.lockedUntil.getTime() - Date.now()) / 60_000),
+      );
+      throw new UnauthorizedException({
+        success: false,
+        error: {
+          code: 'ACCOUNT_LOCKED',
+          message: `Akun dikunci sementara karena terlalu banyak percobaan login gagal. Coba lagi dalam ${minutesLeft} menit.`,
+        },
+      });
+    }
+
     // Verify password
     const isPasswordValid = await comparePassword(
       dto.password!,
       user.passwordHash,
     );
     if (!isPasswordValid) {
+      await this.recordFailedLogin(user);
       throw new UnauthorizedException({
         success: false,
         error: {
           code: 'INVALID_CREDENTIALS',
           message: 'Email atau password salah',
         },
+      });
+    }
+
+    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+      await this.userRepository.update(user.id, {
+        failedLoginAttempts: 0,
+        lockedUntil: null,
       });
     }
 
@@ -272,16 +322,49 @@ export class AuthService {
     return this.buildLoginResponse(user);
   }
 
-  private async buildLoginResponse(user: User) {
-    const payload = {
+  /** Counts a wrong password; the MAX_FAILED_LOGINS-th locks the account. */
+  private async recordFailedLogin(user: User) {
+    const attempts = (user.failedLoginAttempts ?? 0) + 1;
+    if (attempts >= MAX_FAILED_LOGINS) {
+      await this.userRepository.update(user.id, {
+        failedLoginAttempts: 0,
+        lockedUntil: new Date(Date.now() + LOCKOUT_MINUTES * 60_000),
+      });
+      Logger.warn(
+        `[LOCKOUT] Akun dikunci ${LOCKOUT_MINUTES} menit setelah ${attempts} percobaan gagal | userId=${user.id}`,
+        'AuthService',
+      );
+    } else {
+      await this.userRepository.update(user.id, {
+        failedLoginAttempts: attempts,
+      });
+    }
+  }
+
+  /** Issues an access token. Role/clinic in it are informational only — the
+   * JwtStrategy re-reads them from the user row on every request. */
+  private signAccessToken(
+    user: User,
+    opts: { impersonated?: boolean; authTime?: number; expiresIn?: string } = {},
+  ): string {
+    const claims: AccessTokenClaims = {
       sub: user.id,
       email: user.email,
       role: user.role,
       clinicId: user.clinicId,
       practitionerId: user.practitionerId,
+      jti: crypto.randomUUID(),
+      tv: user.tokenVersion ?? 0,
+      at: opts.authTime ?? Math.floor(Date.now() / 1000),
+      ...(opts.impersonated ? { imp: true } : {}),
     };
+    return opts.expiresIn
+      ? this.jwtService.sign(claims, { expiresIn: opts.expiresIn as any })
+      : this.jwtService.sign(claims);
+  }
 
-    const accessToken = this.jwtService.sign(payload);
+  private async buildLoginResponse(user: User) {
+    const accessToken = this.signAccessToken(user);
 
     // Update last login
     await this.userRepository.update(user.id, {
@@ -347,15 +430,10 @@ export class AuthService {
       });
     }
 
-    const payload = {
-      sub: target.id,
-      email: target.email,
-      role: target.role,
-      clinicId: target.clinicId,
-      practitionerId: target.practitionerId,
-    };
-
-    const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
+    const accessToken = this.signAccessToken(target, {
+      impersonated: true,
+      expiresIn: '1h',
+    });
 
     return {
       success: true,
@@ -433,33 +511,60 @@ export class AuthService {
   }
 
   /**
-   * Refresh access token using refresh token (JWT re-sign)
-   * Simple implementation: validate existing token and re-issue
+   * Re-issues the caller's access token and revokes the old one. Refreshing
+   * can't extend a session past MAX_SESSION_HOURS after the original login,
+   * and impersonation tokens can't be refreshed at all.
    */
-  async refreshToken(userId: number) {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user || !user.isActive) {
+  async refreshToken(current: AccessTokenClaims) {
+    const user = await this.userRepository.findOne({
+      where: { id: current.sub },
+    });
+    const sessionAgeSeconds = Math.floor(Date.now() / 1000) - (current.at ?? 0);
+    if (
+      !user ||
+      !user.isActive ||
+      current.imp ||
+      !current.at ||
+      sessionAgeSeconds > MAX_SESSION_HOURS * 3600
+    ) {
       throw new UnauthorizedException({
         success: false,
-        error: { code: 'INVALID_REFRESH', message: 'Token tidak valid' },
+        error: { code: 'INVALID_REFRESH', message: 'Sesi berakhir, silakan login ulang' },
       });
     }
-    const payload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-      clinicId: user.clinicId,
-      practitionerId: user.practitionerId,
-    };
-    const accessToken = this.jwtService.sign(payload);
+    const accessToken = this.signAccessToken(user, { authTime: current.at });
+    await this.revokeToken(current);
     return { success: true, data: { accessToken } };
   }
 
   /**
-   * Logout (stateless — client should discard token)
+   * Logout: revokes the caller's token so it stops working immediately,
+   * rather than staying valid until it expires.
    */
-  async logout() {
+  async logout(current?: AccessTokenClaims) {
+    if (current) await this.revokeToken(current);
     return { success: true, data: { message: 'Logged out successfully' } };
+  }
+
+  private async revokeToken(claims: AccessTokenClaims) {
+    // Tokens issued before jti existed can't be individually revoked; they
+    // simply run out at their original expiry.
+    if (!claims.jti || !claims.exp) return;
+    await this.revokedTokenRepository.upsert(
+      { jti: claims.jti, expiresAt: new Date(claims.exp * 1000) },
+      ['jti'],
+    );
+  }
+
+  async isTokenRevoked(jti: string | undefined): Promise<boolean> {
+    if (!jti) return false;
+    return this.revokedTokenRepository.exists({ where: { jti } });
+  }
+
+  /** Denylist rows are useless once the token has expired anyway. */
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async purgeExpiredRevokedTokens() {
+    await this.revokedTokenRepository.delete({ expiresAt: LessThan(new Date()) });
   }
 
   /**
@@ -639,6 +744,10 @@ export class AuthService {
       passwordHash,
       resetPasswordToken: null as unknown as string,
       resetPasswordExpiresAt: null as unknown as Date,
+      // A reset password must also end every session opened with the old one.
+      tokenVersion: (user.tokenVersion ?? 0) + 1,
+      failedLoginAttempts: 0,
+      lockedUntil: null,
     });
 
     Logger.log(`[RESET] Password berhasil direset | userId=${user.id}`);

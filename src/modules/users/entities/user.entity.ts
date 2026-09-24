@@ -61,6 +61,16 @@ export class User extends BaseEntity {
   @Column({ name: 'last_login_at', nullable: true })
   lastLoginAt: Date;
 
+  /** Bumped to invalidate every token issued before it (see JwtStrategy). */
+  @Column({ name: 'token_version', type: 'int', default: 0 })
+  tokenVersion: number;
+
+  @Column({ name: 'failed_login_attempts', type: 'int', default: 0 })
+  failedLoginAttempts: number;
+
+  @Column({ name: 'locked_until', type: 'datetime', nullable: true })
+  lockedUntil: Date | null;
+
   // Relations
   @ManyToOne(() => Clinic, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'clinic_id' })

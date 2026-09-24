@@ -25,7 +25,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Token tidak valid');
     }
 
-    // Payload contains: sub (userId), email, role, clinicId, practitionerId
+    // Payload: see AccessTokenClaims in auth.service.ts
     const user = await this.authService.validateUser(payload.sub);
 
     if (!user) {
@@ -36,14 +36,29 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User tidak aktif');
     }
 
-    // This will be available as req.user in controllers
+    // token_version bumped (e.g. password reset) → every older token is dead.
+    // Tokens issued before `tv` existed count as version 0.
+    if ((payload.tv ?? 0) !== (user.tokenVersion ?? 0)) {
+      throw new UnauthorizedException('Sesi sudah berakhir, silakan login ulang');
+    }
+
+    if (await this.authService.isTokenRevoked(payload.jti)) {
+      throw new UnauthorizedException('Sesi sudah berakhir, silakan login ulang');
+    }
+
+    // This will be available as req.user in controllers. Role, clinic and
+    // practitioner come from the user row, not the token, so a role change
+    // or removal takes effect on the next request instead of at token expiry.
     return {
       userId: payload.sub,
-      email: payload.email,
+      email: user.email,
       name: user.name,
-      role: payload.role,
-      clinicId: payload.clinicId,
-      practitionerId: payload.practitionerId,
+      role: user.role,
+      clinicId: user.clinicId,
+      practitionerId: user.practitionerId,
+      impersonated: !!payload.imp,
+      // Raw claims, for logout/refresh to revoke exactly this token.
+      tokenClaims: payload,
       // Read fresh off the user row (not the JWT) so MfaEnforcementGuard sees
       // it flip to true the moment MFA is enabled, without needing a new
       // token — validateUser above already fetches the row, so this is free.

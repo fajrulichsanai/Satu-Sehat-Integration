@@ -11,6 +11,7 @@ import {
 import * as bcrypt from 'bcrypt';
 import { AuthService } from '../auth.service';
 import { User } from '../../users/entities/user.entity';
+import { RevokedToken } from '../entities/revoked-token.entity';
 import { Clinic } from '../../clinics/entities/clinic.entity';
 import { OwnerCodeService } from '../../owner-code/owner-code.service';
 import { ClinicSubscriptionsService } from '../../subscriptions/clinic-subscriptions.service';
@@ -41,6 +42,7 @@ describe('AuthService', () => {
   let ownerCodeService: { validate: jest.Mock; markAsUsed: jest.Mock };
   let subscriptionsService: { provisionTrialForNewClinic: jest.Mock };
   let mfaService: { verifyLoginCode: jest.Mock };
+  let revokedRepo: { upsert: jest.Mock; exists: jest.Mock; delete: jest.Mock };
 
   beforeEach(async () => {
     userRepo = {
@@ -71,12 +73,18 @@ describe('AuthService', () => {
       provisionTrialForNewClinic: jest.fn().mockResolvedValue(undefined),
     };
     mfaService = { verifyLoginCode: jest.fn() };
+    revokedRepo = {
+      upsert: jest.fn().mockResolvedValue(undefined),
+      exists: jest.fn().mockResolvedValue(false),
+      delete: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
         { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: getRepositoryToken(Clinic), useValue: clinicRepo },
+        { provide: getRepositoryToken(RevokedToken), useValue: revokedRepo },
         { provide: JwtService, useValue: jwtService },
         {
           provide: ConfigService,
@@ -217,6 +225,43 @@ describe('AuthService', () => {
       await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
     });
 
+    it('counts a wrong password toward the lockout (negative)', async () => {
+      userRepo.findOne.mockResolvedValue({ ...activeUser, failedLoginAttempts: 1 });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+      await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
+      expect(userRepo.update).toHaveBeenCalledWith(1, { failedLoginAttempts: 2 });
+    });
+
+    it('locks the account for 15 minutes on the 5th wrong password (negative)', async () => {
+      userRepo.findOne.mockResolvedValue({ ...activeUser, failedLoginAttempts: 4 });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+      await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
+      const [, patch] = userRepo.update.mock.calls[0];
+      expect(patch.failedLoginAttempts).toBe(0);
+      expect(patch.lockedUntil.getTime()).toBeGreaterThan(Date.now() + 14 * 60_000);
+    });
+
+    it('rejects a locked account even with the right password (negative)', async () => {
+      const compareCalls = (bcrypt.compare as jest.Mock).mock.calls.length;
+      userRepo.findOne.mockResolvedValue({
+        ...activeUser,
+        lockedUntil: new Date(Date.now() + 5 * 60_000),
+      });
+      await expect(service.login(dto)).rejects.toMatchObject({
+        response: { error: { code: 'ACCOUNT_LOCKED' } },
+      });
+      expect((bcrypt.compare as jest.Mock).mock.calls.length).toBe(compareCalls);
+    });
+
+    it('clears the failed-attempt counter after a successful login (positive)', async () => {
+      userRepo.findOne.mockResolvedValue({ ...activeUser, failedLoginAttempts: 3 });
+      await service.login(dto);
+      expect(userRepo.update).toHaveBeenCalledWith(1, {
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      });
+    });
+
     it('throws UnauthorizedException when email is not verified (negative)', async () => {
       userRepo.findOne.mockResolvedValue({
         ...activeUser,
@@ -327,7 +372,7 @@ describe('AuthService', () => {
       const result = await service.impersonate(5);
 
       expect(jwtService.sign).toHaveBeenCalledWith(
-        expect.any(Object),
+        expect.objectContaining({ sub: 5, imp: true }),
         { expiresIn: '1h' },
       );
       expect(result.data.user.id).toBe(5);
@@ -392,29 +437,64 @@ describe('AuthService', () => {
       );
     });
 
-    it('refreshToken re-issues a token for an active user (positive)', async () => {
-      userRepo.findOne.mockResolvedValue({
-        id: 1,
-        isActive: true,
-        email: 'a@x.com',
-        role: UserRole.ADMIN,
-        clinicId: 1,
-        practitionerId: null,
-      });
-      const result = await service.refreshToken(1);
+    const nowSec = () => Math.floor(Date.now() / 1000);
+    const claims = (over: Record<string, unknown> = {}) =>
+      ({
+        sub: 1,
+        jti: 'old-jti',
+        tv: 0,
+        at: nowSec() - 3600,
+        exp: nowSec() + 3600,
+        ...over,
+      }) as any;
+    const activeRow = {
+      id: 1,
+      isActive: true,
+      email: 'a@x.com',
+      role: UserRole.ADMIN,
+      clinicId: 1,
+      practitionerId: null,
+      tokenVersion: 0,
+    };
+
+    it('refreshToken re-issues a token, keeps the login time, and revokes the old one (positive)', async () => {
+      userRepo.findOne.mockResolvedValue(activeRow);
+      const current = claims();
+      const result = await service.refreshToken(current);
       expect(result.data.accessToken).toBe('signed.jwt.token');
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ sub: 1, at: current.at }),
+      );
+      expect(revokedRepo.upsert).toHaveBeenCalledWith(
+        { jti: 'old-jti', expiresAt: new Date(current.exp * 1000) },
+        ['jti'],
+      );
+    });
+
+    it('refreshToken refuses once the session is older than 24h (negative)', async () => {
+      userRepo.findOne.mockResolvedValue(activeRow);
+      await expect(
+        service.refreshToken(claims({ at: nowSec() - 25 * 3600 })),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('refreshToken refuses impersonation tokens (negative)', async () => {
+      userRepo.findOne.mockResolvedValue(activeRow);
+      await expect(
+        service.refreshToken(claims({ imp: true })),
+      ).rejects.toThrow(UnauthorizedException);
     });
 
     it('refreshToken throws for inactive user (negative)', async () => {
       userRepo.findOne.mockResolvedValue({ id: 1, isActive: false });
-      await expect(service.refreshToken(1)).rejects.toThrow(
+      await expect(service.refreshToken(claims())).rejects.toThrow(
         UnauthorizedException,
       );
     });
 
     it('refreshToken throws when user does not exist (negative)', async () => {
       userRepo.findOne.mockResolvedValue(null);
-      await expect(service.refreshToken(999)).rejects.toThrow(
+      await expect(service.refreshToken(claims({ sub: 999 }))).rejects.toThrow(
         UnauthorizedException,
       );
     });
@@ -474,7 +554,7 @@ describe('AuthService', () => {
       expect(result.success).toBe(true);
       expect(userRepo.update).toHaveBeenCalledWith(
         1,
-        expect.objectContaining({ resetPasswordToken: null }),
+        expect.objectContaining({ resetPasswordToken: null, tokenVersion: 1 }),
       );
     });
 
@@ -504,12 +584,28 @@ describe('AuthService', () => {
   });
 
   describe('logout / validateUser', () => {
-    it('logout returns a static success message (positive)', async () => {
-      const result = await service.logout();
+    it('logout revokes the current token until its expiry (positive)', async () => {
+      const exp = Math.floor(Date.now() / 1000) + 600;
+      const result = await service.logout({ jti: 'abc', exp } as any);
       expect(result).toEqual({
         success: true,
         data: { message: 'Logged out successfully' },
       });
+      expect(revokedRepo.upsert).toHaveBeenCalledWith(
+        { jti: 'abc', expiresAt: new Date(exp * 1000) },
+        ['jti'],
+      );
+    });
+
+    it('logout of a legacy token without jti is a no-op (edge)', async () => {
+      await service.logout({ exp: 123 } as any);
+      expect(revokedRepo.upsert).not.toHaveBeenCalled();
+    });
+
+    it('isTokenRevoked checks the denylist (positive)', async () => {
+      revokedRepo.exists.mockResolvedValue(true);
+      await expect(service.isTokenRevoked('abc')).resolves.toBe(true);
+      await expect(service.isTokenRevoked(undefined)).resolves.toBe(false);
     });
 
     it('validateUser returns the user when found (positive)', async () => {
