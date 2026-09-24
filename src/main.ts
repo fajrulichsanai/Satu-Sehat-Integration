@@ -28,6 +28,14 @@ async function bootstrap() {
     (req.path.startsWith('/api/docs') ? helmetDocs : helmetStrict)(req, res, next),
   );
 
+  // API responses are per-user patient/financial data: never cache them in
+  // browsers or proxies (stale screens, and PHI left on shared machines).
+  // Public uploaded files under /files set their own long-lived caching.
+  app.use((req: any, res: any, next: any) => {
+    if (!req.path.startsWith('/files/')) res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
+
   // Uploaded files (payment proofs, supporting-exam images) are served through
   // authenticated, ownership-checked controller routes — see
   // SupportingExamController#getFile and SubscriptionPaymentsController#getProofFile —
