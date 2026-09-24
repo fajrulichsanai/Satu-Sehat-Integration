@@ -2,12 +2,31 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Behind nginx and/or the Next.js BFF, req.ip would otherwise be the proxy's
+  // address — which breaks per-IP rate limits and audit-log IPs. Only trust
+  // X-Forwarded-For from the proxies named here (default: same host only).
+  app.set('trust proxy', parseTrustProxy(process.env.TRUST_PROXY));
+
+  // Security headers (HSTS, nosniff, frame-ancestors, etc.). Swagger UI needs
+  // inline scripts, so its route gets everything except the CSP.
+  const helmetStrict = helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' }, // clinic logos/images are embedded by the frontend origin
+  });
+  const helmetDocs = helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  });
+  app.use((req: any, res: any, next: any) =>
+    (req.path.startsWith('/api/docs') ? helmetDocs : helmetStrict)(req, res, next),
+  );
 
   // Uploaded files (payment proofs, supporting-exam images) are served through
   // authenticated, ownership-checked controller routes — see
@@ -86,19 +105,38 @@ async function bootstrap() {
     .addTag('satusehat', 'SATUSEHAT Integration')
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document, {
-    swaggerOptions: {
-      persistAuthorization: true, // Keep auth token in browser
-      tagsSorter: 'alpha',
-      operationsSorter: 'alpha',
-    },
-  });
+  // API docs map every endpoint — off in production unless explicitly enabled.
+  const swaggerEnabled =
+    process.env.SWAGGER_ENABLED === 'true' ||
+    (process.env.NODE_ENV !== 'production' &&
+      process.env.SWAGGER_ENABLED !== 'false');
+  if (swaggerEnabled) {
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document, {
+      swaggerOptions: {
+        persistAuthorization: true, // Keep auth token in browser
+        tagsSorter: 'alpha',
+        operationsSorter: 'alpha',
+      },
+    });
+  }
 
   const port = process.env.PORT ?? 3001;
   await app.listen(port);
 
   console.log(`🚀 Application is running on: http://localhost:${port}`);
-  console.log(`📚 Swagger documentation: http://localhost:${port}/api/docs`);
+  if (swaggerEnabled) {
+    console.log(`📚 Swagger documentation: http://localhost:${port}/api/docs`);
+  }
+}
+
+/** TRUST_PROXY: a hop count ("1"), "true"/"false", or Express's named
+ * subnets/IP list ("loopback", "loopback, 10.0.0.0/8"). */
+function parseTrustProxy(value: string | undefined): boolean | number | string {
+  if (!value) return 'loopback';
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  if (/^\d+$/.test(value)) return parseInt(value, 10);
+  return value;
 }
 bootstrap();
