@@ -27,6 +27,7 @@ describe('AuditLogService', () => {
   let repo: {
     create: jest.Mock;
     save: jest.Mock;
+    count: jest.Mock;
     createQueryBuilder: jest.Mock;
   };
   let qb: ReturnType<typeof buildQueryBuilderMock>;
@@ -46,6 +47,7 @@ describe('AuditLogService', () => {
     repo = {
       create: jest.fn((data) => data),
       save: jest.fn().mockResolvedValue(undefined),
+      count: jest.fn().mockResolvedValue(0),
       createQueryBuilder: jest.fn(() => qb),
     };
 
@@ -215,6 +217,40 @@ describe('AuditLogService', () => {
       ]);
       const csv = await service.exportCsv(1, { page: 1, limit: 10 } as any);
       expect(csv).toContain('42');
+    });
+  });
+
+  describe('bulk-read detection', () => {
+    const viewInput: RecordAuditLogInput = {
+      ...baseInput,
+      actionType: AuditActionType.VIEW,
+    };
+
+    it('raises one ALERT when a user exceeds the read threshold (positive)', async () => {
+      repo.count.mockResolvedValue(151);
+      await service.record(viewInput);
+      await service.record(viewInput);
+
+      const alerts = repo.save.mock.calls.filter(
+        ([e]) => e.actionType === AuditActionType.ALERT,
+      );
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0][0]).toMatchObject({
+        actorId: 10,
+        entityType: 'SecurityAlert',
+        failureReason: 'BULK_READ_ANOMALY',
+      });
+    });
+
+    it('stays quiet under the threshold (negative)', async () => {
+      repo.count.mockResolvedValue(20);
+      await service.record(viewInput);
+      expect(repo.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not count non-read actions (negative)', async () => {
+      await service.record(baseInput);
+      expect(repo.count).not.toHaveBeenCalled();
     });
   });
 });

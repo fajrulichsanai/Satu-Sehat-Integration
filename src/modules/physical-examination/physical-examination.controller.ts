@@ -29,6 +29,7 @@ export class PhysicalExaminationController {
     private readonly physicalExaminationService: PhysicalExaminationService,
   ) {}
 
+  @Audit('PhysicalExamination', AuditActionType.VIEW)
   @Get()
   @ApiOperation({ summary: 'Get physical examination for an encounter' })
   async findOne(

@@ -8,6 +8,8 @@ export enum AuditActionType {
   LOGOUT = 'LOGOUT',
   EXPORT = 'EXPORT',
   VIEW = 'VIEW',
+  /** Raised by the system itself, e.g. bulk-read anomaly detection. */
+  ALERT = 'ALERT',
 }
 
 export enum AuditStatus {

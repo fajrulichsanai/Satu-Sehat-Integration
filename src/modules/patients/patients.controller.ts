@@ -40,6 +40,7 @@ import { NotificationType } from '../notifications/entities/notification.entity'
 export class PatientsController {
   constructor(private readonly patientsService: PatientsService) {}
 
+  @Audit('Patient', AuditActionType.VIEW)
   @Get()
   @ApiOperation({ summary: 'List patients with pagination and search' })
   async findAll(@ClinicId() clinicId: number, @Query() query: PatientQueryDto) {
@@ -77,6 +78,7 @@ export class PatientsController {
     return { success: true, data };
   }
 
+  @Audit('Patient', AuditActionType.VIEW, { labelField: 'name' })
   @Get(':id')
   @ApiOperation({ summary: 'Get patient detail' })
   async findOne(
@@ -105,6 +107,7 @@ export class PatientsController {
     };
   }
 
+  @Audit('Patient', AuditActionType.VIEW)
   @Get(':id/encounters')
   @ApiOperation({ summary: 'Get patient encounter history' })
   async findEncounters(
@@ -115,6 +118,7 @@ export class PatientsController {
     return { success: true, data: encounters };
   }
 
+  @Audit('Patient', AuditActionType.VIEW)
   @Get(':id/treatment-plans')
   @ApiOperation({ summary: 'Get patient treatment plan progress' })
   async findTreatmentPlans(
@@ -125,6 +129,7 @@ export class PatientsController {
     return { success: true, data };
   }
 
+  @Audit('MedicalRecord', AuditActionType.VIEW)
   @Get(':id/medical-record')
   @ApiOperation({
     summary: 'Get patient medical record (CPPT + vitals per encounter)',
@@ -137,6 +142,7 @@ export class PatientsController {
     return { success: true, data };
   }
 
+  @Audit('Patient', AuditActionType.VIEW)
   @Get(':id/timeline')
   @ApiOperation({
     summary:

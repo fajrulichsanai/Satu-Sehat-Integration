@@ -144,6 +144,7 @@ export class BillingController {
     return { success: true, data };
   }
 
+  @Audit('Billing', AuditActionType.VIEW)
   @Get('billings/:id')
   @ApiOperation({ summary: 'Get billing detail with items and payments' })
   async findOneBilling(
@@ -209,6 +210,7 @@ export class BillingController {
     return { success: true, data };
   }
 
+  @Audit('Billing', AuditActionType.VIEW)
   @Get('billings/:id/invoice')
   @Audit('Invoice', AuditActionType.EXPORT)
   @ApiOperation({ summary: 'Download invoice as PDF' })

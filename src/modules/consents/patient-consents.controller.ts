@@ -48,6 +48,7 @@ export class PatientConsentsController {
     return { success: true, data: result };
   }
 
+  @Audit('PatientConsent', AuditActionType.VIEW)
   @Get(':id')
   @ApiOperation({ summary: 'Detail formulir persetujuan' })
   async findOne(
@@ -96,6 +97,7 @@ export class PatientConsentsController {
     return { success: true, data };
   }
 
+  @Audit('PatientConsent', AuditActionType.VIEW)
   @Get(':id/pdf')
   @Audit('PatientConsent', AuditActionType.EXPORT)
   @ApiOperation({

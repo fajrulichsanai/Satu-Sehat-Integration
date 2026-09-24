@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { MoreThan, Repository } from 'typeorm';
 import {
   AuditLog,
   AuditActionType,
@@ -26,9 +26,16 @@ export interface RecordAuditLogInput {
   userAgent?: string | null;
 }
 
+/** Bulk-read detection (SATUSEHAT self-assessment No. 22): more than this
+ * many successful reads by one user within the window is flagged. */
+const VIEW_ALERT_WINDOW_MS = 10 * 60_000;
+const DEFAULT_VIEW_ALERT_THRESHOLD = 150;
+
 @Injectable()
 export class AuditLogService {
   private readonly logger = new Logger(AuditLogService.name);
+  /** actorId → time of last alert, so one burst raises one alert, not hundreds. */
+  private readonly lastViewAlert = new Map<number, number>();
 
   constructor(
     @InjectRepository(AuditLog)
@@ -61,12 +68,69 @@ export class AuditLogService {
         userAgent: input.userAgent ?? null,
       });
       await this.auditLogRepository.save(entry);
+
+      if (
+        input.actionType === AuditActionType.VIEW &&
+        input.actorId !== null &&
+        (input.status ?? AuditStatus.SUCCESS) === AuditStatus.SUCCESS
+      ) {
+        await this.checkBulkReads(input);
+      }
     } catch (err) {
       this.logger.error(
         `Gagal mencatat audit log: ${(err as Error).message}`,
         (err as Error).stack,
       );
     }
+  }
+
+  private async checkBulkReads(input: RecordAuditLogInput): Promise<void> {
+    const actorId = input.actorId as number;
+    const now = Date.now();
+    const last = this.lastViewAlert.get(actorId);
+    if (last && now - last < VIEW_ALERT_WINDOW_MS) return;
+
+    const threshold =
+      parseInt(process.env.AUDIT_VIEW_ALERT_THRESHOLD ?? '', 10) ||
+      DEFAULT_VIEW_ALERT_THRESHOLD;
+    const since = new Date(now - VIEW_ALERT_WINDOW_MS);
+    const count = await this.auditLogRepository.count({
+      where: {
+        actorId,
+        actionType: AuditActionType.VIEW,
+        status: AuditStatus.SUCCESS,
+        createdAt: MoreThan(since),
+      },
+    });
+    if (count <= threshold) return;
+
+    this.lastViewAlert.set(actorId, now);
+    // Structured so the central log pipeline can alert on event=bulk_read.
+    this.logger.warn(
+      JSON.stringify({
+        event: 'bulk_read',
+        actorId,
+        actorName: input.actorName,
+        actorRole: input.actorRole,
+        clinicId: input.clinicId,
+        reads: count,
+        windowMinutes: VIEW_ALERT_WINDOW_MS / 60_000,
+        ip: input.ipAddress ?? null,
+      }),
+    );
+    await this.record({
+      clinicId: input.clinicId,
+      actorId,
+      actorName: input.actorName,
+      actorRole: input.actorRole,
+      actionType: AuditActionType.ALERT,
+      entityType: 'SecurityAlert',
+      entityLabel: `Akses massal: ${count} data dibuka dalam ${VIEW_ALERT_WINDOW_MS / 60_000} menit`,
+      status: AuditStatus.FAILED,
+      failureReason: 'BULK_READ_ANOMALY',
+      ipAddress: input.ipAddress,
+      userAgent: input.userAgent,
+    });
   }
 
   private buildQuery(clinicId: number | null, query: AuditLogQueryDto) {

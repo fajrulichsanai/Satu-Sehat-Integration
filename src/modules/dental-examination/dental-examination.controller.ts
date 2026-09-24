@@ -29,6 +29,7 @@ export class DentalExaminationController {
     private readonly dentalExaminationService: DentalExaminationService,
   ) {}
 
+  @Audit('DentalExamination', AuditActionType.VIEW)
   @Get()
   @ApiOperation({
     summary: 'Get advanced dental examination (indices) for an encounter',

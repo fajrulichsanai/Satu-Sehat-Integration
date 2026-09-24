@@ -37,6 +37,7 @@ import { AuditActionType } from '../audit-log/entities/audit-log.entity';
 export class SupportingExamController {
   constructor(private readonly supportingExamService: SupportingExamService) {}
 
+  @Audit('SupportingExamImage', AuditActionType.VIEW)
   @Get()
   @ApiOperation({
     summary: 'List supporting exam images (photo/rontgen) for an encounter',
@@ -77,6 +78,7 @@ export class SupportingExamController {
     return { success: true, data };
   }
 
+  @Audit('SupportingExamImage', AuditActionType.VIEW)
   @Get(':imageId/file')
   @ApiOperation({
     summary:

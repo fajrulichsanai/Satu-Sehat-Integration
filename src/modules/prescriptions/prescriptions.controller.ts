@@ -33,6 +33,7 @@ export class PrescriptionsController {
     private readonly prescriptionPdfService: PrescriptionPdfService,
   ) {}
 
+  @Audit('Prescription', AuditActionType.VIEW)
   @Get()
   @ApiOperation({ summary: 'List prescription items for an encounter' })
   async findAll(
@@ -46,6 +47,7 @@ export class PrescriptionsController {
     return { success: true, data };
   }
 
+  @Audit('Prescription', AuditActionType.VIEW)
   @Get('pdf')
   @Audit('Prescription', AuditActionType.EXPORT)
   @ApiOperation({ summary: 'Download prescription sheet as PDF' })

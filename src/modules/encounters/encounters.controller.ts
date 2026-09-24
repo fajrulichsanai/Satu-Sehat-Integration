@@ -65,6 +65,7 @@ export class EncountersController {
     return { success: true, data: encounter };
   }
 
+  @Audit('Encounter', AuditActionType.VIEW)
   @Get(':id')
   @ApiOperation({ summary: 'Get encounter detail' })
   async findOne(
