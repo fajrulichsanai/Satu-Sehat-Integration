@@ -26,7 +26,11 @@ jobs:
       # Fails on any high/critical advisory in runtime dependencies.
       - run: npm audit --omit=dev --audit-level=high
       # Software Bill of Materials (SATUSEHAT self-assessment No. 12).
-      - run: npx --yes @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.cdx.json
+      # package.json's name ("Satu Sehat Integration ") isn't a valid npm name,
+      # which the SBOM tool rejects; normalise it in the CI checkout only.
+      - run: |
+          npm pkg set name=satu-sehat-integration
+          npx --yes @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.cdx.json
       - uses: actions/upload-artifact@v4
         with:
           name: sbom-backend
