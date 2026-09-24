@@ -19,12 +19,15 @@ export const SKIP_MFA_ENFORCEMENT_KEY = 'skipMfaEnforcement';
 export const SkipMfaEnforcement = () =>
   SetMetadata(SKIP_MFA_ENFORCEMENT_KEY, true);
 
-/** Roles required to have MFA enabled before using anything else. */
+/**
+ * Roles required to have MFA enabled before using anything else: platform
+ * Super Admins and clinic owners. ADMIN and DOKTER may still opt in from the
+ * Keamanan page, but are not forced to.
+ */
 export const MFA_ENFORCED_ROLES: UserRole[] = [
   UserRole.SUPER_ADMIN,
   UserRole.MULTI_CLINIC_OWNER,
   UserRole.OWNER,
-  UserRole.ADMIN,
 ];
 
 /**

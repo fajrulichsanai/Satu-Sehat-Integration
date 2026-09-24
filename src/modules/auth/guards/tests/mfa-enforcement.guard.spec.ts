@@ -55,8 +55,15 @@ describe('MfaEnforcementGuard', () => {
     expect(() => guard.canActivate(ctx)).toThrow(HttpException);
   });
 
+  it('does not enforce MFA for ADMIN or DOKTER (positive)', () => {
+    for (const role of [UserRole.ADMIN, UserRole.DOKTER]) {
+      const ctx = buildContext({ role, mfaEnabled: false });
+      expect(guard.canActivate(ctx)).toBe(true);
+    }
+  });
+
   it('throws with the MFA_SETUP_REQUIRED error code (negative)', () => {
-    const ctx = buildContext({ role: UserRole.ADMIN, mfaEnabled: false });
+    const ctx = buildContext({ role: UserRole.OWNER, mfaEnabled: false });
     try {
       guard.canActivate(ctx);
       fail('expected canActivate to throw');
