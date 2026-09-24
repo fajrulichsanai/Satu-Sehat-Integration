@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - development
+      - dev-daffa
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: Build, test & dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx jest --ci
+      # Fails on any high/critical advisory in runtime dependencies.
+      - run: npm audit --omit=dev --audit-level=high
+      # Software Bill of Materials (SATUSEHAT self-assessment No. 12).
+      - run: npx --yes @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-backend
+          path: sbom.cdx.json
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

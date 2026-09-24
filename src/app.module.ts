@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -42,6 +42,7 @@ import { MultiClinicModule } from './modules/multi-clinic/multi-clinic.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
+import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 import { MfaEnforcementGuard } from './modules/auth/guards/mfa-enforcement.guard';
 import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.guard';
 
@@ -159,4 +160,8 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestLoggerMiddleware).forRoutes('{*splat}');
+  }
+}

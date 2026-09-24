@@ -1,0 +1,6 @@
+# Reviewed false positives: truncated example JWT headers in API docs/Swagger
+# examples, and the stock NestJS README CircleCI badge (token=abc123def456).
+0b71ccafbb4b29a303762d5d06a930b373282422:docs/APi_SPEC.md:generic-api-key:167
+0b71ccafbb4b29a303762d5d06a930b373282422:docs/APi_SPEC.md:generic-api-key:219
+0b71ccafbb4b29a303762d5d06a930b373282422:src/modules/auth/dto/auth.dto.ts:generic-api-key:64
+d9fb486a7eb11a2b34de74dc13d3431dfa0709d6:README.md:generic-api-key:5
