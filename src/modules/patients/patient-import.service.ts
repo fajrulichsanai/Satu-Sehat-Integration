@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { PatientsService } from './patients.service';
 import { CreatePatientDto } from './dto/patient.dto';
 import {
@@ -37,62 +37,65 @@ export class PatientImportService {
 
   /** Builds the downloadable .xlsx template: header + one example row, plus a
    * "Petunjuk" sheet spelling out which columns are required and accepted values. */
-  generateTemplateBuffer(): Buffer {
+  async generateTemplateBuffer(): Promise<Buffer> {
     const headers = PATIENT_IMPORT_COLUMNS.map((c) => c.header);
     const exampleRow = PATIENT_IMPORT_COLUMNS.map((c) => c.example);
 
-    const dataSheet = XLSX.utils.aoa_to_sheet([headers, exampleRow]);
-    dataSheet['!cols'] = headers.map(() => ({ wch: 20 }));
+    const workbook = new ExcelJS.Workbook();
 
-    const instructionsSheet = XLSX.utils.aoa_to_sheet([
-      ['Kolom', 'Wajib?', 'Keterangan'],
-      ...PATIENT_IMPORT_COLUMNS.map((c) => [
+    const dataSheet = workbook.addWorksheet('Data Pasien');
+    dataSheet.addRow(headers);
+    dataSheet.addRow(exampleRow);
+    dataSheet.columns.forEach((col) => (col.width = 20));
+
+    const instructionsSheet = workbook.addWorksheet('Petunjuk');
+    instructionsSheet.addRow(['Kolom', 'Wajib?', 'Keterangan']);
+    for (const c of PATIENT_IMPORT_COLUMNS) {
+      instructionsSheet.addRow([
         c.header,
         c.required ? 'Wajib' : 'Opsional',
         c.note || '-',
-      ]),
-    ]);
-    instructionsSheet['!cols'] = [{ wch: 22 }, { wch: 10 }, { wch: 55 }];
+      ]);
+    }
+    [22, 10, 55].forEach((w, i) => (instructionsSheet.getColumn(i + 1).width = w));
 
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, dataSheet, 'Data Pasien');
-    XLSX.utils.book_append_sheet(workbook, instructionsSheet, 'Petunjuk');
-
-    return XLSX.write(workbook, {
-      type: 'buffer',
-      bookType: 'xlsx',
-    }) as Buffer;
+    return Buffer.from(await workbook.xlsx.writeBuffer());
   }
 
-  /** Reads the first sheet of an uploaded workbook into raw string rows, matching
-   * columns by header text (case/whitespace-insensitive) rather than position —
-   * so a clinic reordering or omitting optional columns still parses correctly. */
-  parseFile(buffer: Buffer): PatientImportRawRow[] {
-    const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
-    const firstSheetName = workbook.SheetNames[0];
-    if (!firstSheetName) return [];
-    const sheet = workbook.Sheets[firstSheetName];
+  /** Reads the first sheet of an uploaded workbook (.xlsx or .csv) into raw
+   * string rows, matching columns by header text (case/whitespace-insensitive)
+   * rather than position — so a clinic reordering or omitting optional columns
+   * still parses correctly. */
+  async parseFile(buffer: Buffer): Promise<PatientImportRawRow[]> {
+    if (isLegacyXls(buffer)) {
+      throw new BadRequestException(
+        'Format .xls lama tidak didukung — simpan ulang file sebagai .xlsx atau .csv',
+      );
+    }
+    const grid = isZip(buffer)
+      ? await readXlsxGrid(buffer)
+      : readCsvGrid(buffer);
 
-    const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-      defval: '',
-      raw: false,
-      dateNF: 'yyyy-mm-dd',
-    });
+    const [headerRow, ...dataRows] = grid;
+    if (!headerRow) return [];
 
     const headerToField = new Map(
       PATIENT_IMPORT_COLUMNS.map((c) => [c.header.trim().toLowerCase(), c.field]),
     );
+    const columnFields = headerRow.map((h) =>
+      headerToField.get(h.trim().toLowerCase()),
+    );
 
-    return raw.map((rawRow) => {
-      const mapped: PatientImportRawRow = {};
-      for (const [key, value] of Object.entries(rawRow)) {
-        const field = headerToField.get(key.trim().toLowerCase());
-        if (!field) continue;
-        mapped[field] =
-          value === undefined || value === null ? '' : String(value).trim();
-      }
-      return mapped;
-    });
+    return dataRows
+      .filter((cells) => cells.some((v) => v.trim() !== ''))
+      .map((cells) => {
+        const mapped: PatientImportRawRow = {};
+        columnFields.forEach((field, i) => {
+          if (!field) return;
+          mapped[field] = (cells[i] ?? '').trim();
+        });
+        return mapped;
+      });
   }
 
   private isRowBlank(row: PatientImportRawRow): boolean {
@@ -264,4 +267,90 @@ export class PatientImportService {
       results,
     };
   }
+}
+
+function isZip(buffer: Buffer): boolean {
+  return buffer.length >= 2 && buffer[0] === 0x50 && buffer[1] === 0x4b; // "PK"
+}
+
+function isLegacyXls(buffer: Buffer): boolean {
+  return (
+    buffer.length >= 4 &&
+    buffer[0] === 0xd0 &&
+    buffer[1] === 0xcf &&
+    buffer[2] === 0x11 &&
+    buffer[3] === 0xe0
+  );
+}
+
+function formatCell(value: ExcelJS.CellValue, text: string): string {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === 'number') return String(value);
+  return text ?? '';
+}
+
+async function readXlsxGrid(buffer: Buffer): Promise<string[][]> {
+  const workbook = new ExcelJS.Workbook();
+  // exceljs's Buffer type predates Node's generic Buffer<ArrayBufferLike>.
+  await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
+  const sheet = workbook.worksheets[0];
+  if (!sheet) return [];
+
+  const grid: string[][] = [];
+  sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+    const cells: string[] = [];
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      cells[colNumber - 1] = formatCell(cell.value, cell.text);
+    });
+    grid[rowNumber - 1] = Array.from(cells, (v) => v ?? '');
+  });
+  return Array.from(grid, (r) => r ?? []);
+}
+
+/** Minimal RFC 4180 CSV reader. Keeps every value as text (so phone numbers
+ * keep their leading 0) and auto-detects ";" — the default list separator
+ * for Excel on Indonesian-locale Windows — versus ",". */
+function readCsvGrid(buffer: Buffer): string[][] {
+  const text = buffer.toString('utf8').replace(/^\uFEFF/, '');
+  const firstLine = text.split(/\r?\n/, 1)[0] ?? '';
+  const delimiter =
+    (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0)
+      ? ';'
+      : ',';
+
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"' && text[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        field += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === delimiter) {
+      row.push(field);
+      field = '';
+    } else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+    } else {
+      field += ch;
+    }
+  }
+  if (field !== '' || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows;
 }

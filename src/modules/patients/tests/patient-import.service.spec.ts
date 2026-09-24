@@ -1,18 +1,21 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { ConflictException } from '@nestjs/common';
 import { PatientImportService } from '../patient-import.service';
 import { PatientsService } from '../patients.service';
 import { PATIENT_IMPORT_COLUMNS, PatientImportRawRow } from '../patient-import.columns';
 import { Gender } from '../../../enums';
 
-function buildWorkbookBuffer(rows: Record<string, string>[]): Buffer {
+async function aoaToXlsx(aoa: unknown[][]): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Data Pasien');
+  aoa.forEach((row) => sheet.addRow(row));
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
+function buildWorkbookBuffer(rows: Record<string, string>[]): Promise<Buffer> {
   const headers = PATIENT_IMPORT_COLUMNS.map((c) => c.header);
-  const aoa = [headers, ...rows.map((row) => headers.map((h) => row[h] ?? ''))];
-  const sheet = XLSX.utils.aoa_to_sheet(aoa);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, sheet, 'Data Pasien');
-  return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+  return aoaToXlsx([headers, ...rows.map((row) => headers.map((h) => row[h] ?? ''))]);
 }
 
 describe('PatientImportService', () => {
@@ -35,60 +38,77 @@ describe('PatientImportService', () => {
   it('should be defined', () => expect(service).toBeDefined());
 
   describe('generateTemplateBuffer', () => {
-    it('produces a workbook with a Data Pasien sheet whose headers match the column spec, plus a Petunjuk sheet (positive)', () => {
-      const buffer = service.generateTemplateBuffer();
+    it('produces a workbook with a Data Pasien sheet whose headers match the column spec, plus a Petunjuk sheet (positive)', async () => {
+      const buffer = await service.generateTemplateBuffer();
       expect(Buffer.isBuffer(buffer)).toBe(true);
       expect(buffer.length).toBeGreaterThan(0);
 
-      const workbook = XLSX.read(buffer, { type: 'buffer' });
-      expect(workbook.SheetNames).toEqual(['Data Pasien', 'Petunjuk']);
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
+      expect(workbook.worksheets.map((w) => w.name)).toEqual(['Data Pasien', 'Petunjuk']);
 
-      const dataSheet = XLSX.utils.sheet_to_json<string[]>(workbook.Sheets['Data Pasien'], { header: 1 });
-      expect(dataSheet[0]).toEqual(PATIENT_IMPORT_COLUMNS.map((c) => c.header));
+      const dataSheet = workbook.getWorksheet('Data Pasien')!;
+      const headerValues = (dataSheet.getRow(1).values as unknown[]).slice(1);
+      expect(headerValues).toEqual(PATIENT_IMPORT_COLUMNS.map((c) => c.header));
       // Example row given so the client sees a filled-in sample, not just headers.
-      expect(dataSheet[1]).toHaveLength(PATIENT_IMPORT_COLUMNS.length);
+      expect(dataSheet.getRow(2).cellCount).toBe(PATIENT_IMPORT_COLUMNS.length);
+    });
+
+    it('round-trips through parseFile (positive)', async () => {
+      const rows = await service.parseFile(await service.generateTemplateBuffer());
+      expect(rows).toHaveLength(1);
     });
   });
 
   describe('parseFile', () => {
-    it('maps columns by header text regardless of column order (positive)', () => {
+    it('maps columns by header text regardless of column order (positive)', async () => {
       const headers = PATIENT_IMPORT_COLUMNS.map((c) => c.header);
       // Deliberately reversed order — the parser must match by header text, not position.
       const reversed = [...headers].reverse();
-      const sheet = XLSX.utils.aoa_to_sheet([
+      const buffer = await aoaToXlsx([
         reversed,
         reversed.map((h) => (h === 'Nama Lengkap' ? 'Siti' : h === 'Jenis Kelamin' ? 'Perempuan' : '')),
       ]);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, sheet, 'Data Pasien');
-      const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
 
-      const rows = service.parseFile(buffer);
+      const rows = await service.parseFile(buffer);
       expect(rows).toHaveLength(1);
       expect(rows[0].name).toBe('Siti');
       expect(rows[0].gender).toBe('Perempuan');
     });
 
-    it('ignores a column whose header is not part of the template (positive/edge)', () => {
-      const sheet = XLSX.utils.aoa_to_sheet([
+    it('ignores a column whose header is not part of the template (positive/edge)', async () => {
+      const buffer = await aoaToXlsx([
         ['Nama Lengkap', 'Jenis Kelamin', 'Kolom Aneh'],
         ['Budi', 'Laki-laki', 'sesuatu'],
       ]);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, sheet, 'Data Pasien');
-      const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
 
-      const rows = service.parseFile(buffer);
+      const rows = await service.parseFile(buffer);
       expect(rows[0]).toEqual({ name: 'Budi', gender: 'Laki-laki' });
     });
 
-    it('returns an empty array for a workbook with no rows (negative/edge)', () => {
-      const sheet = XLSX.utils.aoa_to_sheet([PATIENT_IMPORT_COLUMNS.map((c) => c.header)]);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, sheet, 'Data Pasien');
-      const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    it('returns an empty array for a workbook with no rows (negative/edge)', async () => {
+      const buffer = await aoaToXlsx([PATIENT_IMPORT_COLUMNS.map((c) => c.header)]);
+      expect(await service.parseFile(buffer)).toEqual([]);
+    });
 
-      expect(service.parseFile(buffer)).toEqual([]);
+    it('formats date cells as yyyy-mm-dd (positive)', async () => {
+      const buffer = await aoaToXlsx([
+        ['Nama Lengkap', 'Tanggal Lahir'],
+        ['Budi', new Date(Date.UTC(1990, 4, 17))],
+      ]);
+      const rows = await service.parseFile(buffer);
+      expect(Object.values(rows[0])).toContain('1990-05-17');
+    });
+
+    it('reads a semicolon-separated CSV with quoted fields (positive)', async () => {
+      const csv = 'Nama Lengkap;Jenis Kelamin\n"Budi; Jr";Laki-laki\n';
+      const rows = await service.parseFile(Buffer.from(csv));
+      expect(rows).toEqual([{ name: 'Budi; Jr', gender: 'Laki-laki' }]);
+    });
+
+    it('rejects a legacy binary .xls file (negative)', async () => {
+      const xls = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+      await expect(service.parseFile(xls)).rejects.toThrow('.xls');
     });
   });
 

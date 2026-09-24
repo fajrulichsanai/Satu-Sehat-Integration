@@ -3,7 +3,7 @@ import { memoryStorage } from 'multer';
 import { extname } from 'path';
 import type { Request } from 'express';
 
-const ALLOWED_EXTENSIONS = new Set(['.xlsx', '.xls', '.csv']);
+const ALLOWED_EXTENSIONS = new Set(['.xlsx', '.csv']);
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
 export const patientImportUploadOptions = {
@@ -16,7 +16,7 @@ export const patientImportUploadOptions = {
   ) => {
     if (!ALLOWED_EXTENSIONS.has(extname(file.originalname).toLowerCase())) {
       callback(
-        new BadRequestException('Format file harus XLSX, XLS, atau CSV'),
+        new BadRequestException('Format file harus XLSX atau CSV'),
         false,
       );
       return;

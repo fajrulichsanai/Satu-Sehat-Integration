@@ -42,7 +42,7 @@ export class PatientImportController {
   @Get('import-template')
   @ApiOperation({ summary: 'Download the patient migration spreadsheet template (Super Admin only)' })
   async downloadTemplate(@Res() res: Response) {
-    const buffer = this.patientImportService.generateTemplateBuffer();
+    const buffer = await this.patientImportService.generateTemplateBuffer();
     res.set({
       'Content-Type':
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -64,7 +64,7 @@ export class PatientImportController {
       throw new BadRequestException('File spreadsheet wajib diunggah');
     }
 
-    const rows = this.patientImportService.parseFile(file.buffer);
+    const rows = await this.patientImportService.parseFile(file.buffer);
     if (rows.length === 0) {
       throw new BadRequestException(
         'File tidak berisi data — pastikan menggunakan template yang disediakan',
