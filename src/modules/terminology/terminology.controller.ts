@@ -5,11 +5,20 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { Public } from '../auth/decorators/public.decorator';
 import { TerminologyService } from './terminology.service';
 import type { TerminologySystem } from './entities/terminology-concept.entity';
 
+/**
+ * ICD-10 / SNOMED CT lookup. Public reference data (no patient data), so it
+ * also works without login — the landing page lets visitors try it —
+ * throttled per signed-in user, or per IP when anonymous.
+ */
 @ApiTags('terminology')
 @ApiBearerAuth('JWT-auth')
+@Public()
+@Throttle({ default: { limit: 60, ttl: 60000 } })
 @Controller('terminology')
 export class TerminologyController {
   constructor(private readonly terminologyService: TerminologyService) {}
