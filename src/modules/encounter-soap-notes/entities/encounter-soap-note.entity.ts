@@ -2,6 +2,17 @@ import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { BaseEntity } from '../../../common/base.entity';
 import { Encounter } from '../../encounters/entities/encounter.entity';
 
+/** A coded diagnosis in the assessment (ICD-10 or SNOMED CT). */
+export interface SoapDiagnosis {
+  system: 'icd10' | 'snomed';
+  code: string;
+  /** Canonical name from the code system (set by the server). */
+  display: string;
+  /** Diagnosis utama; at most one per note. */
+  primary: boolean;
+  note?: string | null;
+}
+
 @Entity('encounter_soap_notes')
 @Index(['encounterId'], { unique: true })
 export class EncounterSoapNote extends BaseEntity {
@@ -16,6 +27,10 @@ export class EncounterSoapNote extends BaseEntity {
 
   @Column({ type: 'text', nullable: true })
   assessment: string;
+
+  // Diagnosis terkode (ICD-10 / SNOMED CT) — melengkapi teks assessment.
+  @Column({ type: 'json', nullable: true })
+  diagnoses: SoapDiagnosis[] | null;
 
   // Tindakan yang dilakukan pada kunjungan ini (bukan rencana ke depan —
   // itu ada di `plan`).

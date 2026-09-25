@@ -14,6 +14,7 @@ const MIGRATIONS = [
   '1789910000000-DropSyncLogPayloads',
   '1789920000000-AddAuditAlertAction',
   '1789930000000-CreateApiKeys',
+  '1789940000000-CreateTerminology',
 ];
 
 async function main() {

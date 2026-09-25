@@ -1,9 +1,31 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { EncounterSoapNotesService } from '../encounter-soap-notes.service';
 import { EncounterSoapNote } from '../entities/encounter-soap-note.entity';
 import { Encounter } from '../../encounters/entities/encounter.entity';
+import { TerminologyService } from '../../terminology/terminology.service';
+
+const CONCEPTS: Record<string, string> = {
+  'icd10:K02.1': 'Caries of dentine',
+  'icd10:K05.1': 'Chronic gingivitis',
+  'snomed:80967001': 'Dental caries',
+};
+const terminology = {
+  resolve: jest.fn(async (items: Array<{ system: string; code: string }>) => {
+    const missing = items.find((i) => !CONCEPTS[`${i.system}:${i.code}`]);
+    if (missing)
+      throw new BadRequestException(
+        `Kode diagnosis ${missing.code} tidak dikenal`,
+      );
+    return new Map(
+      items.map((i) => [
+        `${i.system}:${i.code}`,
+        { display: CONCEPTS[`${i.system}:${i.code}`] },
+      ]),
+    );
+  }),
+};
 
 describe('EncounterSoapNotesService', () => {
   let service: EncounterSoapNotesService;
@@ -23,12 +45,11 @@ describe('EncounterSoapNotesService', () => {
         EncounterSoapNotesService,
         { provide: getRepositoryToken(EncounterSoapNote), useValue: noteRepo },
         { provide: getRepositoryToken(Encounter), useValue: encounterRepo },
+        { provide: TerminologyService, useValue: terminology },
       ],
     }).compile();
 
-    service = module.get<EncounterSoapNotesService>(
-      EncounterSoapNotesService,
-    );
+    service = module.get<EncounterSoapNotesService>(EncounterSoapNotesService);
   });
 
   it('should be defined', () => expect(service).toBeDefined());
@@ -98,6 +119,105 @@ describe('EncounterSoapNotesService', () => {
         service.upsertForEncounter(999, 1, {} as any, 9),
       ).rejects.toThrow(NotFoundException);
       expect(noteRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('diagnoses', () => {
+    beforeEach(() => {
+      encounterRepo.findOne.mockResolvedValue({ id: 1, clinicId: 1 });
+      noteRepo.findOne.mockResolvedValue(null);
+    });
+
+    it('stores the code system name, drops duplicates, first becomes primary (positive)', async () => {
+      const note: any = await service.upsertForEncounter(
+        1,
+        1,
+        {
+          diagnoses: [
+            { system: 'icd10', code: 'K02.1', note: ' gigi 36 ' },
+            { system: 'snomed', code: '80967001' },
+            { system: 'icd10', code: 'K02.1' },
+          ],
+        } as any,
+        7,
+      );
+      expect(note.diagnoses).toEqual([
+        {
+          system: 'icd10',
+          code: 'K02.1',
+          display: 'Caries of dentine',
+          primary: true,
+          note: 'gigi 36',
+        },
+        {
+          system: 'snomed',
+          code: '80967001',
+          display: 'Dental caries',
+          primary: false,
+          note: null,
+        },
+      ]);
+    });
+
+    it('keeps the diagnosis marked primary (positive)', async () => {
+      const note: any = await service.upsertForEncounter(
+        1,
+        1,
+        {
+          diagnoses: [
+            { system: 'icd10', code: 'K02.1' },
+            { system: 'icd10', code: 'K05.1', primary: true },
+          ],
+        } as any,
+        7,
+      );
+      expect(note.diagnoses.map((d: any) => d.primary)).toEqual([false, true]);
+    });
+
+    it('rejects unknown codes and two primary diagnoses (negative)', async () => {
+      await expect(
+        service.upsertForEncounter(
+          1,
+          1,
+          { diagnoses: [{ system: 'icd10', code: 'XX9.9' }] } as any,
+          7,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.upsertForEncounter(
+          1,
+          1,
+          {
+            diagnoses: [
+              { system: 'icd10', code: 'K02.1', primary: true },
+              { system: 'icd10', code: 'K05.1', primary: true },
+            ],
+          } as any,
+          7,
+        ),
+      ).rejects.toThrow('Hanya boleh satu diagnosis utama');
+    });
+
+    it('leaves saved diagnoses alone when the field is not sent (edge)', async () => {
+      noteRepo.findOne.mockResolvedValue({
+        id: 1,
+        encounterId: 1,
+        diagnoses: [{ code: 'K02.1' }],
+      });
+      const note: any = await service.upsertForEncounter(
+        1,
+        1,
+        { assessment: 'x' } as any,
+        7,
+      );
+      expect(note.diagnoses).toEqual([{ code: 'K02.1' }]);
+      const cleared: any = await service.upsertForEncounter(
+        1,
+        1,
+        { diagnoses: [] } as any,
+        7,
+      );
+      expect(cleared.diagnoses).toEqual([]);
     });
   });
 });
