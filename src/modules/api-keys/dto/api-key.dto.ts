@@ -33,7 +33,10 @@ export class CreateApiKeyDto {
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(10)
-  @Matches(ORIGIN_PATTERN, { each: true, message: 'Domain harus berbentuk https://nama-domain (tanpa path)' })
+  @Matches(ORIGIN_PATTERN, {
+    each: true,
+    message: 'Domain harus berbentuk https://nama-domain (tanpa path)',
+  })
   allowedOrigins?: string[];
 
   /** Super Admin only: which clinic the key belongs to. Owners are fixed to their own clinic. */
@@ -56,7 +59,10 @@ export class UpdateApiKeyDto {
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(10)
-  @Matches(ORIGIN_PATTERN, { each: true, message: 'Domain harus berbentuk https://nama-domain (tanpa path)' })
+  @Matches(ORIGIN_PATTERN, {
+    each: true,
+    message: 'Domain harus berbentuk https://nama-domain (tanpa path)',
+  })
   allowedOrigins?: string[];
 }
 
@@ -124,4 +130,24 @@ export class ApiCreateReservationDto {
   @IsString()
   @MaxLength(500)
   notes?: string;
+}
+
+/** Find a patient's own upcoming reservations without the token. Both
+ * fields must match what was entered at booking — the phone number alone
+ * is too easy to guess to reveal someone's appointment. */
+export class ApiLookupReservationDto {
+  @ApiProperty({ example: '08123456789' })
+  @IsString()
+  @IsNotEmpty({ message: 'Nomor telepon wajib diisi' })
+  @MaxLength(20)
+  patientPhone: string;
+
+  @ApiProperty({
+    example: 'Budi Santoso',
+    description: 'Nama seperti saat reservasi (huruf besar/kecil diabaikan)',
+  })
+  @IsString()
+  @IsNotEmpty({ message: 'Nama wajib diisi' })
+  @MaxLength(100)
+  patientName: string;
 }
