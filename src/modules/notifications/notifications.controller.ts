@@ -26,6 +26,10 @@ export class NotificationsController {
     @Query('unreadOnly') unreadOnly?: string,
     @Query('limit') limit?: string,
   ) {
+    // Super Admins without a selected clinic have no clinic feed (a null
+    // clinicId in the where clause made TypeORM throw → 500 on every page).
+    if (!clinicId)
+      return { success: true, data: { items: [], unreadCount: 0 } };
     const [items, unreadCount] = await Promise.all([
       this.notificationsService.listForClinic(clinicId, {
         unreadOnly: unreadOnly === 'true',
@@ -43,7 +47,7 @@ export class NotificationsController {
     @Param('id', ParseIntPipe) id: number,
     @ClinicId() clinicId: number,
   ) {
-    await this.notificationsService.markRead(id, clinicId);
+    if (clinicId) await this.notificationsService.markRead(id, clinicId);
     return { success: true };
   }
 
@@ -52,7 +56,7 @@ export class NotificationsController {
     summary: "Mark every one of the caller's clinic notifications as read",
   })
   async markAllRead(@ClinicId() clinicId: number) {
-    await this.notificationsService.markAllRead(clinicId);
+    if (clinicId) await this.notificationsService.markAllRead(clinicId);
     return { success: true };
   }
 }

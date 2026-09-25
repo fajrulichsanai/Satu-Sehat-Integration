@@ -139,6 +139,7 @@ export class PublicApiController {
   }
 
   @Post('reservations/:token/cancel')
+  @HttpCode(200)
   @ApiOperation({ summary: 'Cancel a pending/confirmed reservation by token' })
   async cancelReservation(
     @Req() req: ApiRequest,
