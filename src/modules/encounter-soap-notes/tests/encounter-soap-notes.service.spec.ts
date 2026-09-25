@@ -12,6 +12,9 @@ const CONCEPTS: Record<string, string> = {
   'snomed:80967001': 'Dental caries',
 };
 const terminology = {
+  nameIdFor: jest.fn((system: string, code: string) =>
+    code === 'K02.1' ? 'Karies dentin' : null,
+  ),
   resolve: jest.fn(async (items: Array<{ system: string; code: string }>) => {
     const missing = items.find((i) => !CONCEPTS[`${i.system}:${i.code}`]);
     if (missing)
@@ -146,6 +149,7 @@ describe('EncounterSoapNotesService', () => {
           system: 'icd10',
           code: 'K02.1',
           display: 'Caries of dentine',
+          nameId: 'Karies dentin',
           primary: true,
           note: 'gigi 36',
         },
@@ -153,6 +157,7 @@ describe('EncounterSoapNotesService', () => {
           system: 'snomed',
           code: '80967001',
           display: 'Dental caries',
+          nameId: null,
           primary: false,
           note: null,
         },

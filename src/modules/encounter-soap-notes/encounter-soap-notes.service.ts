@@ -102,6 +102,7 @@ export class EncounterSoapNotesService {
       system: d.system,
       code: d.code,
       display: concepts.get(`${d.system}:${d.code}`)!.display,
+      nameId: this.terminologyService.nameIdFor(d.system, d.code),
       primary: hasPrimary ? !!d.primary : i === 0,
       note: d.note?.trim() || null,
     }));

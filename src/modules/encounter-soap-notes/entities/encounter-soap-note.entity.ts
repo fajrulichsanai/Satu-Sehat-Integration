@@ -8,6 +8,8 @@ export interface SoapDiagnosis {
   code: string;
   /** Canonical name from the code system (set by the server). */
   display: string;
+  /** Indonesian name, when the code has one (set by the server). */
+  nameId?: string | null;
   /** Diagnosis utama; at most one per note. */
   primary: boolean;
   note?: string | null;

@@ -271,6 +271,11 @@ export class TerminologyService {
     return out;
   }
 
+  /** Indonesian name for a code, when it has one. */
+  nameIdFor(system: TerminologySystem, code: string): string | null {
+    return this.curated(system, code)?.nameId ?? null;
+  }
+
   private curated(
     system: TerminologySystem,
     code: string,
