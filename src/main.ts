@@ -69,11 +69,27 @@ async function bootstrap() {
     .flatMap((v) => v!.split(',').map((s) => s.trim()))
     .filter(Boolean);
 
-  app.enableCors({
-    origin: allowedOrigins.length > 0 ? allowedOrigins : true,
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+  // The public API (/v1) is called from clinic websites on their own domains:
+  // CORS lets any origin through, and ApiKeyGuard then checks the origin
+  // against the key's registered domains. No cookies/credentials there.
+  app.enableCors((req: any, callback: any) => {
+    if (typeof req.url === 'string' && req.url.startsWith('/v1/')) {
+      callback(null, {
+        origin: true,
+        credentials: false,
+        methods: ['GET', 'POST', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'X-Api-Key', 'Authorization'],
+        exposedHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-Quota-Limit', 'X-Quota-Remaining'],
+        maxAge: 86400,
+      });
+      return;
+    }
+    callback(null, {
+      origin: allowedOrigins.length > 0 ? allowedOrigins : true,
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+    });
   });
 
   // Swagger/OpenAPI Documentation (Task 1.8)

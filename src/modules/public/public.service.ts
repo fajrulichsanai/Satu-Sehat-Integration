@@ -64,7 +64,7 @@ export class PublicService {
 
     const practitioners = await this.practitionerRepository.find({
       where: { clinicId, isActive: true },
-      select: { id: true, name: true, specialization: true },
+      select: { id: true, name: true, specialization: true, photoUrl: true, jadwalPraktik: true },
       order: { id: 'ASC' },
     });
 
@@ -116,9 +116,21 @@ export class PublicService {
     }
 
     const dayKey = DAY_KEYS[new Date(`${query.date}T00:00:00`).getDay()];
-    const hoursToday = clinic.operationalHours?.[dayKey];
+    // A doctor's own practice hours (if set) take precedence over the clinic's.
+    let schedule: Record<string, string> | null | undefined = clinic.operationalHours;
+    if (query.practitionerId) {
+      const practitioner = await this.practitionerRepository.findOne({
+        where: { id: query.practitionerId, clinicId: query.clinicId },
+        select: { id: true, jadwalPraktik: true },
+      });
+      if (!practitioner) {
+        throw new NotFoundException('Dokter tidak ditemukan di klinik ini');
+      }
+      if (practitioner.jadwalPraktik) schedule = practitioner.jadwalPraktik;
+    }
+    const hoursToday = schedule?.[dayKey];
 
-    if (!hoursToday || hoursToday === 'Tutup') {
+    if (!hoursToday || hoursToday.trim().toLowerCase() === 'tutup') {
       return { date: query.date, isOpen: false, slots: [] };
     }
 

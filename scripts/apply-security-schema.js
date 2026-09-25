@@ -13,6 +13,7 @@ const MIGRATIONS = [
   '1789900000000-AddSessionSecurity',
   '1789910000000-DropSyncLogPayloads',
   '1789920000000-AddAuditAlertAction',
+  '1789930000000-CreateApiKeys',
 ];
 
 async function main() {

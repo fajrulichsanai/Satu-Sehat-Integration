@@ -57,6 +57,15 @@ export class Practitioner extends BaseEntity {
   @Column({ name: 'satusehat_practitioner_id', length: 100, nullable: true })
   satusehatPractitionerId: string;
 
+  /** Public profile photo (clinic website / public API). */
+  @Column({ name: 'photo_url', type: 'varchar', length: 500, nullable: true })
+  photoUrl: string | null;
+
+  /** Practice hours by day, same shape as Clinic.operationalHours
+   * ({ senin: '08:00-14:00', minggu: 'Tutup', ... }). Null = follows the clinic's hours. */
+  @Column({ name: 'jadwal_praktik', type: 'json', nullable: true })
+  jadwalPraktik: Record<string, string> | null;
+
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 

@@ -9,7 +9,7 @@ import { ReservationsService } from '../../reservations/reservations.service';
 describe('PublicService', () => {
   let service: PublicService;
   let clinicRepo: { findOne: jest.Mock };
-  let practitionerRepo: { find: jest.Mock };
+  let practitionerRepo: { find: jest.Mock; findOne: jest.Mock };
   let reservationsService: {
     createPublic: jest.Mock;
     getStatusByToken: jest.Mock;
@@ -19,7 +19,10 @@ describe('PublicService', () => {
 
   beforeEach(async () => {
     clinicRepo = { findOne: jest.fn() };
-    practitionerRepo = { find: jest.fn().mockResolvedValue([]) };
+    practitionerRepo = {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue({ id: 5, jadwalPraktik: null }),
+    };
     reservationsService = {
       createPublic: jest.fn(),
       getStatusByToken: jest.fn(),
@@ -240,6 +243,34 @@ describe('PublicService', () => {
         '2026-06-15',
         5,
       );
+    });
+
+    it("uses the doctor's own practice hours when set (positive)", async () => {
+      clinicRepo.findOne.mockResolvedValue({ id: 1, operationalHours: { senin: '08:00-20:00' } });
+      practitionerRepo.findOne.mockResolvedValue({ id: 5, jadwalPraktik: { senin: '13:00-14:00' } });
+
+      const result = await service.getAvailableSlots({ clinicId: 1, date: '2026-06-15', practitionerId: 5 } as any);
+
+      expect(result.slots[0]).toBe('13:00');
+      expect(result.slots.every((s: string) => s >= '13:00' && s < '14:00')).toBe(true);
+    });
+
+    it("treats a doctor's 'Tutup' day as closed even if the clinic is open (edge)", async () => {
+      clinicRepo.findOne.mockResolvedValue({ id: 1, operationalHours: { senin: '08:00-20:00' } });
+      practitionerRepo.findOne.mockResolvedValue({ id: 5, jadwalPraktik: { senin: 'Tutup' } });
+
+      const result = await service.getAvailableSlots({ clinicId: 1, date: '2026-06-15', practitionerId: 5 } as any);
+
+      expect(result.isOpen).toBe(false);
+    });
+
+    it('rejects a doctor from another clinic (negative)', async () => {
+      clinicRepo.findOne.mockResolvedValue({ id: 1, operationalHours: { senin: '08:00-20:00' } });
+      practitionerRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.getAvailableSlots({ clinicId: 1, date: '2026-06-15', practitionerId: 99 } as any),
+      ).rejects.toThrow(NotFoundException);
     });
 
     describe('past-time filtering for today', () => {

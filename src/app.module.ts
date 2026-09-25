@@ -22,6 +22,7 @@ import { MasterDataModule } from './modules/master-data/master-data.module';
 import { SoapTemplatesModule } from './modules/soap-templates/soap-templates.module';
 import { IcdModule } from './modules/icd/icd.module';
 import { OwnerCodeModule } from './modules/owner-code/owner-code.module';
+import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { OperationalRecordsModule } from './modules/operational-records/operational-records.module';
 import { DoctorFeeModule } from './modules/doctor-fee/doctor-fee.module';
@@ -113,6 +114,7 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     SoapTemplatesModule,
     IcdModule,
     OwnerCodeModule,
+    ApiKeysModule,
     DashboardModule,
     OperationalRecordsModule,
     DoctorFeeModule,

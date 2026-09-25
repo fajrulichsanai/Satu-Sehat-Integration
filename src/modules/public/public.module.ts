@@ -16,5 +16,6 @@ import { ReservationsModule } from '../reservations/reservations.module';
   ],
   controllers: [PublicController],
   providers: [PublicService],
+  exports: [PublicService],
 })
 export class PublicModule {}
