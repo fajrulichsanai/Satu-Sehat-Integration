@@ -40,6 +40,51 @@ export function normalizeName(value: string): string {
     .trim();
 }
 
+/** Forms of address people type in front of a name; not part of it. */
+const HONORIFICS = new Set([
+  'ibu',
+  'bu',
+  'bapak',
+  'pak',
+  'bpk',
+  'sdr',
+  'sdri',
+  'saudara',
+  'saudari',
+  'an',
+  'ny',
+  'nyonya',
+  'nn',
+  'nona',
+  'tn',
+  'tuan',
+  'mas',
+  'mbak',
+  'kak',
+  'adik',
+  'dik',
+]);
+
+/** Words of a name without forms of address ("Ibu Sri" → ["sri"]). */
+function nameWords(value: string): string[] {
+  return normalizeName(value)
+    .split(' ')
+    .filter((w) => w && !HONORIFICS.has(w));
+}
+
+/**
+ * Lenient name check so patients needn't remember how they typed it: every
+ * word they enter must start a word of the booked name. "sri", "WAHYUNI",
+ * "wahyu" and "Bu Sri" all match "Sri Wahyuni"; at least 3 letters overall.
+ * The phone number must still match exactly, and failures are rate-limited.
+ */
+export function nameMatches(input: string, booked: string): boolean {
+  const typed = nameWords(input);
+  if (typed.join('').length < 3) return false;
+  const words = nameWords(booked);
+  return typed.every((t) => words.some((w) => w.startsWith(t)));
+}
+
 /**
  * Data behind the public API (/v1). Every method is scoped to the clinic that
  * owns the API key — callers never pass a clinicId — and returns only what a
@@ -175,7 +220,7 @@ export class PublicApiService {
     dto: ApiLookupReservationDto,
   ) {
     const phone = normalizePhone(dto.patientPhone);
-    const name = normalizeName(dto.patientName);
+    const name = dto.patientName;
     const phoneKey = `phone:${clinicId}:${phone}`;
     const keyKey = `key:${apiKeyId}`;
     if (
@@ -196,7 +241,7 @@ export class PublicApiService {
     }
 
     const candidates =
-      phone.length >= 8 && name
+      phone.length >= 8 && nameWords(name).join('').length >= 3
         ? await this.reservationRepository.find({
             where: {
               clinicId,
@@ -215,7 +260,7 @@ export class PublicApiService {
       .filter(
         (r) =>
           normalizePhone(r.patientPhone) === phone &&
-          normalizeName(r.patientName) === name,
+          nameMatches(name, r.patientName),
       )
       .slice(0, 5);
 

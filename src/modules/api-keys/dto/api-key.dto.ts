@@ -144,7 +144,8 @@ export class ApiLookupReservationDto {
 
   @ApiProperty({
     example: 'Budi Santoso',
-    description: 'Nama seperti saat reservasi (huruf besar/kecil diabaikan)',
+    description:
+      'Nama pasien; nama depan saja cukup, huruf besar/kecil & sapaan (Ibu/Pak) diabaikan',
   })
   @IsString()
   @IsNotEmpty({ message: 'Nama wajib diisi' })

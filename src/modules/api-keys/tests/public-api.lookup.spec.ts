@@ -1,5 +1,6 @@
 import {
   PublicApiService,
+  nameMatches,
   normalizeName,
   normalizePhone,
 } from '../public-api.service';
@@ -131,5 +132,31 @@ describe('lookup normalisers', () => {
     expect(normalizePhone('6281234')).toBe('081234');
     expect(normalizePhone('0812 3456')).toBe('08123456');
     expect(normalizeName("  Muh. D'affa  SAFRA ")).toBe('muh d affa safra');
+  });
+});
+
+describe('nameMatches (lenient, so patients need not remember the exact name)', () => {
+  it('accepts first name, last name, word starts, any case and forms of address (positive)', () => {
+    for (const typed of [
+      'sri',
+      'SRI',
+      'Wahyuni',
+      'wahyu',
+      'sri wahyuni',
+      'Bu Sri',
+      'ibu SRI WAHYUNI',
+      'Wahyuni Sri',
+    ]) {
+      expect(nameMatches(typed, 'Sri Wahyuni')).toBe(true);
+    }
+    expect(nameMatches('daffa', 'Muhammad Daffa Safra')).toBe(true);
+  });
+
+  it('rejects other names, letters inside a word, and too-short input (negative)', () => {
+    expect(nameMatches('Budi', 'Sri Wahyuni')).toBe(false);
+    expect(nameMatches('sri budi', 'Sri Wahyuni')).toBe(false); // every typed word must match
+    expect(nameMatches('ahyuni', 'Sri Wahyuni')).toBe(false); // must start a word
+    expect(nameMatches('sr', 'Sri Wahyuni')).toBe(false);
+    expect(nameMatches('Ibu', 'Sri Wahyuni')).toBe(false); // only a form of address
   });
 });
