@@ -7,6 +7,7 @@ import {
 } from '@nestjs/swagger';
 import { IcdService } from './icd.service';
 
+import { parseLimit } from '../../common/utils/query.util';
 @ApiTags('icd')
 @ApiBearerAuth('JWT-auth')
 @Controller()
@@ -18,7 +19,7 @@ export class IcdController {
   @ApiQuery({ name: 'q', required: true })
   @ApiQuery({ name: 'limit', required: false })
   searchIcd10(@Query('q') q: string, @Query('limit') limit?: string) {
-    const data = this.icdService.searchIcd10(q, limit ? parseInt(limit) : 25);
+    const data = this.icdService.searchIcd10(q, parseLimit(limit) ?? 25);
     return { success: true, data };
   }
 
@@ -27,7 +28,7 @@ export class IcdController {
   @ApiQuery({ name: 'q', required: true })
   @ApiQuery({ name: 'limit', required: false })
   searchIcd9(@Query('q') q: string, @Query('limit') limit?: string) {
-    const data = this.icdService.searchIcd9(q, limit ? parseInt(limit) : 25);
+    const data = this.icdService.searchIcd9(q, parseLimit(limit) ?? 25);
     return { success: true, data };
   }
 }

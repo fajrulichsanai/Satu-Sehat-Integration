@@ -36,7 +36,8 @@ export class PaymentsService {
 
       if (
         billing.status === BillingStatus.PAID ||
-        billing.status === BillingStatus.CANCELLED
+        billing.status === BillingStatus.CANCELLED ||
+        billing.status === BillingStatus.REFUNDED
       ) {
         throw new BadRequestException(
           `Billing sudah berstatus '${billing.status}'`,

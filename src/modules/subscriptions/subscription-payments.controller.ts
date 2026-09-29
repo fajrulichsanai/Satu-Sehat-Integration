@@ -87,7 +87,7 @@ export class SubscriptionPaymentsController {
   })
   async getProofFile(
     @Param('id', ParseIntPipe) id: number,
-    @ClinicId() clinicId: number,
+    @ClinicId({ optional: true }) clinicId: number | null,
     @Res() res: Response,
   ) {
     const absolutePath = await this.paymentsService.getProofFilePath(

@@ -12,6 +12,7 @@ import { NotificationsService } from './notifications.service';
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 
+import { parseLimit } from '../../common/utils/query.util';
 @ApiTags('notifications')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(ClinicContextGuard)
@@ -22,7 +23,7 @@ export class NotificationsController {
   @Get()
   @ApiOperation({ summary: "List the caller's clinic recent notifications" })
   async list(
-    @ClinicId() clinicId: number,
+    @ClinicId({ optional: true }) clinicId: number | null,
     @Query('unreadOnly') unreadOnly?: string,
     @Query('limit') limit?: string,
   ) {
@@ -33,7 +34,7 @@ export class NotificationsController {
     const [items, unreadCount] = await Promise.all([
       this.notificationsService.listForClinic(clinicId, {
         unreadOnly: unreadOnly === 'true',
-        limit: limit ? Number(limit) : undefined,
+        limit: parseLimit(limit),
       }),
       this.notificationsService.countUnread(clinicId),
     ]);
@@ -45,7 +46,7 @@ export class NotificationsController {
   @ApiOperation({ summary: 'Mark one notification as read' })
   async markRead(
     @Param('id', ParseIntPipe) id: number,
-    @ClinicId() clinicId: number,
+    @ClinicId({ optional: true }) clinicId: number | null,
   ) {
     if (clinicId) await this.notificationsService.markRead(id, clinicId);
     return { success: true };
@@ -55,7 +56,7 @@ export class NotificationsController {
   @ApiOperation({
     summary: "Mark every one of the caller's clinic notifications as read",
   })
-  async markAllRead(@ClinicId() clinicId: number) {
+  async markAllRead(@ClinicId({ optional: true }) clinicId: number | null) {
     if (clinicId) await this.notificationsService.markAllRead(clinicId);
     return { success: true };
   }

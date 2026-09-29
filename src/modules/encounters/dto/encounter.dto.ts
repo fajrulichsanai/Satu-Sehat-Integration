@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
   Min,
+  Max,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
@@ -128,5 +129,6 @@ export class EncounterListQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(1000)
   limit?: number = 20;
 }

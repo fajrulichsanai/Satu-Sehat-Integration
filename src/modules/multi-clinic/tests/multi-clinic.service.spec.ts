@@ -128,6 +128,11 @@ describe('MultiClinicService', () => {
       await service.unlinkClinic(1, 10);
       expect(linkRepo.delete).toHaveBeenCalledWith({ ownerId: 1, clinicId: 10 });
     });
+
+    it('throws NotFoundException when the clinic was never linked to the owner (negative)', async () => {
+      linkRepo.delete.mockResolvedValue({ affected: 0 });
+      await expect(service.unlinkClinic(1, 999)).rejects.toThrow(NotFoundException);
+    });
   });
 
   describe('assertOwnsClinic', () => {

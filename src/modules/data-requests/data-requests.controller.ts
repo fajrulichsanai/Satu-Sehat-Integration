@@ -22,6 +22,7 @@ import {
   AuditStatus,
 } from '../audit-log/entities/audit-log.entity';
 import { DataRequestsService } from './data-requests.service';
+import { DataRequestType } from './entities/data-request.entity';
 import {
   CreateDataRequestDto,
   DataRequestQueryDto,
@@ -64,7 +65,7 @@ export class DataRequestsController {
       entityType: 'DataRequest',
       entityId: data.id,
       entityLabel:
-        dto.type === 'export'
+        dto.type === DataRequestType.EXPORT
           ? 'Permintaan ekspor data'
           : 'Permintaan tutup akun',
       status: AuditStatus.SUCCESS,

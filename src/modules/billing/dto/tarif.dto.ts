@@ -5,6 +5,8 @@ import {
   IsOptional,
   IsString,
   Min,
+  IsInt,
+  Max,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -107,10 +109,15 @@ export class TarifQueryDto {
   @ApiPropertyOptional()
   @IsOptional()
   @Type(() => Number)
+  @IsInt()
+  @Min(1)
   page?: number = 1;
 
   @ApiPropertyOptional()
   @IsOptional()
   @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1000)
   limit?: number = 50;
 }
