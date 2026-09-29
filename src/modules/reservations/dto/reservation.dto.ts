@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ReservationStatus, ServiceType } from '../../../enums';
@@ -25,10 +26,15 @@ export class CreateReservationDto {
   @MaxLength(100)
   patientName: string;
 
-  @ApiProperty({ example: '08123456789' })
-  @IsNotEmpty()
+  @ApiPropertyOptional({
+    example: '08123456789',
+    description:
+      'Wajib diisi untuk entri manual (tanpa patientId). Jika patientId diisi, akan diambil otomatis dari data pasien bila dikosongkan.',
+  })
+  @ValidateIf((o: CreateReservationDto) => !o.patientId)
+  @IsNotEmpty({ message: 'Nomor telepon wajib diisi' })
   @MaxLength(20)
-  patientPhone: string;
+  patientPhone?: string;
 
   @ApiPropertyOptional({ example: '3171234567890001' })
   @IsOptional()
@@ -111,6 +117,14 @@ export class ReservationQueryDto extends PaginationDto {
   @IsDateString()
   dateFrom?: string;
 
+  @ApiPropertyOptional({
+    example: '2026-06-18',
+    description: 'Filter reservasi sampai tanggal ini (inklusif)',
+  })
+  @IsOptional()
+  @IsDateString()
+  dateTo?: string;
+
   @ApiPropertyOptional({ enum: ReservationStatus })
   @IsOptional()
   @IsEnum(ReservationStatus)
@@ -139,6 +153,13 @@ export class LinkPatientDto {
 }
 
 export class PublicReservationStatusQueryDto {
+  @ApiProperty({ example: 'AB12CD34' })
+  @IsNotEmpty()
+  @IsString()
+  token: string;
+}
+
+export class PublicCancelReservationDto {
   @ApiProperty({ example: 'AB12CD34' })
   @IsNotEmpty()
   @IsString()

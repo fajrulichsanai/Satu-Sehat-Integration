@@ -96,4 +96,10 @@ export class ClinicResponseDto {
 
   @ApiProperty({ example: true })
   setupComplete: boolean;
+
+  @ApiProperty({
+    example: 'https://is3.cloudhost.id/apex-record/clinics/1/logo-123.jpg',
+    required: false,
+  })
+  logoUrl?: string | null;
 }

@@ -29,6 +29,7 @@ export class EncounterSoapNotesController {
     private readonly encounterSoapNotesService: EncounterSoapNotesService,
   ) {}
 
+  @Audit('SoapNote', AuditActionType.VIEW)
   @Get()
   @ApiOperation({ summary: 'Get SOAP note for an encounter' })
   async findOne(

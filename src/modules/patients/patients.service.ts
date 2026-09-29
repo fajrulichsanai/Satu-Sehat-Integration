@@ -7,9 +7,19 @@ import {
 } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { Patient } from './entities/patient.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
+import { EncounterSoapNote } from '../encounter-soap-notes/entities/encounter-soap-note.entity';
+import { PhysicalExamination } from '../physical-examination/entities/physical-examination.entity';
+import { DentalExamination } from '../dental-examination/entities/dental-examination.entity';
+import { PrescriptionItem } from '../prescriptions/entities/prescription-item.entity';
+import { Billing } from '../billing/entities/billing.entity';
+import {
+  SupportingExamImage,
+  SupportingExamImageType,
+} from '../supporting-exam/entities/supporting-exam-image.entity';
+import { PatientRecall } from '../recalls/entities/patient-recall.entity';
 import {
   CreatePatientDto,
   PatientQueryDto,
@@ -18,6 +28,7 @@ import {
 import { paginate, PaginatedResult } from '../../common/dto/pagination.dto';
 import { SatusehatClientService } from '../satusehat/satusehat-client.service';
 import { TreatmentPlansService } from '../treatment-plans/treatment-plans.service';
+import { hashNik, maskNik } from '../../common/utils/nik-crypto.util';
 
 @Injectable()
 export class PatientsService {
@@ -28,6 +39,20 @@ export class PatientsService {
     private readonly patientRepository: Repository<Patient>,
     @InjectRepository(Encounter)
     private readonly encounterRepository: Repository<Encounter>,
+    @InjectRepository(EncounterSoapNote)
+    private readonly encounterSoapNoteRepository: Repository<EncounterSoapNote>,
+    @InjectRepository(PhysicalExamination)
+    private readonly physicalExaminationRepository: Repository<PhysicalExamination>,
+    @InjectRepository(DentalExamination)
+    private readonly dentalExaminationRepository: Repository<DentalExamination>,
+    @InjectRepository(PrescriptionItem)
+    private readonly prescriptionItemRepository: Repository<PrescriptionItem>,
+    @InjectRepository(Billing)
+    private readonly billingRepository: Repository<Billing>,
+    @InjectRepository(SupportingExamImage)
+    private readonly supportingExamImageRepository: Repository<SupportingExamImage>,
+    @InjectRepository(PatientRecall)
+    private readonly patientRecallRepository: Repository<PatientRecall>,
     private readonly dataSource: DataSource,
     private readonly satusehatClient: SatusehatClientService,
     private readonly treatmentPlansService: TreatmentPlansService,
@@ -46,8 +71,8 @@ export class PatientsService {
 
     if (query.search) {
       qb.andWhere(
-        '(p.name LIKE :search OR p.noRm LIKE :search OR p.nik = :nik)',
-        { search: `%${query.search}%`, nik: query.search },
+        '(p.name LIKE :search OR p.noRm LIKE :search OR p.nikHash = :nikHash)',
+        { search: `%${query.search}%`, nikHash: hashNik(query.search) },
       );
     }
 
@@ -158,15 +183,289 @@ export class PatientsService {
     return this.treatmentPlansService.findByPatient(patientId, clinicId);
   }
 
-  async create(clinicId: number, dto: CreatePatientDto): Promise<Patient> {
+  /**
+   * Rekam Medis pasien — satu baris per kunjungan (encounter) berisi semua
+   * form yang diisi hari itu (TTV, CPPT/SOAP, pemeriksaan gigi lanjutan,
+   * resep, pemeriksaan penunjang). Read-only, agregasi dari data yang sudah
+   * ada (bukan form terpisah). Odontogram & Informed Consent TIDAK ada di
+   * sini — odontogram adalah chart hidup per-pasien (lihat
+   * GET /patients/:id/odontogram) dan informed consent sudah punya listing
+   * sendiri per-pasien (lihat GET /patient-consents?patientId=).
+   */
+  async getMedicalRecord(patientId: number, clinicId: number) {
+    await this.findOne(patientId, clinicId);
+
+    const encounters = await this.encounterRepository.find({
+      where: { patientId, clinicId },
+      relations: { practitioner: true },
+      order: { arrivedTime: 'DESC' },
+    });
+    const encounterIds = encounters.map((e) => e.id);
+
+    const [soapNotes, physicalExams, dentalExams, prescriptions, supportingExamImages] =
+      await Promise.all([
+        encounterIds.length
+          ? this.encounterSoapNoteRepository.find({
+              where: { encounterId: In(encounterIds) },
+            })
+          : Promise.resolve([]),
+        encounterIds.length
+          ? this.physicalExaminationRepository.find({
+              where: { encounterId: In(encounterIds) },
+            })
+          : Promise.resolve([]),
+        encounterIds.length
+          ? this.dentalExaminationRepository.find({
+              where: { encounterId: In(encounterIds) },
+            })
+          : Promise.resolve([]),
+        encounterIds.length
+          ? this.prescriptionItemRepository.find({
+              where: { encounterId: In(encounterIds) },
+              order: { sortOrder: 'ASC' },
+            })
+          : Promise.resolve([]),
+        encounterIds.length
+          ? this.supportingExamImageRepository.find({
+              where: { encounterId: In(encounterIds) },
+              order: { createdAt: 'ASC' },
+            })
+          : Promise.resolve([]),
+      ]);
+
+    const soapByEncounter = new Map(soapNotes.map((s) => [s.encounterId, s]));
+    const examByEncounter = new Map(
+      physicalExams.map((p) => [p.encounterId, p]),
+    );
+    const dentalExamByEncounter = new Map(
+      dentalExams.map((d) => [d.encounterId, d]),
+    );
+    const prescriptionsByEncounter = new Map<number, PrescriptionItem[]>();
+    for (const rx of prescriptions) {
+      const list = prescriptionsByEncounter.get(rx.encounterId) ?? [];
+      list.push(rx);
+      prescriptionsByEncounter.set(rx.encounterId, list);
+    }
+    const imagesByEncounter = new Map<
+      number,
+      { id: number; fileUrl: string; imageType: string; category: string | null }[]
+    >();
+    for (const img of supportingExamImages) {
+      const list = imagesByEncounter.get(img.encounterId) ?? [];
+      list.push({
+        id: img.id,
+        fileUrl: img.fileUrl,
+        imageType: img.imageType,
+        category: img.category ?? null,
+      });
+      imagesByEncounter.set(img.encounterId, list);
+    }
+
+    return encounters.map((e) => {
+      const soap = soapByEncounter.get(e.id);
+      const exam = examByEncounter.get(e.id);
+      const dentalExam = dentalExamByEncounter.get(e.id);
+      return {
+        encounter: {
+          id: e.id,
+          status: e.status,
+          serviceType: e.serviceType,
+          chiefComplaint: e.chiefComplaint,
+          arrivedTime: e.arrivedTime,
+          finishedTime: e.finishedTime,
+          practitionerName: e.practitioner?.name,
+        },
+        vitals: exam
+          ? {
+              bloodPressureSystolic: exam.bloodPressureSystolic,
+              bloodPressureDiastolic: exam.bloodPressureDiastolic,
+              pulseRate: exam.pulseRate,
+              respiratoryRate: exam.respiratoryRate,
+              temperature: exam.temperature,
+              oxygenSaturation: exam.oxygenSaturation,
+              weight: exam.weight,
+              height: exam.height,
+            }
+          : null,
+        soap: soap
+          ? {
+              subjective: soap.subjective,
+              objective: soap.objective,
+              assessment: soap.assessment,
+              treatment: soap.treatment,
+              plan: soap.plan,
+              controlPlan: soap.controlPlan,
+              signature: soap.signature,
+            }
+          : null,
+        dentalExam: dentalExam
+          ? {
+              ohisDebris: dentalExam.ohisDebris,
+              ohisCalculus: dentalExam.ohisCalculus,
+              gingivalIndex: dentalExam.gingivalIndex,
+              plaqueSurfacesWithPlaque: dentalExam.plaqueSurfacesWithPlaque,
+              plaqueSurfacesExamined: dentalExam.plaqueSurfacesExamined,
+            }
+          : null,
+        prescriptions: (prescriptionsByEncounter.get(e.id) ?? []).map((rx) => ({
+          drugName: rx.drugName,
+          dosage: rx.dosage,
+          frequency: rx.frequency,
+          quantity: rx.quantity,
+        })),
+        supportingExamImages: imagesByEncounter.get(e.id) ?? [],
+      };
+    });
+  }
+
+  /**
+   * Patient Timeline (PRD 5.1) — semua aktivitas pasien digabung jadi satu
+   * daftar kronologis, terisi otomatis dari data yang sudah ada (kunjungan,
+   * billing, foto klinis, treatment plan, recall). Tidak ada form khusus,
+   * murni agregasi read-only.
+   */
+  async getTimeline(patientId: number, clinicId: number) {
+    await this.findOne(patientId, clinicId);
+
+    const encounters = await this.encounterRepository.find({
+      where: { patientId, clinicId },
+      relations: { practitioner: true },
+      order: { arrivedTime: 'DESC' },
+    });
+    const encounterIds = encounters.map((e) => e.id);
+
+    const [soapNotes, billings, photos, recalls] = await Promise.all([
+      encounterIds.length
+        ? this.encounterSoapNoteRepository.find({
+            where: { encounterId: In(encounterIds) },
+          })
+        : Promise.resolve([]),
+      this.billingRepository.find({
+        where: { patientId, clinicId },
+        relations: { items: true },
+        order: { createdAt: 'DESC' },
+      }),
+      encounterIds.length
+        ? this.supportingExamImageRepository.find({
+            where: { encounterId: In(encounterIds) },
+            order: { createdAt: 'DESC' },
+          })
+        : Promise.resolve([]),
+      this.patientRecallRepository.find({
+        where: { patientId, clinicId },
+        relations: { tarif: true },
+        order: { dueDate: 'DESC' },
+      }),
+    ]);
+
+    const soapByEncounter = new Map(soapNotes.map((s) => [s.encounterId, s]));
+    const billingsByEncounter = new Map<number, Billing[]>();
+    for (const b of billings) {
+      const list = billingsByEncounter.get(b.encounterId) ?? [];
+      list.push(b);
+      billingsByEncounter.set(b.encounterId, list);
+    }
+
+    const treatmentPlans = await this.treatmentPlansService.findByPatient(
+      patientId,
+      clinicId,
+    );
+
+    type TimelineItem = {
+      type: 'kunjungan' | 'billing' | 'foto' | 'treatment_plan' | 'recall';
+      date: string;
+      title: string;
+      subtitle?: string;
+      meta?: Record<string, unknown>;
+    };
+
+    const items: TimelineItem[] = [];
+
+    for (const e of encounters) {
+      const soap = soapByEncounter.get(e.id);
+      const encounterBillings = billingsByEncounter.get(e.id) ?? [];
+      const tindakanNames = encounterBillings
+        .flatMap((b) => b.items?.map((i) => i.name) ?? [])
+        .join(', ');
+      items.push({
+        type: 'kunjungan',
+        date: (e.finishedTime ?? e.arrivedTime).toISOString(),
+        title: tindakanNames || e.chiefComplaint || 'Kunjungan',
+        subtitle: e.practitioner?.name
+          ? `drg. ${e.practitioner.name}`
+          : undefined,
+        meta: {
+          encounterId: e.id,
+          status: e.status,
+          soapSummary: soap?.assessment || soap?.subjective || null,
+        },
+      });
+    }
+
+    for (const b of billings) {
+      items.push({
+        type: 'billing',
+        date: b.createdAt.toISOString(),
+        title: `Invoice ${b.invoiceNumber}`,
+        subtitle: `Rp ${Number(b.grandTotal).toLocaleString('id-ID')} · ${b.status}`,
+        meta: { billingId: b.id, encounterId: b.encounterId, status: b.status },
+      });
+    }
+
+    for (const p of photos) {
+      items.push({
+        type: 'foto',
+        date: p.createdAt.toISOString(),
+        title: p.category
+          ? `Foto ${p.category}`
+          : p.imageType === SupportingExamImageType.XRAY
+            ? 'Rontgen'
+            : 'Foto Klinis',
+        subtitle: p.notes || undefined,
+        meta: { imageId: p.id, fileUrl: p.fileUrl, encounterId: p.encounterId },
+      });
+    }
+
+    for (const r of recalls) {
+      items.push({
+        type: 'recall',
+        date: new Date(`${r.dueDate}T00:00:00`).toISOString(),
+        title: `Recall: ${r.tarif?.name ?? 'Kontrol'}`,
+        subtitle: r.status,
+        meta: { recallId: r.id, status: r.status },
+      });
+    }
+
+    for (const tp of treatmentPlans) {
+      items.push({
+        type: 'treatment_plan',
+        date: new Date(tp.createdAt).toISOString(),
+        title: tp.label || tp.treatmentType,
+        subtitle: `${tp.status} · tahap ${tp.currentStage}/${tp.totalStages ?? '-'}`,
+        meta: { treatmentPlanId: tp.id, status: tp.status },
+      });
+    }
+
+    items.sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+
+    return items;
+  }
+
+  async create(
+    clinicId: number,
+    dto: CreatePatientDto,
+    noRmOverride?: string,
+  ): Promise<Patient> {
     this.logger.log(
-      `[CREATE] Membuat pasien baru | clinicId=${clinicId}, name=${dto.name}, nik=${dto.nik || 'bayi'}`,
+      `[CREATE] Membuat pasien baru | clinicId=${clinicId}, name=${dto.name}, nik=${dto.nik ? maskNik(dto.nik) : 'bayi'}`,
     );
     if (dto.nik) {
       await this.checkDuplicateNik(dto.nik, clinicId);
     }
 
-    const saved = await this.createWithNoRmRetry(clinicId, dto);
+    const saved = await this.createWithNoRmRetry(clinicId, dto, noRmOverride);
 
     this.logger.log(
       `[CREATE] Pasien berhasil dibuat | id=${saved.id}, noRm=${saved.noRm}, clinicId=${clinicId}`,
@@ -177,15 +476,22 @@ export class PatientsService {
   private async createWithNoRmRetry(
     clinicId: number,
     dto: CreatePatientDto,
+    noRmOverride?: string,
     attempt = 1,
   ): Promise<Patient> {
     try {
       return await this.dataSource.transaction(async (manager) => {
-        const noRm = await this.generateNoRm(manager, clinicId);
+        // Data migration (see PatientImportService) passes noRmOverride to
+        // preserve a clinic's existing RM numbers instead of renumbering —
+        // generateNoRm's own scan already excludes non-numeric/legacy-style
+        // no_rm values for exactly this reason, so the two schemes coexist
+        // without colliding on the sequence.
+        const noRm = noRmOverride || (await this.generateNoRm(manager, clinicId));
         const patient = manager.create(Patient, {
           clinicId,
           noRm,
           nik: dto.nik,
+          nikHash: dto.nik ? hashNik(dto.nik) : null,
           nikIbu: dto.nikIbu,
           namaWali: dto.namaWali,
           hubunganWali: dto.hubunganWali,
@@ -237,8 +543,17 @@ export class PatientsService {
         String((err as { sqlMessage?: string }).sqlMessage || '').includes(
           'no_rm',
         );
-      if (isDuplicateNoRm && attempt < 5) {
-        return this.createWithNoRmRetry(clinicId, dto, attempt + 1);
+      // An explicit noRmOverride colliding is never auto-regenerated — the
+      // caller asked for that specific number (data migration preserving a
+      // clinic's existing RM), so silently picking a different one instead
+      // would defeat the point. Surface it as a clear conflict.
+      if (isDuplicateNoRm && noRmOverride) {
+        throw new ConflictException(
+          `No. RM "${noRmOverride}" sudah digunakan oleh pasien lain di klinik ini`,
+        );
+      }
+      if (isDuplicateNoRm && !noRmOverride && attempt < 5) {
+        return this.createWithNoRmRetry(clinicId, dto, undefined, attempt + 1);
       }
       throw err;
     }
@@ -260,6 +575,7 @@ export class PatientsService {
 
     Object.assign(patient, {
       nik: dto.nik ?? patient.nik,
+      nikHash: dto.nik ? hashNik(dto.nik) : patient.nikHash,
       nikIbu: dto.nikIbu ?? patient.nikIbu,
       namaWali: dto.namaWali ?? patient.namaWali,
       hubunganWali: dto.hubunganWali ?? patient.hubunganWali,
@@ -319,9 +635,13 @@ export class PatientsService {
     clinicId: number,
     excludeId?: number,
   ): Promise<void> {
+    const nikHash = hashNik(nik);
     const qb = this.patientRepository
       .createQueryBuilder('p')
-      .where('p.nik = :nik AND p.clinicId = :clinicId', { nik, clinicId });
+      .where('p.nikHash = :nikHash AND p.clinicId = :clinicId', {
+        nikHash,
+        clinicId,
+      });
 
     if (excludeId) {
       qb.andWhere('p.id != :excludeId', { excludeId });
@@ -330,7 +650,7 @@ export class PatientsService {
     const existing = await qb.getOne();
     if (existing) {
       this.logger.warn(
-        `[CREATE] NIK duplikat ditemukan | nik=${nik}, clinicId=${clinicId}`,
+        `[CREATE] NIK duplikat ditemukan | nik=${maskNik(nik)}, clinicId=${clinicId}`,
       );
       throw new ConflictException(
         `Pasien dengan NIK ${nik} sudah terdaftar di klinik ini`,
@@ -379,7 +699,7 @@ export class PatientsService {
 
   async searchSatusehat(nik: string, clinicId: number) {
     this.logger.log(
-      `[SEARCH] Mencari pasien di SATUSEHAT | nik=${nik}, clinicId=${clinicId}`,
+      `[SEARCH] Mencari pasien di SATUSEHAT | nik=${maskNik(nik)}, clinicId=${clinicId}`,
     );
     if (!nik) {
       this.logger.warn(

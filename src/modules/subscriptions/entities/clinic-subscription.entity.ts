@@ -56,4 +56,16 @@ export class ClinicSubscription extends BaseEntity {
 
   @Column({ name: 'notified_h1_at', type: 'datetime', nullable: true })
   notifiedH1At: Date | null;
+
+  // Dedup flags for the trial-specific reminder sequence (day 7 / 13 / 15 of
+  // a 15-day trial, per PRD) — separate from the H-7/H-1 flags above, which
+  // are for a real paid subscription approaching its own end date.
+  @Column({ name: 'notified_trial_d7_at', type: 'datetime', nullable: true })
+  notifiedTrialD7At: Date | null;
+
+  @Column({ name: 'notified_trial_d13_at', type: 'datetime', nullable: true })
+  notifiedTrialD13At: Date | null;
+
+  @Column({ name: 'notified_trial_d15_at', type: 'datetime', nullable: true })
+  notifiedTrialD15At: Date | null;
 }

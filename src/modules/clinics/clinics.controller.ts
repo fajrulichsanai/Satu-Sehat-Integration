@@ -1,9 +1,21 @@
-import { Controller, Get, Put, Post, Body, Req, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Put,
+  Post,
+  Body,
+  Req,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { ClinicsService } from './clinics.service';
 import { JwtAuthGuard, RolesGuard, ClinicContextGuard } from '../auth/guards';
@@ -15,6 +27,7 @@ import { UpdateClinicDto, ClinicResponseDto } from './dto/clinic.dto';
 import { Audit } from '../audit-log/decorators/audit.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
 import { AuditActionType } from '../audit-log/entities/audit-log.entity';
+import { clinicLogoUploadOptions } from './upload/clinic-logo.upload';
 
 @ApiTags('settings')
 @Controller('settings/clinic')
@@ -49,8 +62,30 @@ export class ClinicsController {
     @ClinicId() clinicId: number,
     @Req() req: any,
   ) {
-    req.auditBefore = await this.clinicsService.findOne(clinicId).catch(() => null);
+    req.auditBefore = await this.clinicsService
+      .findOne(clinicId)
+      .catch(() => null);
     return this.clinicsService.update(clinicId, dto, user.userId);
+  }
+
+  @Post('logo')
+  @Audit('Clinic', AuditActionType.UPDATE)
+  @Roles(UserRole.OWNER)
+  @ApiOperation({
+    summary: 'Upload logo/foto klinik ke object storage (Owner only)',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 200, description: 'Logo klinik berhasil diunggah' })
+  @UseInterceptors(FileInterceptor('file', clinicLogoUploadOptions))
+  async uploadLogo(
+    @UploadedFile() file: Express.Multer.File,
+    @ClinicId() clinicId: number,
+    @Req() req: any,
+  ) {
+    req.auditBefore = await this.clinicsService
+      .findOne(clinicId)
+      .catch(() => null);
+    return this.clinicsService.uploadLogo(clinicId, file);
   }
 }
 

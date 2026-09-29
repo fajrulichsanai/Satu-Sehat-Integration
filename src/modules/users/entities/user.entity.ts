@@ -18,6 +18,22 @@ export class User extends BaseEntity {
   @Column({ name: 'password_hash', length: 255 })
   passwordHash: string;
 
+  // Encrypted TOTP secret (see mfa.util) — set as soon as setup starts, but
+  // only "live" (gating login) once mfaEnabled is true.
+  @Column({ name: 'mfa_secret', type: 'varchar', length: 255, nullable: true })
+  mfaSecret: string | null;
+
+  @Column({ name: 'mfa_enabled', default: false })
+  mfaEnabled: boolean;
+
+  @Column({ name: 'mfa_enabled_at', type: 'datetime', nullable: true })
+  mfaEnabledAt: Date | null;
+
+  // SHA-256 hashes of single-use recovery codes, shown to the user once at
+  // enable time. Each is removed from the array as it's consumed.
+  @Column({ name: 'mfa_backup_codes', type: 'json', nullable: true })
+  mfaBackupCodes: string[] | null;
+
   @Column({ length: 100 })
   name: string;
 
@@ -44,6 +60,24 @@ export class User extends BaseEntity {
 
   @Column({ name: 'last_login_at', nullable: true })
   lastLoginAt: Date;
+
+  /** Bumped to invalidate every token issued before it (see JwtStrategy). */
+  @Column({ name: 'token_version', type: 'int', default: 0 })
+  tokenVersion: number;
+
+  @Column({ name: 'failed_login_attempts', type: 'int', default: 0 })
+  failedLoginAttempts: number;
+
+  @Column({ name: 'locked_until', type: 'datetime', nullable: true })
+  lockedUntil: Date | null;
+
+  /** When this user accepted the Syarat & Ketentuan and Kebijakan Privasi at sign-up. */
+  @Column({ name: 'terms_accepted_at', type: 'datetime', nullable: true })
+  termsAcceptedAt: Date | null;
+
+  /** Version (effective date) of the legal documents that were accepted. */
+  @Column({ name: 'terms_version', type: 'varchar', length: 20, nullable: true })
+  termsVersion: string | null;
 
   // Relations
   @ManyToOne(() => Clinic, { onDelete: 'SET NULL' })

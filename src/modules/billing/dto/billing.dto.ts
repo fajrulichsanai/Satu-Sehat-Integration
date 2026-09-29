@@ -155,7 +155,10 @@ export class CreatePaymentDto {
   @IsEnum(PaymentMethod)
   method: PaymentMethod | undefined;
 
-  @ApiProperty()
+  @ApiProperty({
+    description:
+      'Jumlah dibayar (DP, cicilan, atau pelunasan), ≤ sisa tagihan. Rp 0 hanya untuk tagihan yang sisanya Rp 0.',
+  })
   @IsNumber()
   @Min(0)
   amount: number | undefined;

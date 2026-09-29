@@ -8,6 +8,7 @@ import {
   SatusehatSyncLog,
   SyncLogStatus,
   SyncOperation,
+  redactSyncError,
 } from './entities/satusehat-sync-log.entity';
 import { SyncStatus } from '../../../enums/sync-status.enum';
 import { SatusehatClientService } from '../satusehat-client.service';
@@ -47,8 +48,6 @@ export class SyncOrchestratorService {
     localId: number,
     satusehatId?: string,
     httpStatus?: number,
-    requestPayload?: object,
-    responsePayload?: object,
     errorMessage?: string,
   ): Promise<void> {
     await this.syncLogRepo.save({
@@ -59,9 +58,7 @@ export class SyncOrchestratorService {
       operation: SyncOperation.CREATE,
       status: errorMessage ? SyncLogStatus.FAILED : SyncLogStatus.SUCCESS,
       httpStatus,
-      requestPayload,
-      responsePayload,
-      errorMessage,
+      errorMessage: redactSyncError(errorMessage),
     });
   }
 

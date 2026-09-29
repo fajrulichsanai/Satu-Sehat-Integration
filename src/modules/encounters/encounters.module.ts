@@ -5,9 +5,14 @@ import { Reservation } from '../reservations/entities/reservation.entity';
 import { EncountersController } from './encounters.controller';
 import { EncountersService } from './encounters.service';
 import { AuditLogModule } from '../audit-log/audit-log.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Encounter, Reservation]), AuditLogModule],
+  imports: [
+    TypeOrmModule.forFeature([Encounter, Reservation]),
+    AuditLogModule,
+    NotificationsModule,
+  ],
   controllers: [EncountersController],
   providers: [EncountersService],
   exports: [EncountersService],

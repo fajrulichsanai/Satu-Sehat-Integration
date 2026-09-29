@@ -104,7 +104,9 @@ export class PractitionersController {
     @ClinicId() clinicId: number,
     @Req() req: any,
   ) {
-    req.auditBefore = await this.practitionersService.findOne(id, clinicId).catch(() => null);
+    req.auditBefore = await this.practitionersService
+      .findOne(id, clinicId)
+      .catch(() => null);
     return this.practitionersService.update(id, dto, clinicId, user.userId);
   }
 
@@ -120,7 +122,9 @@ export class PractitionersController {
     @ClinicId() clinicId: number,
     @Req() req: any,
   ) {
-    req.auditBefore = await this.practitionersService.findOne(id, clinicId).catch(() => null);
+    req.auditBefore = await this.practitionersService
+      .findOne(id, clinicId)
+      .catch(() => null);
     return this.practitionersService.remove(id, clinicId);
   }
 

@@ -1,7 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { SubscriptionPlan } from './entities/subscription-plan.entity';
+import {
+  SubscriptionPlan,
+  SubscriptionPlanTier,
+} from './entities/subscription-plan.entity';
 import {
   CreateSubscriptionPlanDto,
   UpdateSubscriptionPlanDto,
@@ -47,5 +50,13 @@ export class SubscriptionPlansService {
     const plan = await this.findOne(id);
     plan.isActive = false;
     await this.planRepository.save(plan);
+  }
+
+  /** The single active plan clinics are auto-enrolled into at registration. */
+  findActiveTrialPlan() {
+    return this.planRepository.findOne({
+      where: { tier: SubscriptionPlanTier.TRIAL, isActive: true },
+      order: { id: 'ASC' },
+    });
   }
 }

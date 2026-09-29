@@ -2,7 +2,7 @@ import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nes
 import { Reflector } from '@nestjs/core';
 import { Observable, catchError, tap, throwError } from 'rxjs';
 import { AuditLogService } from '../audit-log.service';
-import { AuditStatus } from '../entities/audit-log.entity';
+import { AuditActionType, AuditStatus } from '../entities/audit-log.entity';
 import { AUDIT_KEY, AuditMetadata } from '../decorators/audit.decorator';
 
 /**
@@ -28,10 +28,16 @@ export class AuditInterceptor implements NestInterceptor {
     return next.handle().pipe(
       tap((response) => {
         const payload = response?.data ?? response;
-        const entityId = request.params?.id ?? payload?.id ?? null;
+        const isView = meta.actionType === AuditActionType.VIEW;
+        const entityId = isView
+          ? viewedEntityId(request)
+          : request.params?.id ?? payload?.id ?? null;
         const entityLabel =
           request.auditEntityLabel ??
-          (meta.labelField ? payload?.[meta.labelField] ?? request.body?.[meta.labelField] : undefined) ??
+          (meta.labelField && !Array.isArray(payload)
+            ? payload?.[meta.labelField] ?? request.body?.[meta.labelField]
+            : undefined) ??
+          (isView ? viewLabel(response) : null) ??
           null;
 
         void this.auditLogService.record({
@@ -44,7 +50,10 @@ export class AuditInterceptor implements NestInterceptor {
           entityId,
           entityLabel,
           beforeValue: request.auditBefore ?? null,
-          afterValue: meta.actionType === 'DELETE' ? null : payload ?? null,
+          // A read is recorded as "who opened what, when" — never a copy of
+          // the record itself, or the audit log becomes a second patient DB.
+          afterValue:
+            meta.actionType === 'DELETE' || isView ? null : payload ?? null,
           status: AuditStatus.SUCCESS,
           ipAddress: request.ip,
           userAgent: request.headers?.['user-agent'],
@@ -58,7 +67,10 @@ export class AuditInterceptor implements NestInterceptor {
           actorRole: request.user?.role ?? 'unknown',
           actionType: meta.actionType,
           entityType: meta.entityType,
-          entityId: request.params?.id ?? null,
+          entityId:
+            meta.actionType === AuditActionType.VIEW
+              ? viewedEntityId(request)
+              : request.params?.id ?? null,
           entityLabel: request.auditEntityLabel ?? null,
           beforeValue: request.auditBefore ?? null,
           status: AuditStatus.FAILED,
@@ -70,4 +82,21 @@ export class AuditInterceptor implements NestInterceptor {
       }),
     );
   }
+}
+
+/** The record a read targets: its own :id, else the parent encounter's. */
+function viewedEntityId(request: any): string | null {
+  const p = request.params ?? {};
+  return p.id ?? p.imageId ?? p.encounterId ?? null;
+}
+
+/** For list reads, how many rows were returned (search terms are not stored,
+ * since they are often a patient's name or NIK). */
+function viewLabel(response: any): string | null {
+  const rows = Array.isArray(response?.data)
+    ? response.data
+    : Array.isArray(response)
+      ? response
+      : null;
+  return rows ? `Daftar (${rows.length} data)` : null;
 }

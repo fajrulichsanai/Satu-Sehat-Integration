@@ -35,4 +35,7 @@ export class Clinic extends BaseEntity {
 
   @Column({ name: 'setup_complete', default: false })
   setupComplete: boolean;
+
+  @Column({ name: 'logo_url', type: 'varchar', length: 500, nullable: true })
+  logoUrl: string | null;
 }

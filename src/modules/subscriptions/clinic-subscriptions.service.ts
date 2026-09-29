@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -18,6 +18,8 @@ export interface ClinicSubscriptionSummary {
 
 @Injectable()
 export class ClinicSubscriptionsService {
+  private readonly logger = new Logger(ClinicSubscriptionsService.name);
+
   constructor(
     @InjectRepository(ClinicSubscription)
     private readonly clinicSubscriptionRepository: Repository<ClinicSubscription>,
@@ -144,6 +146,39 @@ export class ClinicSubscriptionsService {
       relations: { plan: true },
     });
     return withPlan!;
+  }
+
+  /**
+   * Auto-enrolls a freshly registered clinic into the Free Trial plan (15
+   * hari, semua fitur sama seperti Starter — lihat PRD bagian 7). Never
+   * throws: a clinic that fails to get a trial simply starts with no
+   * subscription, same as today's behavior, rather than blocking registration.
+   */
+  async provisionTrialForNewClinic(
+    clinicId: number,
+    userId: number,
+  ): Promise<ClinicSubscription | null> {
+    try {
+      const trialPlan =
+        await this.subscriptionPlansService.findActiveTrialPlan();
+      if (!trialPlan) {
+        this.logger.warn(
+          `No active trial plan configured — clinic ${clinicId} registered without a trial subscription`,
+        );
+        return null;
+      }
+      return await this.extendSubscription(
+        clinicId,
+        trialPlan.id,
+        userId,
+        'Free trial otomatis saat registrasi',
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to provision trial for clinic ${clinicId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
+    }
   }
 
   /** Flips any active-but-lapsed row to expired. Run daily by the cron job. */

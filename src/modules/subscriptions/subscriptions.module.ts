@@ -44,6 +44,10 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
     SubscriptionGuard,
     SubscriptionExpiryCron,
   ],
-  exports: [ClinicSubscriptionsService, SubscriptionGuard],
+  exports: [
+    ClinicSubscriptionsService,
+    SubscriptionGuard,
+    SubscriptionPaymentsService,
+  ],
 })
 export class SubscriptionsModule {}

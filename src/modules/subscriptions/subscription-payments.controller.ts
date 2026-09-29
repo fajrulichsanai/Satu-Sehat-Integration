@@ -6,10 +6,12 @@ import {
   ParseIntPipe,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
@@ -76,6 +78,23 @@ export class SubscriptionPaymentsController {
   })
   listQueue(@Query() query: SubscriptionPaymentQueryDto) {
     return this.paymentsService.listQueue(query);
+  }
+
+  @Get(':id/proof-file')
+  @ApiOperation({
+    summary:
+      'Stream the payment proof file (authenticated; owning clinic or Super Admin)',
+  })
+  async getProofFile(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @Res() res: Response,
+  ) {
+    const absolutePath = await this.paymentsService.getProofFilePath(
+      id,
+      clinicId,
+    );
+    res.sendFile(absolutePath);
   }
 
   @Post(':id/confirm')

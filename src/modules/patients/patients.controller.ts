@@ -28,15 +28,19 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Audit } from '../audit-log/decorators/audit.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
 import { AuditActionType } from '../audit-log/entities/audit-log.entity';
+import { Notify } from '../notifications/decorators/notify.decorator';
+import { NotificationInterceptor } from '../notifications/interceptors/notification.interceptor';
+import { NotificationType } from '../notifications/entities/notification.entity';
 
 @ApiTags('patients')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(ClinicContextGuard)
-@UseInterceptors(AuditInterceptor)
+@UseInterceptors(AuditInterceptor, NotificationInterceptor)
 @Controller('patients')
 export class PatientsController {
   constructor(private readonly patientsService: PatientsService) {}
 
+  @Audit('Patient', AuditActionType.VIEW)
   @Get()
   @ApiOperation({ summary: 'List patients with pagination and search' })
   async findAll(@ClinicId() clinicId: number, @Query() query: PatientQueryDto) {
@@ -46,6 +50,7 @@ export class PatientsController {
 
   @Post()
   @Audit('Patient', AuditActionType.CREATE, { labelField: 'name' })
+  @Notify(NotificationType.PATIENT_NEW, 'Pasien baru terdaftar', { labelField: 'name' })
   @ApiOperation({ summary: 'Register new patient' })
   async create(@ClinicId() clinicId: number, @Body() dto: CreatePatientDto) {
     const patient = await this.patientsService.create(clinicId, dto);
@@ -73,6 +78,7 @@ export class PatientsController {
     return { success: true, data };
   }
 
+  @Audit('Patient', AuditActionType.VIEW, { labelField: 'name' })
   @Get(':id')
   @ApiOperation({ summary: 'Get patient detail' })
   async findOne(
@@ -101,6 +107,7 @@ export class PatientsController {
     };
   }
 
+  @Audit('Patient', AuditActionType.VIEW)
   @Get(':id/encounters')
   @ApiOperation({ summary: 'Get patient encounter history' })
   async findEncounters(
@@ -111,6 +118,7 @@ export class PatientsController {
     return { success: true, data: encounters };
   }
 
+  @Audit('Patient', AuditActionType.VIEW)
   @Get(':id/treatment-plans')
   @ApiOperation({ summary: 'Get patient treatment plan progress' })
   async findTreatmentPlans(
@@ -118,6 +126,33 @@ export class PatientsController {
     @ClinicId() clinicId: number,
   ) {
     const data = await this.patientsService.findTreatmentPlans(id, clinicId);
+    return { success: true, data };
+  }
+
+  @Audit('MedicalRecord', AuditActionType.VIEW)
+  @Get(':id/medical-record')
+  @ApiOperation({
+    summary: 'Get patient medical record (CPPT + vitals per encounter)',
+  })
+  async getMedicalRecord(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+  ) {
+    const data = await this.patientsService.getMedicalRecord(id, clinicId);
+    return { success: true, data };
+  }
+
+  @Audit('Patient', AuditActionType.VIEW)
+  @Get(':id/timeline')
+  @ApiOperation({
+    summary:
+      'Get patient activity timeline (kunjungan, billing, foto, treatment plan, recall)',
+  })
+  async getTimeline(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+  ) {
+    const data = await this.patientsService.getTimeline(id, clinicId);
     return { success: true, data };
   }
 

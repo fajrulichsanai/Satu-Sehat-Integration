@@ -43,6 +43,12 @@ export class PaymentsService {
         );
       }
 
+      // Rp 0 is only a real payment when nothing is owed (free visit, a
+      // follow-up already paid for); otherwise it would record nothing.
+      if (!dto.amount && Number(billing.outstandingAmount) > 0) {
+        throw new BadRequestException('Jumlah pembayaran harus lebih dari 0');
+      }
+
       if ((dto.amount || 0) > billing.outstandingAmount) {
         throw new BadRequestException(
           `Jumlah pembayaran (${dto.amount}) melebihi sisa tagihan (${billing.outstandingAmount})`,

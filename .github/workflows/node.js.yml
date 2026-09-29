@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - development
+      - dev-daffa
 
 jobs:
   deploy:
@@ -13,27 +14,56 @@ jobs:
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
+          S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
+          S3_REGION: ${{ secrets.S3_REGION }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT }}
+          envs: S3_ENDPOINT,S3_BUCKET,S3_ACCESS_KEY,S3_SECRET_KEY,S3_REGION
           script: |
             set -e
 
             echo "📁 Masuk ke direktori project..."
             cd ~/staging-apex-record/backend/Satu-Sehat-Integration
 
-            echo "⬇️  Pull kode terbaru..."
-            git fetch origin development
-            git checkout development
-            git reset --hard origin/development
+            echo "⬇️  Pull kode terbaru dari branch ${{ github.ref_name }}..."
+            git fetch origin ${{ github.ref_name }}
+            git checkout ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
+
+            echo "🔑 Sinkronkan kredensial S3 ke .env (kalau di-set sebagai GitHub Secret)..."
+            touch .env
+            for KEY in S3_ENDPOINT S3_BUCKET S3_ACCESS_KEY S3_SECRET_KEY S3_REGION; do
+              VALUE="${!KEY}"
+              if [ -n "$VALUE" ]; then
+                if grep -q "^${KEY}=" .env; then
+                  sed -i "s|^${KEY}=.*|${KEY}=${VALUE}|" .env
+                else
+                  echo "${KEY}=${VALUE}" >> .env
+                fi
+              fi
+            done
 
             echo "📦 Install dependencies..."
             npm install
 
             echo "🔨 Build project..."
             npm run build
+
+            echo "🗄️  Jalankan repair schema paket langganan (one-off, aman diulang)..."
+            node scripts/repair-subscription-plans.js || echo "⚠️  Repair script gagal, lanjut deploy — cek log di atas"
+
+            echo "🔐 Terapkan skema keamanan (sesi, lockout, audit) — idempoten..."
+            node scripts/apply-security-schema.js
+
+            echo "🩺 Muat kode diagnosis ICD-10 & SNOMED CT (hanya bila datanya berubah)..."
+            node scripts/seed-terminology.js || echo "⚠️  Seed terminologi gagal, lanjut deploy — pencarian diagnosis belum tersedia, cek log di atas"
 
             echo "♻️  Restart PM2..."
             pm2 restart apex-record-staging-backend

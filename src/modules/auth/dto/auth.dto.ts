@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  Equals,
   IsEmail,
   IsNotEmpty,
   MinLength,
@@ -35,6 +36,15 @@ export class RegisterDto {
   @IsOptional()
   @MaxLength(20)
   ownerCode?: string;
+
+  @ApiProperty({
+    example: true,
+    description: 'Menyetujui Syarat & Ketentuan dan Kebijakan Privasi (wajib true)',
+  })
+  @Equals(true, {
+    message: 'Anda harus menyetujui Syarat & Ketentuan dan Kebijakan Privasi',
+  })
+  acceptTerms: boolean | undefined;
 }
 
 export class LoginDto {
@@ -135,4 +145,33 @@ export class ActivationStatusResponseDto {
 
   @ApiProperty({ example: 1, nullable: true })
   clinicId: number | undefined;
+}
+
+export class MfaVerifyLoginDto {
+  @ApiProperty({ description: 'Short-lived challenge token from /auth/login' })
+  @IsNotEmpty()
+  mfaToken: string | undefined;
+
+  @ApiProperty({
+    example: '123456',
+    description: '6-digit authenticator code, or a backup code (XXXXX-XXXXX)',
+  })
+  @IsNotEmpty()
+  code: string | undefined;
+}
+
+export class MfaEnableDto {
+  @ApiProperty({
+    example: '123456',
+    description:
+      'Current 6-digit code from the authenticator app, to confirm setup',
+  })
+  @IsNotEmpty()
+  code: string | undefined;
+}
+
+export class MfaDisableDto {
+  @ApiProperty({ description: "Caller's current password, to confirm intent" })
+  @IsNotEmpty()
+  password: string | undefined;
 }

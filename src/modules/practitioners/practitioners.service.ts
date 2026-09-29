@@ -13,6 +13,7 @@ import {
   UpdatePractitionerDto,
   SearchSatusehatPractitionerDto,
 } from './dto/practitioner.dto';
+import { hashNik, maskNik } from '../../common/utils/nik-crypto.util';
 
 @Injectable()
 export class PractitionersService {
@@ -80,16 +81,19 @@ export class PractitionersService {
     createdBy: number,
   ) {
     this.logger.log(
-      `[CREATE] Mendaftarkan practitioner baru | clinicId=${clinicId}, nik=${dto.nik}, name=${dto.name}`,
+      `[CREATE] Mendaftarkan practitioner baru | clinicId=${clinicId}, nik=${maskNik(dto.nik)}, name=${dto.name}`,
     );
     // Check if NIK already exists in this clinic
-    const existing = await this.practitionerRepository.findOne({
-      where: { nik: dto.nik, clinicId },
-    });
+    const nikHash = dto.nik ? hashNik(dto.nik) : null;
+    const existing = nikHash
+      ? await this.practitionerRepository.findOne({
+          where: { nikHash, clinicId },
+        })
+      : null;
 
     if (existing) {
       this.logger.warn(
-        `[CREATE] NIK practitioner sudah terdaftar | nik=${dto.nik}, clinicId=${clinicId}`,
+        `[CREATE] NIK practitioner sudah terdaftar | nik=${maskNik(dto.nik)}, clinicId=${clinicId}`,
       );
       throw new ConflictException({
         success: false,
@@ -102,6 +106,7 @@ export class PractitionersService {
 
     const practitioner = this.practitionerRepository.create({
       ...dto,
+      nikHash,
       clinicId,
       createdBy,
       updatedBy: createdBy,

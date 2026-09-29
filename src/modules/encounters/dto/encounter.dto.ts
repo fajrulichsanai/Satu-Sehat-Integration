@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -7,7 +8,7 @@ import {
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { EncounterStatus, ServiceType } from '../../../enums';
 
 export class CreateEncounterDto {
@@ -105,6 +106,15 @@ export class EncounterListQueryDto {
   @IsOptional()
   @IsEnum(EncounterStatus)
   status?: EncounterStatus;
+
+  @ApiPropertyOptional({
+    description:
+      'Jika true, hanya tampilkan encounter yang belum memiliki billing aktif, lintas semua tanggal (tidak dibatasi filter tanggal default)',
+  })
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  unbilled?: boolean;
 
   @ApiPropertyOptional()
   @IsOptional()
