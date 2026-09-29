@@ -17,6 +17,16 @@ jest.mock('bcrypt', () => ({
 }));
 
 describe('MfaService', () => {
+  // These cases cover MFA switched on; it is off unless MFA_ENABLED=true.
+  const previousMfaEnabled = process.env.MFA_ENABLED;
+  beforeEach(() => {
+    process.env.MFA_ENABLED = 'true';
+  });
+  afterAll(() => {
+    if (previousMfaEnabled === undefined) delete process.env.MFA_ENABLED;
+    else process.env.MFA_ENABLED = previousMfaEnabled;
+  });
+
   let service: MfaService;
   let userRepo: { findOne: jest.Mock; update: jest.Mock };
 
@@ -183,6 +193,26 @@ describe('MfaService', () => {
       await expect(service.verifyLoginCode(1, '123456')).rejects.toThrow(
         UnauthorizedException,
       );
+    });
+  });
+
+  describe('while MFA is switched off', () => {
+    beforeEach(() => {
+      process.env.MFA_ENABLED = 'false';
+    });
+
+    it('refuses setup with MFA_DISABLED instead of failing on a missing key (negative)', async () => {
+      userRepo.findOne.mockResolvedValue({ id: 1, email: 'a@x.com' });
+      await expect(service.setup(1)).rejects.toMatchObject({ status: 403 });
+      expect(userRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('reports MFA as unavailable and not enabled (positive)', async () => {
+      userRepo.findOne.mockResolvedValue({ id: 1, mfaEnabled: true });
+      await expect(service.getStatus(1)).resolves.toEqual({
+        enabled: false,
+        available: false,
+      });
     });
   });
 });

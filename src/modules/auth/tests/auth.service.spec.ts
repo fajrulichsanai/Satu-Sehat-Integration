@@ -30,6 +30,16 @@ jest.mock('bcrypt', () => ({
 }));
 
 describe('AuthService', () => {
+  // These cases cover MFA switched on; it is off unless MFA_ENABLED=true.
+  const previousMfaEnabled = process.env.MFA_ENABLED;
+  beforeEach(() => {
+    process.env.MFA_ENABLED = 'true';
+  });
+  afterAll(() => {
+    if (previousMfaEnabled === undefined) delete process.env.MFA_ENABLED;
+    else process.env.MFA_ENABLED = previousMfaEnabled;
+  });
+
   let service: AuthService;
   let userRepo: {
     findOne: jest.Mock;
@@ -301,6 +311,18 @@ describe('AuthService', () => {
       // The real access token must not be issued yet, and last-login isn't
       // recorded until the MFA step actually completes.
       expect(userRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('skips the MFA step and issues a token when MFA is switched off (positive)', async () => {
+      process.env.MFA_ENABLED = 'false';
+      userRepo.findOne.mockResolvedValue({ ...activeUser, mfaEnabled: true, role: UserRole.OWNER });
+
+      const result: any = await service.login(dto);
+
+      expect(result.data.accessToken).toBeDefined();
+      expect(result.data.mfaRequired).toBeUndefined();
+      expect(result.data.mfaSetupRequired).toBe(false);
+      expect(result.data.user.mfaRequired).toBe(false);
     });
   });
 

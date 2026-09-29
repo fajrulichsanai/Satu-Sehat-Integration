@@ -21,7 +21,7 @@ import { UserRole } from '../../enums';
 import { OwnerCodeService } from '../owner-code/owner-code.service';
 import { ClinicSubscriptionsService } from '../subscriptions/clinic-subscriptions.service';
 import { MfaService } from './mfa.service';
-import { MFA_ENFORCED_ROLES } from './guards/mfa-enforcement.guard';
+import { isMfaEnabled, isMfaRequiredFor } from './guards/mfa-enforcement.guard';
 import {
   hashPassword,
   comparePassword,
@@ -288,7 +288,7 @@ export class AuthService {
       });
     }
 
-    if (user.mfaEnabled) {
+    if (user.mfaEnabled && isMfaEnabled()) {
       const mfaToken = this.jwtService.sign(
         { sub: user.id, type: MFA_CHALLENGE_TYPE },
         { expiresIn: '5m' },
@@ -384,8 +384,7 @@ export class AuthService {
       success: true,
       data: {
         accessToken,
-        mfaSetupRequired:
-          MFA_ENFORCED_ROLES.includes(user.role) && !user.mfaEnabled,
+        mfaSetupRequired: isMfaRequiredFor(user.role) && !user.mfaEnabled,
         user: {
           id: user.id,
           email: user.email,
@@ -394,7 +393,8 @@ export class AuthService {
           clinicId: user.clinicId,
           practitionerId: user.practitionerId,
           isActive: user.isActive,
-          mfaEnabled: user.mfaEnabled,
+          mfaEnabled: user.mfaEnabled && isMfaEnabled(),
+          mfaRequired: isMfaRequiredFor(user.role),
         },
       },
     };
@@ -491,6 +491,8 @@ export class AuthService {
         isActive: user.isActive,
         emailVerifiedAt: user.emailVerifiedAt,
         lastLoginAt: user.lastLoginAt,
+        mfaEnabled: user.mfaEnabled && isMfaEnabled(),
+        mfaRequired: isMfaRequiredFor(user.role),
       },
     };
   }

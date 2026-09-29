@@ -1,8 +1,13 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as QRCode from 'qrcode';
 import { User } from '../users/entities/user.entity';
+import { isMfaEnabled } from './guards/mfa-enforcement.guard';
 import { comparePassword } from '../../common/utils/password.util';
 import {
   generateMfaSecret,
@@ -34,6 +39,7 @@ export class MfaService {
    * proves they can generate a matching code, in enable().
    */
   async setup(userId: number): Promise<MfaSetupResult> {
+    this.assertMfaAvailable();
     const user = await this.getUserOrThrow(userId);
     const secret = generateMfaSecret();
     await this.userRepository.update(user.id, {
@@ -53,6 +59,7 @@ export class MfaService {
     userId: number,
     code: string,
   ): Promise<{ backupCodes: string[] }> {
+    this.assertMfaAvailable();
     const user = await this.getUserOrThrow(userId);
     if (!user.mfaSecret) {
       throw new UnauthorizedException({
@@ -100,9 +107,24 @@ export class MfaService {
     });
   }
 
-  async getStatus(userId: number): Promise<{ enabled: boolean }> {
+  async getStatus(
+    userId: number,
+  ): Promise<{ enabled: boolean; available: boolean }> {
     const user = await this.getUserOrThrow(userId);
-    return { enabled: user.mfaEnabled };
+    const available = isMfaEnabled();
+    return { enabled: available && user.mfaEnabled, available };
+  }
+
+  /** Refuses MFA enrollment while MFA is switched off (MFA_ENABLED unset). */
+  private assertMfaAvailable() {
+    if (isMfaEnabled()) return;
+    throw new ForbiddenException({
+      success: false,
+      error: {
+        code: 'MFA_DISABLED',
+        message: 'Verifikasi dua langkah (MFA) sedang dinonaktifkan.',
+      },
+    });
   }
 
   /**
