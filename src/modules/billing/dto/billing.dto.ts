@@ -5,6 +5,7 @@ import {
   IsInt,
   IsNotEmpty,
   IsNumber,
+  IsPositive,
   IsOptional,
   IsString,
   Min,
@@ -155,9 +156,12 @@ export class CreatePaymentDto {
   @IsEnum(PaymentMethod)
   method: PaymentMethod | undefined;
 
-  @ApiProperty()
+  @ApiProperty({
+    description:
+      'Jumlah dibayar (DP, cicilan, atau pelunasan); > 0 dan ≤ sisa tagihan',
+  })
   @IsNumber()
-  @Min(0)
+  @IsPositive({ message: 'Jumlah pembayaran harus lebih dari 0' })
   amount: number | undefined;
 
   @ApiPropertyOptional()

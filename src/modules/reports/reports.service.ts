@@ -490,13 +490,19 @@ export class ReportsService {
     const totalPaid = parseFloat(summaryRow.totalPaid || 0);
     const totalBilling = parseFloat(summaryRow.totalBilling || 0);
 
+    // Payments are summed per billing first: a bill paid in instalments
+    // (DP + pelunasan) has several payment rows, and joining them directly
+    // would count its grand_total once per payment.
     const byDay = await this.billingRepo.query(
       `SELECT DATE(b.created_at) AS date,
          SUM(b.grand_total) AS revenue,
-         SUM(p.amount) AS collected
+         SUM(COALESCE(p.collected, 0)) AS collected
        FROM billings b
-       LEFT JOIN payments p ON b.id = p.billing_id
+       LEFT JOIN (
+         SELECT billing_id, SUM(amount) AS collected FROM payments GROUP BY billing_id
+       ) p ON b.id = p.billing_id
        WHERE b.clinic_id = ? AND DATE(b.created_at) BETWEEN ? AND ?
+         AND b.status != 'cancelled'
        GROUP BY DATE(b.created_at)
        ORDER BY date ASC`,
       [clinicId, query.dateFrom, query.dateTo],
