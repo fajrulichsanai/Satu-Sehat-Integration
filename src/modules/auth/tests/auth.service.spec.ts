@@ -9,7 +9,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { AuthService } from '../auth.service';
+import { AuthService, LEGAL_TERMS_VERSION } from '../auth.service';
 import { User } from '../../users/entities/user.entity';
 import { RevokedToken } from '../entities/revoked-token.entity';
 import { Clinic } from '../../clinics/entities/clinic.entity';
@@ -119,6 +119,16 @@ describe('AuthService', () => {
       expect(result.data.role).toBe(UserRole.PENDING);
       expect(result.data.isActive).toBe(false);
       expect(clinicRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('records when and which version of the terms the user accepted (positive)', async () => {
+      userRepo.findOne.mockResolvedValue(null);
+
+      await service.register({ ...dto, acceptTerms: true });
+
+      const saved = userRepo.save.mock.calls[0][0];
+      expect(saved.termsAcceptedAt).toBeInstanceOf(Date);
+      expect(saved.termsVersion).toBe(LEGAL_TERMS_VERSION);
     });
 
     it('creates an active OWNER + clinic with a valid owner code (positive)', async () => {

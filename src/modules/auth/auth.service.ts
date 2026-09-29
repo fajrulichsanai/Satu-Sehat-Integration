@@ -27,6 +27,13 @@ import {
   comparePassword,
 } from '../../common/utils/password.util';
 
+
+/**
+ * Effective date of the Syarat & Ketentuan and Kebijakan Privasi on the
+ * frontend (lib/company.ts LEGAL_EFFECTIVE_DATE). Bump both together when the
+ * documents change, so it's clear which version each user accepted.
+ */
+export const LEGAL_TERMS_VERSION = '2026-09-29';
 const MFA_CHALLENGE_TYPE = 'mfa_challenge';
 
 /** Failed password attempts before an account is locked. */
@@ -148,6 +155,8 @@ export class AuthService {
       role: userRole,
       clinicId: clinic?.id || null,
       isActive,
+      termsAcceptedAt: new Date(),
+      termsVersion: LEGAL_TERMS_VERSION,
     });
 
     await this.userRepository.save(user);

@@ -16,6 +16,7 @@ const MIGRATIONS = [
   '1789930000000-CreateApiKeys',
   '1789940000000-CreateTerminology',
   '1789950000000-SettleZeroBillings',
+  '1789960000000-LegalConsentAndDataRequests',
 ];
 
 async function main() {

@@ -23,6 +23,7 @@ import { SoapTemplatesModule } from './modules/soap-templates/soap-templates.mod
 import { IcdModule } from './modules/icd/icd.module';
 import { OwnerCodeModule } from './modules/owner-code/owner-code.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
+import { DataRequestsModule } from './modules/data-requests/data-requests.module';
 import { TerminologyModule } from './modules/terminology/terminology.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { OperationalRecordsModule } from './modules/operational-records/operational-records.module';
@@ -116,6 +117,7 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     IcdModule,
     OwnerCodeModule,
     ApiKeysModule,
+    DataRequestsModule,
     TerminologyModule,
     DashboardModule,
     OperationalRecordsModule,

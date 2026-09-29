@@ -71,6 +71,14 @@ export class User extends BaseEntity {
   @Column({ name: 'locked_until', type: 'datetime', nullable: true })
   lockedUntil: Date | null;
 
+  /** When this user accepted the Syarat & Ketentuan and Kebijakan Privasi at sign-up. */
+  @Column({ name: 'terms_accepted_at', type: 'datetime', nullable: true })
+  termsAcceptedAt: Date | null;
+
+  /** Version (effective date) of the legal documents that were accepted. */
+  @Column({ name: 'terms_version', type: 'varchar', length: 20, nullable: true })
+  termsVersion: string | null;
+
   // Relations
   @ManyToOne(() => Clinic, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'clinic_id' })

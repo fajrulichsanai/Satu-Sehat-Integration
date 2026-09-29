@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  Equals,
   IsEmail,
   IsNotEmpty,
   MinLength,
@@ -35,6 +36,15 @@ export class RegisterDto {
   @IsOptional()
   @MaxLength(20)
   ownerCode?: string;
+
+  @ApiProperty({
+    example: true,
+    description: 'Menyetujui Syarat & Ketentuan dan Kebijakan Privasi (wajib true)',
+  })
+  @Equals(true, {
+    message: 'Anda harus menyetujui Syarat & Ketentuan dan Kebijakan Privasi',
+  })
+  acceptTerms: boolean | undefined;
 }
 
 export class LoginDto {
