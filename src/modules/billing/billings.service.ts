@@ -155,8 +155,10 @@ export class BillingsService {
         additionalFee,
         grandTotal,
         paidAmount: 0,
-        outstandingAmount: grandTotal,
-        status: BillingStatus.UNPAID,
+        outstandingAmount: Math.max(0, grandTotal),
+        // Nothing to pay (free consultation, a follow-up visit already paid
+        // for) — settled from the start instead of 'Belum Bayar' forever.
+        status: grandTotal <= 0 ? BillingStatus.PAID : BillingStatus.UNPAID,
         notes: dto.notes,
         createdBy: userId,
       });

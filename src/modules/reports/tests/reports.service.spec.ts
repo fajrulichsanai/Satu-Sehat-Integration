@@ -1089,6 +1089,100 @@ describe('ReportsService', () => {
     });
   });
 
+  describe('getPaymentStats / getDiscountStats', () => {
+    it('splits bills into lunas, DP (open and settled), unpaid and free (positive)', async () => {
+      billingRepo.query
+        .mockResolvedValueOnce([
+          {
+            lunasCount: '4',
+            lunasAmount: '1000000',
+            partialCount: '2',
+            partialPaid: '300000',
+            partialOutstanding: '200000',
+            unpaidCount: '1',
+            unpaidAmount: '150000',
+            freeCount: '3',
+          },
+        ])
+        .mockResolvedValueOnce([
+          { dpCount: '3', dpTotal: '400000', dpSettledCount: '1' },
+        ]);
+
+      const stats = await (service as any).getPaymentStats(
+        1,
+        '2026-01-01',
+        '2026-01-31',
+      );
+
+      expect(stats).toEqual({
+        lunas: { count: 4, amount: 1000000 },
+        dp: {
+          count: 3,
+          dpTotal: 400000,
+          settledCount: 1,
+          openCount: 2,
+          openPaid: 300000,
+          openOutstanding: 200000,
+        },
+        unpaid: { count: 1, amount: 150000 },
+        free: { count: 3 },
+      });
+    });
+
+    it('returns zeros instead of NaN when the period is empty (negative/edge)', async () => {
+      billingRepo.query.mockResolvedValueOnce([{}]).mockResolvedValueOnce([]);
+      const stats = await (service as any).getPaymentStats(
+        1,
+        '2026-01-01',
+        '2026-01-31',
+      );
+      expect(stats.lunas).toEqual({ count: 0, amount: 0 });
+      expect(stats.dp.count).toBe(0);
+      expect(stats.free.count).toBe(0);
+    });
+
+    it('adds item and bill discounts and computes the discount rate (positive)', async () => {
+      billingItemRepo.query.mockResolvedValueOnce([
+        { gross: '2000000', itemDiscount: '150000', itemDiscountBills: '2' },
+      ]);
+      billingRepo.query
+        .mockResolvedValueOnce([
+          { billDiscount: '50000', billDiscountCount: '1', billCount: '10' },
+        ])
+        .mockResolvedValueOnce([{ c: '3' }]);
+
+      const stats = await (service as any).getDiscountStats(
+        1,
+        '2026-01-01',
+        '2026-01-31',
+      );
+
+      expect(stats).toEqual({
+        totalDiscount: 200000,
+        itemDiscount: 150000,
+        billDiscount: 50000,
+        billingsWithDiscount: 3,
+        billCount: 10,
+        grossBeforeDiscount: 2000000,
+        discountRate: 10,
+      });
+    });
+
+    it('reports a 0% discount rate when nothing was billed (negative/edge)', async () => {
+      billingItemRepo.query.mockResolvedValueOnce([
+        { gross: null, itemDiscount: null },
+      ]);
+      billingRepo.query.mockResolvedValueOnce([{}]).mockResolvedValueOnce([{}]);
+      const stats = await (service as any).getDiscountStats(
+        1,
+        '2026-01-01',
+        '2026-01-31',
+      );
+      expect(stats.discountRate).toBe(0);
+      expect(stats.totalDiscount).toBe(0);
+    });
+  });
+
   describe('getFinancialReport', () => {
     function mockDirectQueries(overrides: {
       summaryRow?: any[];
@@ -1127,6 +1221,8 @@ describe('ReportsService', () => {
       businessMetricsSpy = jest
         .spyOn(service as any, 'computeBusinessMetrics')
         .mockResolvedValue({ ltv: {}, arpv: 0, pareto: {}, dso: {}, retention: {}, categoryProfitability: [], marketing: {} });
+      jest.spyOn(service as any, 'getPaymentStats').mockResolvedValue({});
+      jest.spyOn(service as any, 'getDiscountStats').mockResolvedValue({});
     });
 
     it('computes the financial summary and collection rate (positive)', async () => {

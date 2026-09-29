@@ -15,6 +15,7 @@ const MIGRATIONS = [
   '1789920000000-AddAuditAlertAction',
   '1789930000000-CreateApiKeys',
   '1789940000000-CreateTerminology',
+  '1789950000000-SettleZeroBillings',
 ];
 
 async function main() {

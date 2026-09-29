@@ -660,6 +660,17 @@ export class ReportsService {
           )
         : null;
 
+    const paymentStats = await this.getPaymentStats(
+      clinicId,
+      query.dateFrom,
+      query.dateTo,
+    );
+    const discountStats = await this.getDiscountStats(
+      clinicId,
+      query.dateFrom,
+      query.dateTo,
+    );
+
     return {
       data: {
         summary: {
@@ -694,12 +705,121 @@ export class ReportsService {
           marginPersen,
         },
         tindakanTerlaris,
+        paymentStats,
+        discountStats,
         businessMetrics: await this.computeBusinessMetrics(
           clinicId,
           query.dateFrom,
           query.dateTo,
         ),
       },
+    };
+  }
+
+  /**
+   * How the period's bills were paid: settled in full, started with a DP
+   * (first payment below the bill), still partly paid, unpaid, and free
+   * (Rp 0 — e.g. a follow-up visit already paid for, or a free
+   * consultation). Cancelled bills are left out.
+   */
+  private async getPaymentStats(
+    clinicId: number,
+    dateFrom: string,
+    dateTo: string,
+  ) {
+    const [row] = await this.billingRepo.query(
+      `SELECT
+         SUM(status = 'paid' AND grand_total > 0) AS lunasCount,
+         COALESCE(SUM(CASE WHEN status = 'paid' AND grand_total > 0 THEN grand_total END), 0) AS lunasAmount,
+         SUM(status = 'partial') AS partialCount,
+         COALESCE(SUM(CASE WHEN status = 'partial' THEN paid_amount END), 0) AS partialPaid,
+         COALESCE(SUM(CASE WHEN status = 'partial' THEN outstanding_amount END), 0) AS partialOutstanding,
+         SUM(status = 'unpaid' AND grand_total > 0) AS unpaidCount,
+         COALESCE(SUM(CASE WHEN status = 'unpaid' THEN outstanding_amount END), 0) AS unpaidAmount,
+         SUM(grand_total <= 0) AS freeCount
+       FROM billings
+       WHERE clinic_id = ? AND DATE(created_at) BETWEEN ? AND ? AND status != 'cancelled'`,
+      [clinicId, dateFrom, dateTo],
+    );
+    // A bill "started with a DP" when its first payment was less than the
+    // bill — whether or not it has been settled since.
+    const [dp] = await this.billingRepo.query(
+      `SELECT COUNT(*) AS dpCount,
+         COALESCE(SUM(fp.amount), 0) AS dpTotal,
+         SUM(b.status = 'paid') AS dpSettledCount
+       FROM billings b
+       JOIN (SELECT billing_id, MIN(id) AS first_id FROM payments GROUP BY billing_id) f ON f.billing_id = b.id
+       JOIN payments fp ON fp.id = f.first_id
+       WHERE b.clinic_id = ? AND DATE(b.created_at) BETWEEN ? AND ? AND b.status != 'cancelled'
+         AND fp.amount < b.grand_total`,
+      [clinicId, dateFrom, dateTo],
+    );
+    const n = (v: unknown) => parseInt(String(v ?? 0), 10) || 0;
+    const f = (v: unknown) => parseFloat(String(v ?? 0)) || 0;
+    return {
+      lunas: { count: n(row?.lunasCount), amount: f(row?.lunasAmount) },
+      dp: {
+        count: n(dp?.dpCount),
+        dpTotal: f(dp?.dpTotal),
+        settledCount: n(dp?.dpSettledCount),
+        openCount: n(row?.partialCount),
+        openPaid: f(row?.partialPaid),
+        openOutstanding: f(row?.partialOutstanding),
+      },
+      unpaid: { count: n(row?.unpaidCount), amount: f(row?.unpaidAmount) },
+      free: { count: n(row?.freeCount) },
+    };
+  }
+
+  /**
+   * Discounts given in the period: per-tindakan discounts (price × qty −
+   * item subtotal) plus discounts on the whole bill.
+   */
+  private async getDiscountStats(
+    clinicId: number,
+    dateFrom: string,
+    dateTo: string,
+  ) {
+    const [items] = await this.billingItemRepo.query(
+      `SELECT
+         COALESCE(SUM(bi.quantity * bi.unit_price), 0) AS gross,
+         COALESCE(SUM(bi.quantity * bi.unit_price - bi.subtotal), 0) AS itemDiscount,
+         COUNT(DISTINCT CASE WHEN bi.quantity * bi.unit_price - bi.subtotal > 0 THEN b.id END) AS itemDiscountBills
+       FROM billing_items bi
+       JOIN billings b ON bi.billing_id = b.id
+       WHERE b.clinic_id = ? AND DATE(b.created_at) BETWEEN ? AND ? AND b.status != 'cancelled'`,
+      [clinicId, dateFrom, dateTo],
+    );
+    const [bills] = await this.billingRepo.query(
+      `SELECT
+         COALESCE(SUM(total_discount), 0) AS billDiscount,
+         SUM(total_discount > 0) AS billDiscountCount,
+         COUNT(*) AS billCount
+       FROM billings
+       WHERE clinic_id = ? AND DATE(created_at) BETWEEN ? AND ? AND status != 'cancelled'`,
+      [clinicId, dateFrom, dateTo],
+    );
+    const [withAny] = await this.billingRepo.query(
+      `SELECT COUNT(*) AS c FROM billings b
+       WHERE b.clinic_id = ? AND DATE(b.created_at) BETWEEN ? AND ? AND b.status != 'cancelled'
+         AND (b.total_discount > 0 OR EXISTS (
+           SELECT 1 FROM billing_items bi WHERE bi.billing_id = b.id AND bi.quantity * bi.unit_price - bi.subtotal > 0))`,
+      [clinicId, dateFrom, dateTo],
+    );
+    const f = (v: unknown) => parseFloat(String(v ?? 0)) || 0;
+    const gross = f(items?.gross);
+    const itemDiscount = f(items?.itemDiscount);
+    const billDiscount = f(bills?.billDiscount);
+    const totalDiscount = itemDiscount + billDiscount;
+    return {
+      totalDiscount,
+      itemDiscount,
+      billDiscount,
+      billingsWithDiscount: parseInt(String(withAny?.c ?? 0), 10) || 0,
+      billCount: parseInt(String(bills?.billCount ?? 0), 10) || 0,
+      grossBeforeDiscount: gross,
+      discountRate:
+        gross > 0 ? parseFloat(((totalDiscount / gross) * 100).toFixed(1)) : 0,
     };
   }
 

@@ -241,6 +241,17 @@ describe('BillingsService', () => {
       );
       expect(gudangService.deductForTindakan).not.toHaveBeenCalled();
     });
+
+    it('records a Rp 0 bill (follow-up already paid, free consult) as paid straight away (edge)', async () => {
+      const result = await service.create(
+        clinicId,
+        { encounterId: 5, items: [{ name: 'Kontrol PSA', quantity: 1, unitPrice: 0 }] },
+        userId,
+      );
+      expect(result.grandTotal).toBe(0);
+      expect(result.outstandingAmount).toBe(0);
+      expect(result.status).toBe(BillingStatus.PAID);
+    });
   });
 
   describe('cancel', () => {

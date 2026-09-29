@@ -150,4 +150,22 @@ describe('PaymentsService', () => {
       ),
     ).rejects.toThrow(BadRequestException);
   });
+
+  it('throws BadRequestException for a Rp 0 payment while something is still owed (negative)', async () => {
+    manager.findOne.mockResolvedValue({
+      id: 1,
+      clinicId,
+      status: BillingStatus.PARTIAL,
+      paidAmount: 100000,
+      outstandingAmount: 50000,
+    });
+    await expect(
+      service.createPayment(
+        1,
+        clinicId,
+        { amount: 0, method: 'cash' } as any,
+        userId,
+      ),
+    ).rejects.toThrow('Jumlah pembayaran harus lebih dari 0');
+  });
 });
