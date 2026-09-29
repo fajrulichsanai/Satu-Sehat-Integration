@@ -15,6 +15,7 @@ import type { Request } from 'express';
 import { Public } from '../auth/decorators/public.decorator';
 import { ApiKeyGuard } from './api-key.guard';
 import { PublicApiService } from './public-api.service';
+import { ContentsService } from '../contents/contents.service';
 import {
   ApiCreateReservationDto,
   ApiLookupReservationDto,
@@ -40,7 +41,10 @@ const fileBase = (req: Request) => `${req.protocol}://${req.host}`;
 @UseGuards(ApiKeyGuard)
 @Controller('v1')
 export class PublicApiController {
-  constructor(private readonly publicApiService: PublicApiService) {}
+  constructor(
+    private readonly publicApiService: PublicApiService,
+    private readonly contentsService: ContentsService,
+  ) {}
 
   @Get('clinic')
   @ApiOperation({ summary: 'Clinic profile and operational hours' })
@@ -59,6 +63,20 @@ export class PublicApiController {
     return {
       success: true,
       data: await this.publicApiService.practitioners(
+        req.apiClinicId,
+        fileBase(req),
+      ),
+    };
+  }
+
+  @Get('contents')
+  @ApiOperation({
+    summary: 'Published content (before–after stories) with image URLs',
+  })
+  async contents(@Req() req: ApiRequest) {
+    return {
+      success: true,
+      data: await this.contentsService.listPublished(
         req.apiClinicId,
         fileBase(req),
       ),

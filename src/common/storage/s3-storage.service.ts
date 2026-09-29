@@ -94,6 +94,31 @@ export class S3StorageService {
     return `${this.publicBaseUrl}/${key}`;
   }
 
+  /**
+   * Whether `url` is a file this service uploaded under `keyPrefix` — used to
+   * accept only our own uploads back from clients, never an arbitrary URL.
+   */
+  ownsUrl(url: string, keyPrefix: string): boolean {
+    if (!url || url.includes('..')) return false;
+    return (
+      url.startsWith(`${LOCAL_PUBLIC_PREFIX}${keyPrefix}`) ||
+      (!!this.bucket && url.startsWith(`${this.publicBaseUrl}/${keyPrefix}`))
+    );
+  }
+
+  /** Reads back a file returned by uploadBuffer (local disk or S3), or null. */
+  async readUploaded(url: string): Promise<Buffer | null> {
+    if (url.startsWith(LOCAL_PUBLIC_PREFIX)) return readLocalPublicFile(url);
+    if (!this.bucket || !url.startsWith(`${this.publicBaseUrl}/`)) return null;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+      return res.ok ? Buffer.from(await res.arrayBuffer()) : null;
+    } catch (err) {
+      this.logger.warn(`Gagal membaca file dari S3 | url=${url} | ${String(err)}`);
+      return null;
+    }
+  }
+
   private async saveLocally(key: string, buffer: Buffer): Promise<string> {
     const path = resolveLocalPublicPath(key);
     if (!path) {

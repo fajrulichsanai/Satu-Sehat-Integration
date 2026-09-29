@@ -15,6 +15,7 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { ReservationsModule } from '../reservations/reservations.module';
 import { PublicModule } from '../public/public.module';
 import { AuditLogModule } from '../audit-log/audit-log.module';
+import { ContentsModule } from '../contents/contents.module';
 import { StorageModule } from '../../common/storage/storage.module';
 
 @Module({
@@ -25,6 +26,7 @@ import { StorageModule } from '../../common/storage/storage.module';
     PublicModule,
     AuditLogModule,
     StorageModule,
+    ContentsModule,
   ],
   controllers: [ApiKeysController, PublicApiController],
   providers: [ApiKeysService, PublicApiService, ApiKeyGuard],
