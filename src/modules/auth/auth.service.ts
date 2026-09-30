@@ -20,8 +20,6 @@ import { RegisterDto, LoginDto } from './dto/auth.dto';
 import { UserRole } from '../../enums';
 import { OwnerCodeService } from '../owner-code/owner-code.service';
 import { ClinicSubscriptionsService } from '../subscriptions/clinic-subscriptions.service';
-import { MfaService } from './mfa.service';
-import { isMfaEnabled, isMfaRequiredFor } from './guards/mfa-enforcement.guard';
 import {
   hashPassword,
   comparePassword,
@@ -34,7 +32,6 @@ import {
  * documents change, so it's clear which version each user accepted.
  */
 export const LEGAL_TERMS_VERSION = '2026-09-29';
-const MFA_CHALLENGE_TYPE = 'mfa_challenge';
 
 /** Failed password attempts before an account is locked. */
 const MAX_FAILED_LOGINS = 5;
@@ -75,7 +72,6 @@ export class AuthService {
     private configService: ConfigService,
     private ownerCodeService: OwnerCodeService,
     private clinicSubscriptionsService: ClinicSubscriptionsService,
-    private mfaService: MfaService,
   ) {
     this.resend = new Resend(this.configService.get<string>('RESEND_API_KEY'));
   }
@@ -288,46 +284,6 @@ export class AuthService {
       });
     }
 
-    if (user.mfaEnabled && isMfaEnabled()) {
-      const mfaToken = this.jwtService.sign(
-        { sub: user.id, type: MFA_CHALLENGE_TYPE },
-        { expiresIn: '5m' },
-      );
-      return {
-        success: true,
-        data: { mfaRequired: true, mfaToken },
-      };
-    }
-
-    return this.buildLoginResponse(user);
-  }
-
-  /**
-   * Second step of login when the account has MFA enabled: exchanges the
-   * short-lived challenge token from login() plus a TOTP/backup code for the
-   * real access token.
-   */
-  async verifyMfaLogin(mfaToken: string, code: string) {
-    let payload: { sub: number; type: string };
-    try {
-      payload = this.jwtService.verify(mfaToken);
-    } catch {
-      throw new UnauthorizedException({
-        success: false,
-        error: {
-          code: 'MFA_TOKEN_INVALID',
-          message: 'Sesi login MFA sudah kedaluwarsa, silakan login ulang',
-        },
-      });
-    }
-    if (payload.type !== MFA_CHALLENGE_TYPE) {
-      throw new UnauthorizedException({
-        success: false,
-        error: { code: 'MFA_TOKEN_INVALID', message: 'Token tidak valid' },
-      });
-    }
-
-    const user = await this.mfaService.verifyLoginCode(payload.sub, code);
     return this.buildLoginResponse(user);
   }
 
@@ -384,7 +340,6 @@ export class AuthService {
       success: true,
       data: {
         accessToken,
-        mfaSetupRequired: isMfaRequiredFor(user.role) && !user.mfaEnabled,
         user: {
           id: user.id,
           email: user.email,
@@ -393,8 +348,6 @@ export class AuthService {
           clinicId: user.clinicId,
           practitionerId: user.practitionerId,
           isActive: user.isActive,
-          mfaEnabled: user.mfaEnabled && isMfaEnabled(),
-          mfaRequired: isMfaRequiredFor(user.role),
         },
       },
     };
@@ -491,8 +444,6 @@ export class AuthService {
         isActive: user.isActive,
         emailVerifiedAt: user.emailVerifiedAt,
         lastLoginAt: user.lastLoginAt,
-        mfaEnabled: user.mfaEnabled && isMfaEnabled(),
-        mfaRequired: isMfaRequiredFor(user.role),
       },
     };
   }

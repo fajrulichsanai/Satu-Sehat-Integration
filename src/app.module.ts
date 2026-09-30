@@ -47,7 +47,6 @@ import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
-import { MfaEnforcementGuard } from './modules/auth/guards/mfa-enforcement.guard';
 import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.guard';
 
 @Module({
@@ -153,12 +152,6 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
-    },
-    // Global MFA enforcement for privileged roles — see MfaEnforcementGuard
-    // for the exemptions (@SkipMfaEnforcement routes).
-    {
-      provide: APP_GUARD,
-      useClass: MfaEnforcementGuard,
     },
     // Global subscription-expiry gate on every mutating request — see
     // SubscriptionGuard for the exemptions (SUPER_ADMIN, @SkipSubscriptionCheck routes).

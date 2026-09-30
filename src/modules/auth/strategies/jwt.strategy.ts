@@ -18,13 +18,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    // A short-lived MFA challenge token (see AuthService.login) is only ever
-    // valid for POST /auth/mfa/verify-login — it must never be accepted as a
-    // normal bearer token, even though it's signed with the same secret.
-    if (payload.type === 'mfa_challenge') {
-      throw new UnauthorizedException('Token tidak valid');
-    }
-
     // Payload: see AccessTokenClaims in auth.service.ts
     const user = await this.authService.validateUser(payload.sub);
 
@@ -59,10 +52,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       impersonated: !!payload.imp,
       // Raw claims, for logout/refresh to revoke exactly this token.
       tokenClaims: payload,
-      // Read fresh off the user row (not the JWT) so MfaEnforcementGuard sees
-      // it flip to true the moment MFA is enabled, without needing a new
-      // token — validateUser above already fetches the row, so this is free.
-      mfaEnabled: user.mfaEnabled,
     };
   }
 }

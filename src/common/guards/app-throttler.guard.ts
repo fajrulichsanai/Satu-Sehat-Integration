@@ -33,10 +33,10 @@ export class AppThrottlerGuard extends ThrottlerGuard {
     const header: string | undefined = req.headers?.authorization;
     if (header?.startsWith('Bearer ')) {
       try {
-        const payload = this.jwtService.verify<{ sub?: number; type?: string }>(
+        const payload = this.jwtService.verify<{ sub?: number }>(
           header.slice(7),
         );
-        if (payload?.sub && payload.type !== 'mfa_challenge') {
+        if (payload?.sub) {
           return `user:${payload.sub}`;
         }
       } catch {
