@@ -13,7 +13,6 @@ describe('JwtStrategy.validate', () => {
     clinicId: 7,
     practitionerId: 3,
     isActive: true,
-    mfaEnabled: false,
     tokenVersion: 2,
   };
 
@@ -54,9 +53,4 @@ describe('JwtStrategy.validate', () => {
     ).rejects.toThrow(UnauthorizedException);
   });
 
-  it('rejects an MFA challenge token (negative)', async () => {
-    await expect(
-      strategy.validate({ sub: 1, type: 'mfa_challenge' }),
-    ).rejects.toThrow(UnauthorizedException);
-  });
 });

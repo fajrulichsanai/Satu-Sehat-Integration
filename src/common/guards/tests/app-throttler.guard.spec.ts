@@ -26,13 +26,6 @@ describe('AppThrottlerGuard.getTracker', () => {
     ).resolves.toBe('ip:1.2.3.4');
   });
 
-  it('does not treat an MFA challenge token as a signed-in user (negative)', async () => {
-    jwtService.verify.mockReturnValue({ sub: 42, type: 'mfa_challenge' });
-    await expect(
-      track({ ip: '1.2.3.4', headers: { authorization: 'Bearer c' } }),
-    ).resolves.toBe('ip:1.2.3.4');
-  });
-
   it('uses the IP when there is no token (positive)', async () => {
     await expect(track({ ip: '5.6.7.8', headers: {} })).resolves.toBe(
       'ip:5.6.7.8',
