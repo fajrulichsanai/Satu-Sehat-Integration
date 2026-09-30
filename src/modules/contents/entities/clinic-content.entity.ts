@@ -32,6 +32,10 @@ export interface ContentPhotoFrame {
   zoom: number;
   ox: number;
   oy: number;
+  /** Rotation in degrees, clockwise. */
+  rot?: number;
+  /** Mirrored horizontally (intraoral photos taken with a mirror). */
+  flip?: boolean;
 }
 
 /** Everything on the story that isn't a column of its own. */
@@ -47,6 +51,18 @@ export interface ContentSettings {
   contactTitle?: string;
   contactLine?: string;
   handle?: string;
+  /** Treatment template the story started from (see the editor's list). */
+  template?: string;
+  /** Treated teeth, FDI numbers ("11", "21", …). */
+  teeth?: string[];
+  /** Where in the mouth, e.g. "Rahang atas depan". */
+  region?: string;
+  /** The complaint/diagnosis treated, e.g. "Gigi berlubang". */
+  condition?: string;
+  /** Number of visits the treatment took. */
+  visits?: number;
+  /** False once the caption was typed by hand instead of built from the fields above. */
+  autoCaption?: boolean;
 }
 
 /**

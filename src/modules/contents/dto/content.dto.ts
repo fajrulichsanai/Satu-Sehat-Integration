@@ -1,13 +1,17 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
+  IsInt,
   IsEnum,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   Max,
+  Matches,
   MaxLength,
   Min,
   ValidateNested,
@@ -21,7 +25,7 @@ import {
 export class ContentPhotoFrameDto {
   @IsNumber()
   @Min(1)
-  @Max(3)
+  @Max(5)
   zoom: number;
 
   @IsNumber()
@@ -33,6 +37,16 @@ export class ContentPhotoFrameDto {
   @Min(-5000)
   @Max(5000)
   oy: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-360)
+  @Max(360)
+  rot?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  flip?: boolean;
 }
 
 export class ContentSettingsDto {
@@ -75,6 +89,37 @@ export class ContentSettingsDto {
   @IsString()
   @MaxLength(32)
   handle?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  template?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(32)
+  @Matches(/^[1-8][1-8]$/, { each: true, message: 'Nomor gigi harus format FDI, mis. 11' })
+  teeth?: string[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  region?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  condition?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(99)
+  visits?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  autoCaption?: boolean;
 }
 
 /** Fields shared by create and update; every one is optional on update. */
