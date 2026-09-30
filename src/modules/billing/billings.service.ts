@@ -142,6 +142,8 @@ export class BillingsService {
             ? (subtotal * dto.totalDiscount) / 100
             : dto.totalDiscount;
       }
+      // A bill discount can't exceed what is billed, or the total goes negative.
+      totalDiscountNominal = Math.min(totalDiscountNominal, subtotal);
       const additionalFee =
         dto.additionalFee && dto.additionalFee > 0 ? dto.additionalFee : 0;
       const grandTotal = subtotal - totalDiscountNominal + additionalFee;
@@ -304,13 +306,24 @@ export class BillingsService {
 
       const totalDiscountInput =
         dto.totalDiscount ?? Number(billing.totalDiscount);
-      const totalDiscountNominal =
+      const totalDiscountNominal = Math.min(
         dto.totalDiscount !== undefined &&
-        dto.totalDiscountType === DiscountType.PERCENT
+          dto.totalDiscountType === DiscountType.PERCENT
           ? (subtotal * dto.totalDiscount) / 100
-          : totalDiscountInput;
+          : totalDiscountInput,
+        subtotal,
+      );
       const additionalFee = dto.additionalFee ?? Number(billing.additionalFee);
       const grandTotal = subtotal - totalDiscountNominal + additionalFee;
+
+      // Lowering the bill below what the patient already paid would mark it
+      // paid and silently lose the overpayment.
+      const alreadyPaid = Number(billing.paidAmount);
+      if (grandTotal < alreadyPaid) {
+        throw new BadRequestException(
+          `Total baru (Rp ${Math.round(grandTotal).toLocaleString('id-ID')}) lebih kecil dari yang sudah dibayar (Rp ${Math.round(alreadyPaid).toLocaleString('id-ID')}). Kurangi pembayaran lewat refund terlebih dahulu.`,
+        );
+      }
 
       billing.subtotal = subtotal;
       billing.totalDiscount = totalDiscountNominal;

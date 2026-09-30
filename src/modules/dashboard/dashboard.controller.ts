@@ -4,6 +4,7 @@ import { DashboardService } from './dashboard.service';
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 
+import { parseLimit } from '../../common/utils/query.util';
 @ApiTags('dashboard')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(ClinicContextGuard)
@@ -26,7 +27,7 @@ export class DashboardController {
   ) {
     const data = await this.dashboardService.getRecentActivity(
       clinicId,
-      limit ? parseInt(limit, 10) : undefined,
+      parseLimit(limit),
     );
     return { success: true, data };
   }

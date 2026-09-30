@@ -85,7 +85,19 @@ export class MultiClinicService {
 
   /** Super Admin: putuskan hubungan klinik dari akun multi-klinik owner. */
   async unlinkClinic(ownerId: number, clinicId: number) {
-    await this.linkRepository.delete({ ownerId, clinicId });
+    const result = await this.linkRepository.delete({ ownerId, clinicId });
+    // Nothing unlinked means the owner/clinic pair was never linked — say so
+    // instead of reporting success for a no-op.
+    if (!result.affected) {
+      throw new NotFoundException({
+        success: false,
+        error: {
+          code: 'LINK_NOT_FOUND',
+          message:
+            'Klinik ini tidak terhubung ke akun multi-klinik owner tersebut',
+        },
+      });
+    }
   }
 
   /** Multi-klinik owner: daftar klinik miliknya sendiri. */

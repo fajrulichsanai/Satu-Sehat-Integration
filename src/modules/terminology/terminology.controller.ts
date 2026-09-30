@@ -10,6 +10,7 @@ import { Public } from '../auth/decorators/public.decorator';
 import { TerminologyService } from './terminology.service';
 import type { TerminologySystem } from './entities/terminology-concept.entity';
 
+import { parseLimit } from '../../common/utils/query.util';
 /**
  * ICD-10 / SNOMED CT lookup. Public reference data (no patient data), so it
  * also works without login — the landing page lets visitors try it —
@@ -38,7 +39,7 @@ export class TerminologyController {
     const data = await this.terminologyService.search(
       system,
       q,
-      limit ? parseInt(limit, 10) || 20 : 20,
+      parseLimit(limit, 50) ?? 20,
     );
     return { success: true, data };
   }

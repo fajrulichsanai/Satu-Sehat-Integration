@@ -754,8 +754,10 @@ export class ReportsService {
          AND fp.amount < b.grand_total`,
       [clinicId, dateFrom, dateTo],
     );
-    const n = (v: unknown) => parseInt(String(v ?? 0), 10) || 0;
-    const f = (v: unknown) => parseFloat(String(v ?? 0)) || 0;
+    const n = (v: string | number | null | undefined) =>
+      parseInt(String(v ?? 0), 10) || 0;
+    const f = (v: string | number | null | undefined) =>
+      parseFloat(String(v ?? 0)) || 0;
     return {
       lunas: { count: n(row?.lunasCount), amount: f(row?.lunasAmount) },
       dp: {
@@ -806,7 +808,8 @@ export class ReportsService {
            SELECT 1 FROM billing_items bi WHERE bi.billing_id = b.id AND bi.quantity * bi.unit_price - bi.subtotal > 0))`,
       [clinicId, dateFrom, dateTo],
     );
-    const f = (v: unknown) => parseFloat(String(v ?? 0)) || 0;
+    const f = (v: string | number | null | undefined) =>
+      parseFloat(String(v ?? 0)) || 0;
     const gross = f(items?.gross);
     const itemDiscount = f(items?.itemDiscount);
     const billDiscount = f(bills?.billDiscount);

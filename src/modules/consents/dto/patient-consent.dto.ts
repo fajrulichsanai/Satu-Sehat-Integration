@@ -8,6 +8,7 @@ import {
   IsString,
   Matches,
   Min,
+  Max,
 } from 'class-validator';
 import {
   ConsentSignerRelation,
@@ -72,6 +73,7 @@ export class PatientConsentQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(1000)
   limit?: number = 20;
 }
 

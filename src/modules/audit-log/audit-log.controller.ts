@@ -20,7 +20,7 @@ export class AuditLogController {
 
   @Get()
   @ApiOperation({ summary: 'List audit log entries for the owner\'s clinic' })
-  async findAll(@ClinicId() clinicId: number | null, @Query() query: AuditLogQueryDto) {
+  async findAll(@ClinicId({ optional: true }) clinicId: number | null, @Query() query: AuditLogQueryDto) {
     const data = await this.auditLogService.findAll(clinicId, query);
     return { success: true, data };
   }
@@ -28,7 +28,7 @@ export class AuditLogController {
   @Get('export')
   @ApiOperation({ summary: 'Export filtered audit log entries as CSV' })
   async export(
-    @ClinicId() clinicId: number | null,
+    @ClinicId({ optional: true }) clinicId: number | null,
     @Query() query: AuditLogQueryDto,
     @Req() req: any,
     @Res() res: Response,
@@ -55,7 +55,7 @@ export class AuditLogController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get single audit log entry detail (full before/after)' })
-  async findOne(@Param('id', ParseIntPipe) id: number, @ClinicId() clinicId: number | null) {
+  async findOne(@Param('id', ParseIntPipe) id: number, @ClinicId({ optional: true }) clinicId: number | null) {
     const entry = await this.auditLogService.findOne(id, clinicId);
     return { success: true, data: entry };
   }

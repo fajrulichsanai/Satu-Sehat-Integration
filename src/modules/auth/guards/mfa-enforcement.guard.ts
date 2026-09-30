@@ -31,6 +31,21 @@ export const MFA_ENFORCED_ROLES: UserRole[] = [
 ];
 
 /**
+ * MFA as a whole is switched off unless MFA_ENABLED=true: no code is asked
+ * at login (even for accounts that turned it on earlier), no role is forced
+ * to set it up, and setup is refused. Turning it back on needs
+ * MFA_ENCRYPTION_KEY set to the same key the secrets were stored with.
+ */
+export function isMfaEnabled(): boolean {
+  return process.env.MFA_ENABLED === 'true';
+}
+
+/** Whether this role must have MFA turned on before using the app. */
+export function isMfaRequiredFor(role: UserRole): boolean {
+  return isMfaEnabled() && MFA_ENFORCED_ROLES.includes(role);
+}
+
+/**
  * Global gate: once a privileged-role account has logged in, every route
  * except the MFA setup endpoints (and /auth/me, /auth/logout) is rejected
  * with MFA_SETUP_REQUIRED until they actually enable MFA. Relies on
@@ -52,7 +67,7 @@ export class MfaEnforcementGuard implements CanActivate {
     const user = request.user;
     if (!user) return true;
 
-    if (!MFA_ENFORCED_ROLES.includes(user.role)) return true;
+    if (!isMfaRequiredFor(user.role)) return true;
     if (user.mfaEnabled) return true;
 
     throw new HttpException(

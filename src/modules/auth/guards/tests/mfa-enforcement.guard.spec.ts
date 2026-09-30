@@ -16,6 +16,16 @@ function buildContext(user: unknown, skip = false) {
 }
 
 describe('MfaEnforcementGuard', () => {
+  // These cases cover MFA switched on; it is off unless MFA_ENABLED=true.
+  const previousMfaEnabled = process.env.MFA_ENABLED;
+  beforeEach(() => {
+    process.env.MFA_ENABLED = 'true';
+  });
+  afterAll(() => {
+    if (previousMfaEnabled === undefined) delete process.env.MFA_ENABLED;
+    else process.env.MFA_ENABLED = previousMfaEnabled;
+  });
+
   let guard: MfaEnforcementGuard;
   let reflector: { getAllAndOverride: jest.Mock };
 
@@ -72,6 +82,19 @@ describe('MfaEnforcementGuard', () => {
       const response = (err as HttpException).getResponse() as any;
       expect(response.error.code).toBe('MFA_SETUP_REQUIRED');
       expect((err as HttpException).getStatus()).toBe(403);
+    }
+  });
+
+  it('lets every role through when MFA is switched off (positive)', () => {
+    process.env.MFA_ENABLED = 'false';
+    for (const role of [
+      UserRole.OWNER,
+      UserRole.SUPER_ADMIN,
+      UserRole.MULTI_CLINIC_OWNER,
+    ]) {
+      expect(guard.canActivate(buildContext({ role, mfaEnabled: false }))).toBe(
+        true,
+      );
     }
   });
 });

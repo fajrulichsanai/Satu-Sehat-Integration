@@ -147,6 +147,17 @@ describe('BillingsService', () => {
       expect(result.grandTotal).toBe(100000 - 10000 + 5000);
     });
 
+    it('caps a bill discount at the subtotal so the total never goes negative (edge)', async () => {
+      const result = await service.create(
+        clinicId,
+        { ...dto, totalDiscount: 250000 },
+        userId,
+      );
+      expect(result.totalDiscount).toBe(100000);
+      expect(result.grandTotal).toBe(0);
+      expect(result.status).toBe(BillingStatus.PAID);
+    });
+
     it('applies a percentage total discount correctly (positive)', async () => {
       const result = await service.create(
         clinicId,
@@ -309,6 +320,26 @@ describe('BillingsService', () => {
   });
 
   describe('update', () => {
+    it('refuses to lower the bill below what was already paid (negative)', async () => {
+      const billing = {
+        id: 1,
+        clinicId,
+        status: BillingStatus.PARTIAL,
+        subtotal: 100000,
+        totalDiscount: 0,
+        additionalFee: 0,
+        paidAmount: 80000,
+        outstandingAmount: 20000,
+        notes: null,
+      };
+      manager.findOne.mockResolvedValueOnce(billing);
+
+      await expect(
+        service.update(1, clinicId, { totalDiscount: 50000 } as any, userId),
+      ).rejects.toThrow(BadRequestException);
+      expect(billing.status).toBe(BillingStatus.PARTIAL);
+    });
+
     it('recomputes grandTotal and marks PAID when outstanding drops to zero (positive)', async () => {
       const billing = {
         id: 1,

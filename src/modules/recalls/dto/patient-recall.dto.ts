@@ -1,6 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDateString, IsEnum, IsInt, IsOptional, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  Min,
+  Max,
+} from 'class-validator';
 import { PatientRecallStatus } from '../entities/patient-recall.entity';
 
 export class PatientRecallQueryDto {
@@ -21,6 +28,7 @@ export class PatientRecallQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(1000)
   limit?: number = 20;
 }
 

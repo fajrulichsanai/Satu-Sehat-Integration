@@ -121,6 +121,18 @@ describe('PaymentsService', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
+  it('throws BadRequestException when billing was REFUNDED (negative)', async () => {
+    manager.findOne.mockResolvedValue({
+      id: 1,
+      clinicId,
+      status: BillingStatus.REFUNDED,
+      outstandingAmount: 50000,
+    });
+    await expect(
+      service.createPayment(1, clinicId, { amount: 1000, method: 'cash' } as any, userId),
+    ).rejects.toThrow(BadRequestException);
+  });
+
   it('throws BadRequestException when billing is CANCELLED (negative)', async () => {
     manager.findOne.mockResolvedValue({
       id: 1,
