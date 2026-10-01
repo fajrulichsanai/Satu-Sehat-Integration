@@ -18,6 +18,7 @@ const MIGRATIONS = [
   '1789950000000-SettleZeroBillings',
   '1789960000000-LegalConsentAndDataRequests',
   '1789970000000-CreateClinicContents',
+  '1789980000000-CreateContentTemplates',
 ];
 
 async function main() {

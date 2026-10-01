@@ -9,6 +9,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Clinic } from '../../clinics/entities/clinic.entity';
+import type { ContentTemplate } from './content-template.entity';
 
 export enum ContentStatus {
   DRAFT = 'draft',
@@ -32,6 +33,10 @@ export interface ContentPhotoFrame {
   zoom: number;
   ox: number;
   oy: number;
+  /** Rotation in degrees, clockwise. */
+  rot?: number;
+  /** Mirrored horizontally (intraoral photos taken with a mirror). */
+  flip?: boolean;
 }
 
 /** Everything on the story that isn't a column of its own. */
@@ -47,6 +52,18 @@ export interface ContentSettings {
   contactTitle?: string;
   contactLine?: string;
   handle?: string;
+  /** Treatment template the story started from (see the editor's list). */
+  template?: string;
+  /** Treated teeth, FDI numbers ("11", "21", …). */
+  teeth?: string[];
+  /** Where in the mouth, e.g. "Rahang atas depan". */
+  region?: string;
+  /** The complaint/diagnosis treated, e.g. "Gigi berlubang". */
+  condition?: string;
+  /** Number of visits the treatment took. */
+  visits?: number;
+  /** False once the caption was typed by hand instead of built from the fields above. */
+  autoCaption?: boolean;
 }
 
 /**
@@ -62,6 +79,10 @@ export class ClinicContent {
 
   @Column({ name: 'clinic_id' })
   clinicId: number;
+
+  /** The treatment template it was made from; groups the gallery. */
+  @Column({ name: 'template_id', type: 'int', nullable: true })
+  templateId: number | null;
 
   /** Treatment name, the story's headline. */
   @Column({ length: 64 })
@@ -127,4 +148,10 @@ export class ClinicContent {
   @ManyToOne(() => Clinic, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'clinic_id' })
   clinic: Clinic;
+
+  // By name: content-template.entity imports this file's enums, so a class
+  // reference here would be a circular import.
+  @ManyToOne('ContentTemplate', { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'template_id' })
+  template?: ContentTemplate | null;
 }

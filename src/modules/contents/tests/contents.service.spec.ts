@@ -14,6 +14,7 @@ describe('ContentsService', () => {
   };
   let clinicRepo: { findOne: jest.Mock };
   let storage: S3StorageService;
+  let templates: { assertOwned: jest.Mock };
 
   const file = {
     originalname: 'story.png',
@@ -35,18 +36,24 @@ describe('ContentsService', () => {
     jest
       .spyOn(storage, 'uploadBuffer')
       .mockImplementation((key) => Promise.resolve(`/files/${key}`));
-    service = new ContentsService(repo as any, clinicRepo as any, storage);
+    templates = { assertOwned: jest.fn().mockResolvedValue(undefined) };
+    service = new ContentsService(
+      repo as any,
+      clinicRepo as any,
+      storage,
+      templates as any,
+    );
   });
 
-  it('rejects photo URLs that are not this clinic’s uploads', () => {
+  it('rejects photo URLs that are not this clinic’s uploads', async () => {
     for (const url of [
       'https://evil.example/x.png',
       '/files/contents/9/a.png',
       '/files/contents/5/../9/a.png',
     ]) {
-      expect(() =>
+      await expect(
         service.create(5, 1, { title: 'Hasil', beforeImageUrl: url }),
-      ).toThrow(BadRequestException);
+      ).rejects.toThrow(BadRequestException);
     }
   });
 
@@ -113,5 +120,55 @@ describe('ContentsService', () => {
       'https://api.test/files/contents/5/r.png',
       'https://s3/b/contents/5/r.png',
     ]);
+  });
+
+  it('tells the website which treatment each published story belongs to', async () => {
+    repo.find.mockResolvedValue([
+      {
+        id: 1,
+        title: 'A',
+        imageUrl: null,
+        template: { id: 7, name: 'Tambal' },
+      },
+      { id: 2, title: 'B', imageUrl: null, template: null },
+    ]);
+    const rows = await service.listPublished(5, 'https://api.test');
+    expect(rows.map((r) => r.treatment)).toEqual([
+      { id: 7, name: 'Tambal' },
+      null,
+    ]);
+    expect(repo.find).toHaveBeenCalledWith(
+      expect.objectContaining({ relations: { template: true } }),
+    );
+  });
+
+  it('saves the template a new story was made from (positive)', async () => {
+    const saved = await service.create(5, 9, {
+      title: 'Tambal',
+      templateId: 7,
+    });
+    expect(templates.assertOwned).toHaveBeenCalledWith(5, 7);
+    expect(saved.templateId).toBe(7);
+  });
+
+  it("rejects another clinic's template (negative)", async () => {
+    templates.assertOwned.mockRejectedValue(
+      new BadRequestException('Template tidak ditemukan'),
+    );
+    await expect(
+      service.create(5, 9, { title: 'X', templateId: 99 } as any),
+    ).rejects.toThrow(BadRequestException);
+    expect(repo.save).not.toHaveBeenCalled();
+  });
+
+  it('moves a story to another treatment, or out of one (positive)', async () => {
+    repo.findOne.mockResolvedValue({ id: 1, clinicId: 5, templateId: 7 });
+    expect(
+      (await service.update(1, 5, 9, { templateId: null } as any)).templateId,
+    ).toBeNull();
+    repo.findOne.mockResolvedValue({ id: 1, clinicId: 5, templateId: 7 });
+    expect(
+      (await service.update(1, 5, 9, { templateId: 8 } as any)).templateId,
+    ).toBe(8);
   });
 });

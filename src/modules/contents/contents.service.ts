@@ -8,6 +8,7 @@ import { Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { extname } from 'path';
 import { S3StorageService } from '../../common/storage/s3-storage.service';
+import { ContentTemplatesService } from './content-templates.service';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { ClinicContent, ContentStatus } from './entities/clinic-content.entity';
 import {
@@ -36,6 +37,7 @@ export class ContentsService {
     @InjectRepository(Clinic)
     private readonly clinicRepo: Repository<Clinic>,
     private readonly storage: S3StorageService,
+    private readonly templates: ContentTemplatesService,
   ) {}
 
   list(clinicId: number, query: ContentQueryDto) {
@@ -63,11 +65,13 @@ export class ContentsService {
     return { url };
   }
 
-  create(clinicId: number, userId: number, dto: CreateContentDto) {
+  async create(clinicId: number, userId: number, dto: CreateContentDto) {
     this.assertOwnImages(clinicId, dto);
+    await this.templates.assertOwned(clinicId, dto.templateId);
     return this.repo.save(
       this.repo.create({
         clinicId,
+        templateId: dto.templateId ?? null,
         title: dto.title.trim(),
         caption: dto.caption?.trim() || null,
         layout: dto.layout,
@@ -95,6 +99,10 @@ export class ContentsService {
   ) {
     const content = await this.findOne(id, clinicId);
     this.assertOwnImages(clinicId, dto);
+    if (dto.templateId !== undefined) {
+      await this.templates.assertOwned(clinicId, dto.templateId);
+      content.templateId = dto.templateId ?? null;
+    }
     if (dto.title !== undefined) content.title = dto.title.trim();
     if (dto.caption !== undefined)
       content.caption = dto.caption?.trim() || null;
@@ -170,13 +178,18 @@ export class ContentsService {
   async listPublished(clinicId: number, fileBase: string) {
     const rows = await this.repo.find({
       where: { clinicId, status: ContentStatus.PUBLISHED },
+      relations: { template: true },
       order: { publishedAt: 'DESC' },
-      take: 50,
+      take: 100,
     });
     return rows.map((c) => ({
       id: c.id,
       title: c.title,
       caption: c.caption,
+      // The treatment group (template), for a gallery per treatment.
+      treatment: c.template
+        ? { id: c.template.id, name: c.template.name }
+        : null,
       imageUrl: c.imageUrl?.startsWith('/')
         ? `${fileBase}${c.imageUrl}`
         : c.imageUrl,
