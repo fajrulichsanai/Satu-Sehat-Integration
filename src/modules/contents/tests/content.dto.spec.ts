@@ -4,7 +4,10 @@ import { UpdateContentDto } from '../dto/content.dto';
 
 const errorsFor = async (body: object) => {
   const dto = plainToInstance(UpdateContentDto, body);
-  const errors = await validate(dto, { whitelist: true, forbidNonWhitelisted: true });
+  const errors = await validate(dto, {
+    whitelist: true,
+    forbidNonWhitelisted: true,
+  });
   return JSON.stringify(errors);
 };
 
@@ -27,11 +30,15 @@ describe('UpdateContentDto settings', () => {
   });
 
   it('rejects a tooth number that is not FDI (negative)', async () => {
-    expect(await errorsFor({ settings: { teeth: ['11', '19'] } })).toContain('FDI');
+    expect(await errorsFor({ settings: { teeth: ['11', '19'] } })).toContain(
+      'FDI',
+    );
   });
 
   it('rejects zoom above 5 and rotation beyond a full turn (negative)', async () => {
-    const errors = await errorsFor({ settings: { before: { zoom: 6, ox: 0, oy: 0, rot: 400 } } });
+    const errors = await errorsFor({
+      settings: { before: { zoom: 6, ox: 0, oy: 0, rot: 400 } },
+    });
     expect(errors).toContain('zoom');
     expect(errors).toContain('rot');
   });

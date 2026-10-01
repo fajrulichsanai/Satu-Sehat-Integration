@@ -98,7 +98,10 @@ export class ContentSettingsDto {
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(32)
-  @Matches(/^[1-8][1-8]$/, { each: true, message: 'Nomor gigi harus format FDI, mis. 11' })
+  @Matches(/^[1-8][1-8]$/, {
+    each: true,
+    message: 'Nomor gigi harus format FDI, mis. 11',
+  })
   teeth?: string[];
 
   @IsOptional()
@@ -124,6 +127,15 @@ export class ContentSettingsDto {
 
 /** Fields shared by create and update; every one is optional on update. */
 class ContentFieldsDto {
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Treatment template (GET /contents/templates)',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  templateId?: number | null;
+
   @ApiPropertyOptional({ maxLength: 120 })
   @IsOptional()
   @IsString()
@@ -186,4 +198,54 @@ export class ContentQueryDto {
   @IsOptional()
   @IsEnum(ContentStatus)
   status?: ContentStatus;
+}
+
+/** Story look and text shared by a template's create and update. */
+class ContentTemplateFieldsDto {
+  @ApiPropertyOptional({
+    maxLength: 64,
+    description: 'Headline on the story; defaults to the name',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  title?: string;
+
+  @ApiPropertyOptional({ enum: ContentLayout })
+  @IsOptional()
+  @IsEnum(ContentLayout)
+  layout?: ContentLayout;
+
+  @ApiPropertyOptional({ enum: ContentBackground })
+  @IsOptional()
+  @IsEnum(ContentBackground)
+  background?: ContentBackground;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  showDisclaimer?: boolean;
+
+  @ApiPropertyOptional({ type: ContentSettingsDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ContentSettingsDto)
+  settings?: ContentSettingsDto;
+}
+
+export class CreateContentTemplateDto extends ContentTemplateFieldsDto {
+  @ApiProperty({ maxLength: 40, example: 'Tambal' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(40)
+  name: string;
+}
+
+export class UpdateContentTemplateDto extends ContentTemplateFieldsDto {
+  @ApiPropertyOptional({ maxLength: 40 })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(40)
+  name?: string;
 }

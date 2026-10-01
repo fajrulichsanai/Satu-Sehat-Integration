@@ -9,6 +9,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Clinic } from '../../clinics/entities/clinic.entity';
+import type { ContentTemplate } from './content-template.entity';
 
 export enum ContentStatus {
   DRAFT = 'draft',
@@ -79,6 +80,10 @@ export class ClinicContent {
   @Column({ name: 'clinic_id' })
   clinicId: number;
 
+  /** The treatment template it was made from; groups the gallery. */
+  @Column({ name: 'template_id', type: 'int', nullable: true })
+  templateId: number | null;
+
   /** Treatment name, the story's headline. */
   @Column({ length: 64 })
   title: string;
@@ -143,4 +148,10 @@ export class ClinicContent {
   @ManyToOne(() => Clinic, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'clinic_id' })
   clinic: Clinic;
+
+  // By name: content-template.entity imports this file's enums, so a class
+  // reference here would be a circular import.
+  @ManyToOne('ContentTemplate', { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'template_id' })
+  template?: ContentTemplate | null;
 }
