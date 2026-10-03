@@ -248,6 +248,8 @@ export class SyncOrchestratorService {
 
       if (success) {
         await this.updateSatusehatId(resourceType, localId, satusehatId);
+      } else {
+        await this.markFailed(resourceType, localId, JSON.stringify(data));
       }
 
       return success
@@ -264,6 +266,7 @@ export class SyncOrchestratorService {
         undefined,
         err.message,
       );
+      await this.markFailed(resourceType, localId, err.message);
       return { success: false, error: err.message };
     }
   }
@@ -292,6 +295,44 @@ export class SyncOrchestratorService {
     });
   }
 
+  /** Tandai entity lokal gagal sync agar terlihat di menu SATUSEHAT */
+  private async markFailed(
+    resourceType: string,
+    localId: number,
+    error: string,
+  ): Promise<void> {
+    try {
+      switch (resourceType) {
+        case 'Encounter':
+          await this.encounterRepo.update(localId, {
+            syncStatus: SyncStatus.FAILED,
+            syncError: error?.slice(0, 5000),
+            lastSyncAt: new Date(),
+          });
+          break;
+        case 'Condition':
+          await this.diagnosisRepo.update(localId, {
+            syncStatus: SyncStatus.FAILED,
+          });
+          break;
+        case 'Procedure':
+          await this.procedureRepo.update(localId, {
+            syncStatus: SyncStatus.FAILED,
+          });
+          break;
+        case 'MedicationRequest':
+          await this.prescriptionRepo.update(localId, {
+            syncStatus: SyncStatus.FAILED,
+          });
+          break;
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Gagal menandai ${resourceType}#${localId} sebagai failed: ${(err as Error).message}`,
+      );
+    }
+  }
+
   private async updateSatusehatId(
     resourceType: string,
     localId: number,
@@ -303,6 +344,8 @@ export class SyncOrchestratorService {
         await this.encounterRepo.update(localId, {
           satusehatEncounterId: satusehatId,
           syncStatus: SyncStatus.SYNCED,
+          syncError: null as unknown as string,
+          lastSyncAt: new Date(),
         });
         break;
       case 'Condition':

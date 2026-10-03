@@ -18,12 +18,28 @@ import {
   SaranaItem,
   SaranaListResponse,
   SearchSaranaQueryDto,
+  WilayahItemDto,
+  WilayahLevel,
+  WilayahV2QueryDto,
+  WilayahV2Response,
 } from './dto/master-data.dto';
 
 const SATUSEHAT_BASE: Record<SatusehatEnvironment, string> = {
   [SatusehatEnvironment.SANDBOX]: 'https://api-satusehat-stg.dto.kemkes.go.id',
   [SatusehatEnvironment.PRODUCTION]: 'https://api-satusehat.kemkes.go.id',
 };
+
+/** Bangun query string dengan encoding aman, buang nilai kosong. */
+function toQuery(params: Record<string, string | number | undefined>): string {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') {
+      qs.set(key, String(value));
+    }
+  }
+  const str = qs.toString();
+  return str ? `?${str}` : '';
+}
 
 @Injectable()
 export class MasterDataService {
@@ -47,29 +63,52 @@ export class MasterDataService {
   async getProvinces(
     codes?: string,
   ): Promise<MasterDataResponseDto<ProvinceDto>> {
-    const params = codes ? `?codes=${codes}` : '';
-    return this.fetchMasterData(`provinces${params}`);
+    return this.fetchMasterData(`provinces${toQuery({ codes })}`);
   }
 
   async getCities(
     provinceCodes?: string,
+    codes?: string,
   ): Promise<MasterDataResponseDto<CityDto>> {
-    const params = provinceCodes ? `?province_codes=${provinceCodes}` : '';
-    return this.fetchMasterData(`cities${params}`);
+    return this.fetchMasterData(
+      `cities${toQuery({ province_codes: provinceCodes, codes })}`,
+    );
   }
 
   async getDistricts(
     cityCodes?: string,
+    codes?: string,
   ): Promise<MasterDataResponseDto<DistrictDto>> {
-    const params = cityCodes ? `?city_codes=${cityCodes}` : '';
-    return this.fetchMasterData(`districts${params}`);
+    return this.fetchMasterData(
+      `districts${toQuery({ city_codes: cityCodes, codes })}`,
+    );
   }
 
   async getSubDistricts(
     districtCodes?: string,
+    codes?: string,
   ): Promise<MasterDataResponseDto<SubDistrictDto>> {
-    const params = districtCodes ? `?district_codes=${districtCodes}` : '';
-    return this.fetchMasterData(`sub-districts${params}`);
+    return this.fetchMasterData(
+      `sub-districts${toQuery({ district_codes: districtCodes, codes })}`,
+    );
+  }
+
+  /**
+   * Master Wilayah versi 2 — sama seperti v1 tapi berhalaman (meta.page & cursors).
+   * GET /masterdata/v2/{provinces|cities|districts|sub-districts}
+   */
+  async getWilayahV2(
+    level: WilayahLevel,
+    query: WilayahV2QueryDto,
+  ): Promise<WilayahV2Response> {
+    const raw = (await this.fetchMasterData(
+      `${level}${toQuery({ ...query })}`,
+      'v2',
+    )) as {
+      data?: WilayahItemDto[];
+      meta?: WilayahV2Response['meta'];
+    };
+    return { items: raw.data ?? [], meta: raw.meta ?? null };
   }
 
   /**
@@ -152,11 +191,14 @@ export class MasterDataService {
     return body;
   }
 
-  private async fetchMasterData(endpoint: string): Promise<any> {
+  private async fetchMasterData(
+    endpoint: string,
+    version: 'v1' | 'v2' = 'v1',
+  ): Promise<any> {
     try {
       const token = await this.oauthService.getAccessToken(this.environment);
       const baseUrl = SATUSEHAT_BASE[this.environment];
-      const url = `${baseUrl}/masterdata/v1/${endpoint}`;
+      const url = `${baseUrl}/masterdata/${version}/${endpoint}`;
 
       this.logger.debug(`Fetching: ${url}`);
 

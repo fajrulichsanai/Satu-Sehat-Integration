@@ -16,6 +16,7 @@ import { SatusehatGlobalOauthService } from './satusehat-global-oauth.service';
 import { SatusehatFhirService } from './satusehat-fhir.service';
 import { SyncOrchestratorService } from './sync/sync-orchestrator.service';
 import { SyncQueueService } from './sync/sync-queue.service';
+import { SatusehatMonitorService } from './monitor/satusehat-monitor.service';
 
 @Module({
   imports: [
@@ -39,7 +40,14 @@ import { SyncQueueService } from './sync/sync-queue.service';
     SatusehatFhirService,
     SyncOrchestratorService,
     SyncQueueService,
+    SatusehatMonitorService,
   ],
-  exports: [SatusehatClientService, SatusehatGlobalOauthService, SatusehatFhirService, SyncOrchestratorService, SyncQueueService],
+  exports: [
+    SatusehatClientService,
+    SatusehatGlobalOauthService,
+    SatusehatFhirService,
+    SyncOrchestratorService,
+    SyncQueueService,
+  ],
 })
 export class SatusehatModule {}

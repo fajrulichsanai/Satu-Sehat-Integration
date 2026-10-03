@@ -40,6 +40,72 @@ export class SubDistrictDto {
   name: string;
 }
 
+export class WilayahItemDto {
+  code: string;
+  parent_code: string;
+  bps_code: string;
+  name: string;
+}
+
+export const WILAYAH_LEVELS = [
+  'provinces',
+  'cities',
+  'districts',
+  'sub-districts',
+] as const;
+export type WilayahLevel = (typeof WILAYAH_LEVELS)[number];
+
+/** Query Master Wilayah v2. Kode wilayah boleh dipisah koma. */
+export class WilayahV2QueryDto {
+  @ApiPropertyOptional({ default: 1, minimum: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  current_page = 1;
+
+  @ApiPropertyOptional({ description: 'Cursor next dari meta.cursors' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  next?: number;
+
+  @ApiPropertyOptional({ description: 'Cursor prev dari meta.cursors' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  prev?: number;
+
+  @ApiPropertyOptional({ description: 'Filter kode wilayah (pisah koma)' })
+  @IsOptional()
+  @Matches(/^[\d.,]+$/, { message: 'codes hanya angka dipisah koma' })
+  codes?: string;
+
+  @ApiPropertyOptional({ description: 'Untuk cities' })
+  @IsOptional()
+  @Matches(/^[\d.,]+$/, { message: 'province_codes hanya angka dipisah koma' })
+  province_codes?: string;
+
+  @ApiPropertyOptional({ description: 'Untuk districts' })
+  @IsOptional()
+  @Matches(/^[\d.,]+$/, { message: 'city_codes hanya angka dipisah koma' })
+  city_codes?: string;
+
+  @ApiPropertyOptional({ description: 'Untuk sub-districts' })
+  @IsOptional()
+  @Matches(/^[\d.,]+$/, { message: 'district_codes hanya angka dipisah koma' })
+  district_codes?: string;
+}
+
+export interface WilayahV2Response {
+  items: WilayahItemDto[];
+  meta: {
+    item_count?: number;
+    page?: { current?: number; next?: number; total_page?: number };
+    cursors?: { next?: number; previous?: number };
+  } | null;
+}
+
 export class MasterDataResponseDto<T> {
   status: number;
   error: boolean;
@@ -180,8 +246,17 @@ export interface SaranaItem {
   kabkota?: SaranaWilayah;
   kecamatan?: SaranaWilayah;
   kelurahan?: SaranaWilayah;
+  wilayah_perairan_darat?: unknown;
+  wilayah_karakteristik?: unknown;
+  sarana_administrasi?: {
+    kode?: string;
+    nama?: string;
+    kode_sarana?: string;
+    status_aktif?: boolean;
+    status_sarana?: string;
+  };
   jenis_sarana?: { kode: string; nama: string; nama_alt?: string };
-  subjenis?: { kode: string; nama: string };
+  subjenis?: { kode: string; nama: string; nama_alt?: string };
   kelas_sarana?: { kode: string; nama: string };
   status_sarana?: string;
   status_aktif?: boolean;

@@ -60,6 +60,27 @@ export class SatusehatClientService {
     return this.refreshToken(clinic);
   }
 
+  /**
+   * Paksa minta token baru — dipakai untuk "Test Koneksi" setelah kredensial
+   * diubah. Melempar ServiceUnavailableException bila kredensial ditolak.
+   */
+  async testConnection(clinicId: number): Promise<{ expiresAt: Date }> {
+    const clinic = await this.clinicRepository.findOne({
+      where: { id: clinicId },
+    });
+    if (!clinic?.satusehatClientId || !clinic?.satusehatClientSecret) {
+      throw new ServiceUnavailableException(
+        'Konfigurasi SATUSEHAT belum lengkap',
+      );
+    }
+    await this.refreshToken(clinic);
+    const refreshed = await this.clinicRepository.findOne({
+      where: { id: clinicId },
+      select: { id: true, satusehatTokenExpiresAt: true },
+    });
+    return { expiresAt: refreshed!.satusehatTokenExpiresAt };
+  }
+
   async sendFhirResource(
     clinicId: number,
     method: 'POST' | 'PUT',

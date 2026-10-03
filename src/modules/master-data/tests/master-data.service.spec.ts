@@ -106,4 +106,40 @@ describe('MasterDataService – Master Sarana Index', () => {
       service.getSaranaByKodeSatusehat('1000000001'),
     ).rejects.toThrow(NotFoundException);
   });
+
+  it('Master Wilayah v1: query di-encode dan param codes diteruskan', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { status: 200, error: false, message: 'ok', data: [] }),
+    );
+    await service.getCities('32&x=1', '3273');
+    const [url] = fetchMock.mock.calls[0] as [string];
+    const parsed = new URL(url);
+    expect(parsed.pathname).toBe('/masterdata/v1/cities');
+    expect(Object.fromEntries(parsed.searchParams)).toEqual({
+      province_codes: '32&x=1',
+      codes: '3273',
+    });
+  });
+
+  it('Master Wilayah v2: memanggil /v2 dan mengembalikan items + meta', async () => {
+    const meta = { item_count: 1, page: { current: 1, total_page: 3 } };
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, {
+        status: 200,
+        error: false,
+        message: 'ok',
+        data: [
+          { code: '32', parent_code: '', bps_code: '32', name: 'Jawa Barat' },
+        ],
+        meta,
+      }),
+    );
+    const res = await service.getWilayahV2('provinces', { current_page: 1 });
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe(
+      'https://api-satusehat-stg.dto.kemkes.go.id/masterdata/v2/provinces?current_page=1',
+    );
+    expect(res.items[0].name).toBe('Jawa Barat');
+    expect(res.meta).toEqual(meta);
+  });
 });

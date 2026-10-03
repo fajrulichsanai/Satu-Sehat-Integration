@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import { Clinic } from './entities/clinic.entity';
 import { UpdateClinicDto, SatusehatConfigDto } from './dto/clinic.dto';
 import { encrypt } from '../../common/utils/crypto.util';
+import { SatusehatClientService } from '../satusehat/satusehat-client.service';
 
 @Injectable()
 export class ClinicsService {
@@ -20,6 +21,7 @@ export class ClinicsService {
     @InjectRepository(Clinic)
     private clinicRepository: Repository<Clinic>,
     private readonly configService: ConfigService,
+    private readonly satusehatClient: SatusehatClientService,
   ) {
     this.encryptionKey = this.configService.get<string>(
       'ENCRYPTION_KEY',
@@ -163,6 +165,11 @@ export class ClinicsService {
     );
     clinic.satusehatEnvironment = dto.satusehatEnvironment;
     clinic.updatedBy = updatedBy;
+    // Kredensial berubah → buang token lama agar request berikutnya minta ulang
+    Object.assign(clinic, {
+      satusehatToken: null,
+      satusehatTokenExpiresAt: null,
+    });
 
     await this.clinicRepository.save(clinic);
 
@@ -213,15 +220,30 @@ export class ClinicsService {
 
     this.logger.log(`[SATUSEHAT-TEST] Test koneksi berhasil | clinicId=${clinicId}, env=${clinic.satusehatEnvironment}`);
 
-    return {
-      success: true,
-      data: {
-        connected: true,
-        environment: clinic.satusehatEnvironment,
-        orgId: clinic.satusehatOrgId,
-        message: 'Koneksi ke SATUSEHAT berhasil (mock)',
-        note: 'TODO: Implement actual OAuth2 token request',
-      },
-    };
+    try {
+      const { expiresAt } =
+        await this.satusehatClient.testConnection(clinicId);
+      this.logger.log(`[SATUSEHAT-TEST] Koneksi berhasil | clinicId=${clinicId}`);
+      return {
+        success: true,
+        data: {
+          connected: true,
+          environment: clinic.satusehatEnvironment,
+          orgId: clinic.satusehatOrgId,
+          tokenExpiresAt: expiresAt,
+          message: 'Koneksi ke SATUSEHAT berhasil',
+        },
+      };
+    } catch {
+      this.logger.warn(`[SATUSEHAT-TEST] Koneksi gagal | clinicId=${clinicId}`);
+      throw new BadRequestException({
+        success: false,
+        error: {
+          code: 'SATUSEHAT_AUTH_FAILED',
+          message:
+            'Gagal mendapatkan token SATUSEHAT. Periksa Client ID, Client Secret, dan environment.',
+        },
+      });
+    }
   }
 }

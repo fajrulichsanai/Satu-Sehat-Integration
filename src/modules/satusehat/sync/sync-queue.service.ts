@@ -21,8 +21,8 @@ export class SyncQueueService {
     private readonly orchestrator: SyncOrchestratorService,
   ) {}
 
-  /** Process all pending/retryable failed items */
-  async processPending(): Promise<{
+  /** Process all pending/retryable failed items (optionally for one clinic) */
+  async processPending(clinicId?: number): Promise<{
     processed: number;
     succeeded: number;
     failed: number;
@@ -39,7 +39,10 @@ export class SyncQueueService {
 
     try {
       const items = await this.syncLogRepo.find({
-        where: { status: SyncLogStatus.PENDING },
+        where: {
+          status: SyncLogStatus.PENDING,
+          ...(clinicId ? { clinicId } : {}),
+        },
         order: { createdAt: 'ASC' },
         take: 100,
       });
