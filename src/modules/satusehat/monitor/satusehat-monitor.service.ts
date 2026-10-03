@@ -42,6 +42,19 @@ const idStatus = (idCol: string, type: string) =>
   `WHEN x.sync_status = 'failed' OR ${lastLog(type, 'status')} = 'failed' THEN 'failed' ` +
   `ELSE 'pending' END`;
 
+/** Status untuk resource yang hanya punya kolom id (tanpa sync_status) */
+const idOrLogStatus = (idCol: string, type: string) =>
+  `CASE WHEN ${idCol} IS NOT NULL AND ${idCol} <> '' THEN 'synced' ` +
+  `WHEN ${lastLog(type, 'status')} = 'failed' THEN 'failed' ELSE 'pending' END`;
+
+/** ID SATUSEHAT dari tabel satusehat_resource_links */
+const linkId = (localType: string) =>
+  `(SELECT k.satusehat_id FROM satusehat_resource_links k WHERE k.local_type = '${localType}' AND k.local_id = x.id LIMIT 1)`;
+
+const linkStatus = (localType: string, logType: string) =>
+  `CASE WHEN ${linkId(localType)} IS NOT NULL THEN 'synced' ` +
+  `WHEN ${lastLog(logType, 'status')} = 'failed' THEN 'failed' ELSE 'pending' END`;
+
 const encounterChild = (table: string) => (qb: SelectQueryBuilder<any>) =>
   qb
     .from(table, 'x')
@@ -52,9 +65,8 @@ const encounterChild = (table: string) => (qb: SelectQueryBuilder<any>) =>
 const RESOURCES: Record<SatusehatResourceType, ResourceDef> = {
   Patient: {
     label: 'Pasien',
-    // Sync pasien memakai id encounter (lihat SyncOrchestratorService), jadi
-    // tidak ditawarkan dari sini — pasien dicocokkan lewat pencarian NIK.
-    syncable: false,
+    // "Kirim" = cari IHS pasien di SATUSEHAT berdasarkan NIK
+    syncable: true,
     base: (qb) => qb.from('patients', 'x').where('x.clinic_id = :clinicId'),
     title: 'x.name',
     subtitle:
@@ -114,9 +126,9 @@ const RESOURCES: Record<SatusehatResourceType, ResourceDef> = {
     title: "CONCAT(x.name, ': ', x.value, ' ', COALESCE(x.unit, ''))",
     subtitle: "CONCAT('Pasien: ', COALESCE(pt.name, '-'))",
     date: 'COALESCE(x.recorded_at, x.created_at)',
-    // vital_signs tidak menyimpan id SATUSEHAT → ambil dari log sukses terakhir
-    satusehatId: `(SELECT l.satusehat_id FROM satusehat_sync_logs l WHERE l.resource_type = 'Observation' AND l.local_id = x.id AND l.status = 'success' ORDER BY l.id DESC LIMIT 1)`,
-    status: `CASE ${lastLog('Observation', 'status')} WHEN 'success' THEN 'synced' WHEN 'failed' THEN 'failed' ELSE 'pending' END`,
+    // vital_signs tidak punya kolom id SATUSEHAT → pakai tabel link
+    satusehatId: linkId('vital_sign'),
+    status: linkStatus('vital_sign', 'Observation'),
     lastError: lastLog('Observation', 'error_message'),
     search: ['x.name', 'pt.name'],
   },
@@ -137,9 +149,27 @@ const RESOURCES: Record<SatusehatResourceType, ResourceDef> = {
     lastError: lastLog('MedicationRequest', 'error_message'),
     search: ['m.name', 'pt.name'],
   },
+  MedicationDispense: {
+    label: 'Pengeluaran Obat (MedicationDispense)',
+    syncable: true,
+    base: (qb) =>
+      encounterChild('dispenses')(qb).leftJoin(
+        'medications',
+        'm',
+        'm.id = x.medication_id',
+      ),
+    title: "CONCAT(COALESCE(m.name, '-'), ' × ', x.quantity_dispensed)",
+    subtitle: "CONCAT('Pasien: ', COALESCE(pt.name, '-'))",
+    date: 'x.dispensed_at',
+    satusehatId: linkId('dispense'),
+    status: linkStatus('dispense', 'MedicationDispense'),
+    lastError: lastLog('MedicationDispense', 'error_message'),
+    search: ['m.name', 'pt.name'],
+  },
   Practitioner: {
     label: 'Tenaga Kesehatan (Practitioner)',
-    syncable: false,
+    // "Kirim" = cari IHS nakes berdasarkan NIK
+    syncable: true,
     base: (qb) =>
       qb.from('practitioners', 'x').where('x.clinic_id = :clinicId'),
     title: 'x.name',
@@ -147,22 +177,21 @@ const RESOURCES: Record<SatusehatResourceType, ResourceDef> = {
       "CONCAT('NIK ', COALESCE(x.nik, '-'), ' · ', COALESCE(x.specialization, '-'))",
     date: 'x.created_at',
     satusehatId: 'x.satusehat_practitioner_id',
-    status:
-      "CASE WHEN x.satusehat_practitioner_id IS NOT NULL AND x.satusehat_practitioner_id <> '' THEN 'synced' ELSE 'pending' END",
-    lastError: 'NULL',
+    status: idOrLogStatus('x.satusehat_practitioner_id', 'Practitioner'),
+    lastError: lastLog('Practitioner', 'error_message'),
     search: ['x.name', 'x.nik'],
   },
   Location: {
     label: 'Lokasi / Ruangan (Location)',
-    syncable: false,
+    // "Kirim" = buat resource Location di SATUSEHAT
+    syncable: true,
     base: (qb) => qb.from('locations', 'x').where('x.clinic_id = :clinicId'),
     title: 'x.name',
     subtitle: "CONCAT('Tipe: ', x.type)",
     date: 'x.created_at',
     satusehatId: 'x.satusehat_location_id',
-    status:
-      "CASE WHEN x.satusehat_location_id IS NOT NULL AND x.satusehat_location_id <> '' THEN 'synced' ELSE 'pending' END",
-    lastError: 'NULL',
+    status: idOrLogStatus('x.satusehat_location_id', 'Location'),
+    lastError: lastLog('Location', 'error_message'),
     search: ['x.name'],
   },
 };

@@ -12,6 +12,10 @@ export class Medication extends BaseEntity {
   @Column({ length: 100 })
   name: string;
 
+  /** Kode Kamus Farmasi & Alkes (KFA) Kemenkes — wajib untuk kirim resep ke SATUSEHAT */
+  @Column({ name: 'kfa_code', length: 20, nullable: true })
+  kfaCode: string;
+
   @Column({ name: 'generic_name', length: 100, nullable: true })
   genericName: string;
 

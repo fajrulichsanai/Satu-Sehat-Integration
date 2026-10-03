@@ -6,6 +6,7 @@ import {
   IsNotEmpty,
   IsNumber,
   IsOptional,
+  Matches,
   IsString,
   Min,
 } from 'class-validator';
@@ -18,6 +19,13 @@ export class CreateMedicationDto {
   @IsString()
   @IsNotEmpty()
   name: string;
+
+  @ApiPropertyOptional({
+    description: 'Kode KFA (Kamus Farmasi & Alkes) Kemenkes, mis. 93002013',
+  })
+  @IsOptional()
+  @Matches(/^\d{8}$/, { message: 'Kode KFA harus 8 digit angka' })
+  kfaCode?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -73,6 +81,13 @@ export class UpdateMedicationDto {
   @IsOptional()
   @IsString()
   name?: string;
+
+  @ApiPropertyOptional({
+    description: 'Kode KFA (Kamus Farmasi & Alkes) Kemenkes, mis. 93002013',
+  })
+  @IsOptional()
+  @Matches(/^\d{8}$/, { message: 'Kode KFA harus 8 digit angka' })
+  kfaCode?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

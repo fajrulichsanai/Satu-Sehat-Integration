@@ -114,6 +114,40 @@ export class SatusehatClientService {
     }
   }
 
+  /** GET ke FHIR SATUSEHAT, mis. `Practitioner?identifier=...` */
+  async getFhir(
+    clinicId: number,
+    pathAndQuery: string,
+  ): Promise<{ status: number; data: any }> {
+    const clinic = await this.clinicRepository.findOne({
+      where: { id: clinicId },
+    });
+    if (!clinic)
+      throw new ServiceUnavailableException('Klinik tidak ditemukan');
+
+    const token = await this.getAccessToken(clinicId);
+    const baseUrl = SATUSEHAT_BASE[clinic.satusehatEnvironment];
+    try {
+      const response = await fetch(`${baseUrl}/fhir-r4/v1/${pathAndQuery}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json().catch(() => ({}));
+      return { status: response.status, data };
+    } catch (err) {
+      this.logger.error(`SATUSEHAT GET failed: ${(err as Error).message}`);
+      throw new ServiceUnavailableException('Koneksi ke SATUSEHAT gagal');
+    }
+  }
+
+  /** Cari IHS Practitioner berdasarkan NIK (Bundle FHIR). */
+  async searchPractitionerByNik(clinicId: number, nik: string): Promise<any> {
+    const { data } = await this.getFhir(
+      clinicId,
+      `Practitioner?identifier=${encodeURIComponent(`https://fhir.kemkes.go.id/id/nik|${nik}`)}`,
+    );
+    return data;
+  }
+
   async searchPatientByNik(clinicId: number, nik: string): Promise<any> {
     const clinic = await this.clinicRepository.findOne({
       where: { id: clinicId },

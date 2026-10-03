@@ -10,6 +10,12 @@ import { Prescription } from '../prescription/entities/prescription.entity';
 import { Allergy } from '../allergy/entities/allergy.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { SatusehatSyncLog } from './sync/entities/satusehat-sync-log.entity';
+import { SatusehatResourceLink } from './sync/entities/satusehat-resource-link.entity';
+import { Practitioner } from '../practitioners/entities/practitioner.entity';
+import { Location } from '../location/entities/location.entity';
+import { Anamnesis } from '../anamnesis/entities/anamnesis.entity';
+import { OhisData } from '../ohis-data/entities/ohis-data.entity';
+import { Dispense } from '../dispense/entities/dispense.entity';
 import { SatusehatController } from './satusehat.controller';
 import { SatusehatClientService } from './satusehat-client.service';
 import { SatusehatGlobalOauthService } from './satusehat-global-oauth.service';
@@ -31,6 +37,12 @@ import { SatusehatMonitorService } from './monitor/satusehat-monitor.service';
       Allergy,
       Clinic,
       SatusehatSyncLog,
+      SatusehatResourceLink,
+      Practitioner,
+      Location,
+      Anamnesis,
+      OhisData,
+      Dispense,
     ]),
   ],
   controllers: [SatusehatController],

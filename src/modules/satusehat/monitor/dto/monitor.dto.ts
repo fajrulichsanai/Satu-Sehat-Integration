@@ -18,6 +18,7 @@ export const SATUSEHAT_RESOURCE_TYPES = [
   'Procedure',
   'Observation',
   'MedicationRequest',
+  'MedicationDispense',
   'Practitioner',
   'Location',
 ] as const;

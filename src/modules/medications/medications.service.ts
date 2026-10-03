@@ -84,6 +84,7 @@ export class MedicationsService {
       clinicId,
       name: dto.name,
       genericName: dto.genericName,
+      kfaCode: dto.kfaCode,
       strength: dto.strength,
       strengthUnit: dto.strengthUnit,
       dosageForm: dto.dosageForm,
@@ -109,6 +110,7 @@ export class MedicationsService {
     Object.assign(med, {
       name: dto.name ?? med.name,
       genericName: dto.genericName ?? med.genericName,
+      kfaCode: dto.kfaCode ?? med.kfaCode,
       strength: dto.strength ?? med.strength,
       strengthUnit: dto.strengthUnit ?? med.strengthUnit,
       dosageForm: dto.dosageForm ?? med.dosageForm,
@@ -190,6 +192,7 @@ export class MedicationsService {
       medicationId: m.id,
       name: m.name,
       genericName: m.genericName,
+      kfaCode: m.kfaCode,
       strength: m.strength,
       dosageForm: m.dosageForm,
       quantity: m.quantity,

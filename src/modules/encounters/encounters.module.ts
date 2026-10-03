@@ -1,3 +1,4 @@
+import { SatusehatModule } from '../satusehat/satusehat.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Encounter } from './entities/encounter.entity';
@@ -35,6 +36,7 @@ import { OhisService } from '../ohis-data/ohis.service';
 
 @Module({
   imports: [
+    SatusehatModule,
     TypeOrmModule.forFeature([
       Encounter,
       Queue,

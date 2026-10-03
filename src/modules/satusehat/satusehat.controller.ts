@@ -24,23 +24,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { UserRole } from '../../enums/user-role.enum';
 import { ApiResponse } from '../../common/response/api-response';
-
-/** Ambil pesan yang bisa dibaca dari OperationOutcome FHIR bila ada. */
-function readableError(error?: string): string {
-  if (!error) return 'tidak diketahui';
-  try {
-    const parsed = JSON.parse(error) as {
-      issue?: { details?: { text?: string }; diagnostics?: string }[];
-    };
-    const texts = (parsed.issue ?? [])
-      .map((i) => i.details?.text || i.diagnostics)
-      .filter(Boolean);
-    if (texts.length) return texts.join('; ');
-  } catch {
-    // bukan JSON
-  }
-  return error.length > 300 ? `${error.slice(0, 300)}…` : error;
-}
+import { readableFhirError } from './fhir/fhir-error';
 
 @ApiTags('satusehat')
 @ApiBearerAuth('JWT-auth')
@@ -117,6 +101,20 @@ export class SatusehatController {
     return ApiResponse.success(await this.syncQueue.processPending(clinicId));
   }
 
+  @Post('encounters/:encounterId/sync')
+  @ApiOperation({
+    summary:
+      'Kirim seluruh data kunjungan sesuai Playbook RME Rawat Jalan (laporan per langkah)',
+  })
+  async syncEncounterFull(
+    @Param('encounterId', ParseIntPipe) encounterId: number,
+    @ClinicId() clinicId: number,
+  ) {
+    return ApiResponse.success(
+      await this.syncOrchestrator.syncEncounterFull(encounterId, clinicId),
+    );
+  }
+
   @Post('sync/:resourceType/:localId')
   @ApiOperation({ summary: 'Manual sync a resource to SATUSEHAT' })
   async manualSync(
@@ -139,7 +137,7 @@ export class SatusehatController {
         success: false,
         error: {
           code: 'SATUSEHAT_SYNC_FAILED',
-          message: `Gagal mengirim ${canonical} ke SATUSEHAT: ${readableError(result.error)}`,
+          message: `Gagal mengirim ${canonical} ke SATUSEHAT: ${readableFhirError(result.error)}`,
         },
       });
     }
