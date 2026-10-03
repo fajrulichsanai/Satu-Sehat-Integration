@@ -1,10 +1,21 @@
-import { Controller, Post, Get, Body, UseGuards, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Req,
+  UseGuards,
+  Query,
+  Param,
+  ParseIntPipe,
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import {
   RegisterDto,
@@ -12,30 +23,44 @@ import {
   LoginResponseDto,
   UserResponseDto,
   ActivationStatusResponseDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
 } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
+import { Roles } from './decorators/roles.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
+import { UserRole } from '../../enums';
+import { SkipSubscriptionCheck } from '../subscriptions/guards/subscription.guard';
+import { AuditLogService } from '../audit-log/audit-log.service';
+import {
+  AuditActionType,
+  AuditStatus,
+} from '../audit-log/entities/audit-log.entity';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('register')
   @ApiOperation({ summary: 'Register new user' })
   @ApiResponse({ status: 201, description: 'User registered successfully' })
   @ApiResponse({ status: 409, description: 'Email already exists' })
   @ApiResponse({ status: 400, description: 'Validation error' })
   async register(@Body() dto: RegisterDto) {
-    console.log(
-      `Received registration request for email: ${dto.email}`,
-    );
+    console.log(`Received registration request for email: ${dto.email}`);
     return this.authService.register(dto);
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login')
   @ApiOperation({ summary: 'Login user' })
   @ApiResponse({
@@ -44,9 +69,38 @@ export class AuthController {
     type: LoginResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  async login(@Body() dto: LoginDto) {
+  async login(@Body() dto: LoginDto, @Req() req: any) {
     console.log(`Received login request for email: ${dto.email}`);
-    return this.authService.login(dto);
+    try {
+      const result = await this.authService.login(dto);
+      const loggedInUser = (result?.data as { user?: any })?.user;
+      void this.auditLogService.record({
+        clinicId: loggedInUser?.clinicId ?? null,
+        actorId: loggedInUser?.id ?? null,
+        actorName: loggedInUser?.name ?? dto.email ?? 'Unknown',
+        actorRole: loggedInUser?.role ?? 'unknown',
+        actionType: AuditActionType.LOGIN,
+        entityType: 'Auth',
+        status: AuditStatus.SUCCESS,
+        ipAddress: req.ip,
+        userAgent: req.headers?.['user-agent'],
+      });
+      return result;
+    } catch (err) {
+      void this.auditLogService.record({
+        clinicId: null,
+        actorId: null,
+        actorName: dto.email ?? 'Unknown',
+        actorRole: 'unknown',
+        actionType: AuditActionType.LOGIN,
+        entityType: 'Auth',
+        status: AuditStatus.FAILED,
+        failureReason: (err as Error)?.message?.slice(0, 255),
+        ipAddress: req.ip,
+        userAgent: req.headers?.['user-agent'],
+      });
+      throw err;
+    }
   }
 
   @Get('me')
@@ -78,27 +132,101 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @SkipSubscriptionCheck()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Refresh access token' })
   @ApiResponse({ status: 200, description: 'New access token issued' })
   async refresh(@CurrentUser() user: any) {
-    return this.authService.refreshToken(user.userId);
+    return this.authService.refreshToken(user.tokenClaims);
   }
 
   @Post('logout')
+  // Ending a session must always work — never gated on billing.
+  @SkipSubscriptionCheck()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Logout (client should discard token)' })
+  @ApiOperation({ summary: 'Logout: revokes the current access token' })
   @ApiResponse({ status: 200, description: 'Logged out' })
-  async logout() {
-    return this.authService.logout();
+  async logout(@CurrentUser() user: any, @Req() req: any) {
+    void this.auditLogService.record({
+      clinicId: user?.clinicId ?? null,
+      actorId: user?.userId ?? null,
+      actorName: user?.name ?? 'Unknown',
+      actorRole: user?.role ?? 'unknown',
+      actionType: AuditActionType.LOGOUT,
+      entityType: 'Auth',
+      status: AuditStatus.SUCCESS,
+      ipAddress: req.ip,
+      userAgent: req.headers?.['user-agent'],
+    });
+    return this.authService.logout(user?.tokenClaims);
   }
 
   @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('verify-email')
   @ApiOperation({ summary: 'Verify email with token sent to email' })
   async verifyEmail(@Query('token') token: string) {
     return this.authService.verifyEmail(token);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('forgot-password')
+  @ApiOperation({ summary: 'Request password reset link via email' })
+  @ApiResponse({ status: 200, description: 'Reset link sent if email exists' })
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto.email!);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Reset password with token sent to email' })
+  @ApiResponse({ status: 200, description: 'Password reset successful' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired token' })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto.token!, dto.password!);
+  }
+
+  @Post('impersonate/:userId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary:
+      'Super Admin: issue a short-lived token to act as another user, for support/debugging (audited)',
+  })
+  @ApiResponse({ status: 200, description: 'Impersonation token issued' })
+  async impersonate(
+    @Param('userId', ParseIntPipe) userId: number,
+    @CurrentUser() admin: any,
+    @Req() req: any,
+  ) {
+    const result = await this.authService.impersonate(userId);
+    const target = result?.data?.user;
+    void this.auditLogService.record({
+      clinicId: target?.clinicId ?? null,
+      actorId: admin.userId,
+      actorName: admin.name ?? admin.email ?? 'Super Admin',
+      actorRole: admin.role,
+      actionType: AuditActionType.LOGIN,
+      entityType: 'Impersonation',
+      entityId: target?.id ?? null,
+      entityLabel: target ? `${target.name} (${target.email})` : null,
+      afterValue: target
+        ? {
+            impersonatedUserId: target.id,
+            impersonatedUserEmail: target.email,
+            impersonatedUserRole: target.role,
+            impersonatedClinicId: target.clinicId,
+          }
+        : null,
+      status: AuditStatus.SUCCESS,
+      ipAddress: req.ip,
+      userAgent: req.headers?.['user-agent'],
+    });
+    return result;
   }
 }

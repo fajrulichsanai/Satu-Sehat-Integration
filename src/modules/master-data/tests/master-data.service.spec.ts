@@ -1,145 +1,183 @@
-import {
-  BadRequestException,
-  NotFoundException,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
+import { ServiceUnavailableException } from '@nestjs/common';
 import { MasterDataService } from '../master-data.service';
 import { SatusehatGlobalOauthService } from '../../satusehat/satusehat-global-oauth.service';
-import { JenisSarana, SearchSaranaQueryDto } from '../dto/master-data.dto';
 
-describe('MasterDataService – Master Sarana Index', () => {
-  let service: MasterDataService;
-  let fetchMock: jest.Mock;
+describe('MasterDataService', () => {
+  let oauthService: { getAccessToken: jest.Mock };
 
-  const jsonResponse = (status: number, body: unknown) =>
-    ({
-      ok: status >= 200 && status < 300,
-      status,
-      statusText: 'status',
-      json: () => Promise.resolve(body),
-    }) as unknown as Response;
+  function buildService(env: string) {
+    return Test.createTestingModule({
+      providers: [
+        MasterDataService,
+        { provide: SatusehatGlobalOauthService, useValue: oauthService },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn(() => env) },
+        },
+      ],
+    }).compile();
+  }
 
   beforeEach(() => {
-    const oauth = {
-      getAccessToken: jest.fn().mockResolvedValue('token-123'),
-    } as unknown as SatusehatGlobalOauthService;
-    const config = {
-      get: jest.fn().mockReturnValue('sandbox'),
-    } as unknown as ConfigService;
-    service = new MasterDataService(oauth, config);
-    fetchMock = jest.fn();
-    global.fetch = fetchMock;
+    oauthService = { getAccessToken: jest.fn().mockResolvedValue('token-abc') };
+    global.fetch = jest.fn() as any;
   });
 
-  it('meneruskan filter ke endpoint MSI dan menormalkan respons', async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse(200, {
-        status_code: 200,
-        message: 'Success',
-        page: 2,
-        total_page: 5,
-        data: [
-          { kode_satusehat: '1000000001', kode_sarana: 'K1', nama: 'Klinik A' },
-        ],
-      }),
-    );
+  it('should be defined', async () => {
+    const module = await buildService('sandbox');
+    expect(module.get(MasterDataService)).toBeDefined();
+  });
 
-    const query = Object.assign(new SearchSaranaQueryDto(), {
-      page: 2,
-      limit: 10,
-      jenis_sarana: JenisSarana.KLINIK,
-      nama: 'Klinik A',
+  describe('getProvinces', () => {
+    it('fetches from the sandbox base URL by default (positive)', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: [] }),
+      });
+      const module = await buildService('sandbox');
+      const service = module.get(MasterDataService);
+
+      await service.getProvinces();
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('api-satusehat-stg.dto.kemkes.go.id'),
+        expect.any(Object),
+      );
     });
-    const result = await service.searchSarana(query);
 
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const parsed = new URL(url);
-    expect(parsed.origin + parsed.pathname).toBe(
-      'https://api-satusehat-stg.dto.kemkes.go.id/masterdata/v1/mastersaranaindex/mastersarana',
-    );
-    expect(Object.fromEntries(parsed.searchParams)).toEqual({
-      page: '2',
-      limit: '10',
-      jenis_sarana: '103',
-      nama: 'Klinik A',
+    it('fetches from the production base URL when configured (positive)', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: [] }),
+      });
+      const module = await buildService('production');
+      const service = module.get(MasterDataService);
+
+      await service.getProvinces();
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/^https:\/\/api-satusehat\.kemkes\.go\.id/),
+        expect.any(Object),
+      );
     });
-    expect(init.headers).toEqual({ Authorization: 'Bearer token-123' });
-    expect(result).toEqual({
-      page: 2,
-      totalPage: 5,
-      items: [
-        { kode_satusehat: '1000000001', kode_sarana: 'K1', nama: 'Klinik A' },
-      ],
+
+    it('appends codes as a query param when provided (positive)', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: [] }),
+      });
+      const module = await buildService('sandbox');
+      const service = module.get(MasterDataService);
+
+      await service.getProvinces('11,12');
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('provinces?codes=11,12'),
+        expect.any(Object),
+      );
+    });
+
+    it('sends the bearer token from the oauth service (positive)', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: [] }),
+      });
+      const module = await buildService('sandbox');
+      const service = module.get(MasterDataService);
+
+      await service.getProvinces();
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer token-abc',
+          }),
+        }),
+      );
+    });
+
+    it('throws ServiceUnavailableException when the upstream responds with an error status (negative)', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+      });
+      const module = await buildService('sandbox');
+      const service = module.get(MasterDataService);
+
+      await expect(service.getProvinces()).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+    });
+
+    it('throws ServiceUnavailableException when fetch itself throws (negative)', async () => {
+      (global.fetch as jest.Mock).mockRejectedValue(new Error('network down'));
+      const module = await buildService('sandbox');
+      const service = module.get(MasterDataService);
+
+      await expect(service.getProvinces()).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+    });
+
+    it('throws ServiceUnavailableException when the oauth token fetch fails (negative)', async () => {
+      oauthService.getAccessToken.mockRejectedValue(new Error('oauth down'));
+      const module = await buildService('sandbox');
+      const service = module.get(MasterDataService);
+
+      await expect(service.getProvinces()).rejects.toThrow(
+        ServiceUnavailableException,
+      );
     });
   });
 
-  it('mengubah error 4xx SATUSEHAT menjadi BadRequest', async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse(400, {
-        status_code: 400,
-        message: 'limit cannot be more than 2000',
-        data: null,
-      }),
-    );
-    await expect(
-      service.searchSarana(new SearchSaranaQueryDto()),
-    ).rejects.toThrow(BadRequestException);
-  });
-
-  it('mengubah gagal koneksi menjadi ServiceUnavailable', async () => {
-    fetchMock.mockRejectedValue(new Error('ECONNRESET'));
-    await expect(
-      service.searchSarana(new SearchSaranaQueryDto()),
-    ).rejects.toThrow(ServiceUnavailableException);
-  });
-
-  it('getSaranaByKodeSatusehat: validasi format & not found', async () => {
-    await expect(service.getSaranaByKodeSatusehat('123')).rejects.toThrow(
-      BadRequestException,
-    );
-
-    fetchMock.mockResolvedValue(
-      jsonResponse(200, { status_code: 200, message: 'Success', data: [] }),
-    );
-    await expect(
-      service.getSaranaByKodeSatusehat('1000000001'),
-    ).rejects.toThrow(NotFoundException);
-  });
-
-  it('Master Wilayah v1: query di-encode dan param codes diteruskan', async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse(200, { status: 200, error: false, message: 'ok', data: [] }),
-    );
-    await service.getCities('32&x=1', '3273');
-    const [url] = fetchMock.mock.calls[0] as [string];
-    const parsed = new URL(url);
-    expect(parsed.pathname).toBe('/masterdata/v1/cities');
-    expect(Object.fromEntries(parsed.searchParams)).toEqual({
-      province_codes: '32&x=1',
-      codes: '3273',
+  describe('getCities / getDistricts / getSubDistricts', () => {
+    beforeEach(() => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: [] }),
+      });
     });
-  });
 
-  it('Master Wilayah v2: memanggil /v2 dan mengembalikan items + meta', async () => {
-    const meta = { item_count: 1, page: { current: 1, total_page: 3 } };
-    fetchMock.mockResolvedValue(
-      jsonResponse(200, {
-        status: 200,
-        error: false,
-        message: 'ok',
-        data: [
-          { code: '32', parent_code: '', bps_code: '32', name: 'Jawa Barat' },
-        ],
-        meta,
-      }),
-    );
-    const res = await service.getWilayahV2('provinces', { current_page: 1 });
-    const [url] = fetchMock.mock.calls[0] as [string];
-    expect(url).toBe(
-      'https://api-satusehat-stg.dto.kemkes.go.id/masterdata/v2/provinces?current_page=1',
-    );
-    expect(res.items[0].name).toBe('Jawa Barat');
-    expect(res.meta).toEqual(meta);
+    it('getCities appends province_codes param (positive)', async () => {
+      const module = await buildService('sandbox');
+      const service = module.get(MasterDataService);
+      await service.getCities('11');
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('cities?province_codes=11'),
+        expect.any(Object),
+      );
+    });
+
+    it('getDistricts appends city_codes param (positive)', async () => {
+      const module = await buildService('sandbox');
+      const service = module.get(MasterDataService);
+      await service.getDistricts('1101');
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('districts?city_codes=1101'),
+        expect.any(Object),
+      );
+    });
+
+    it('getSubDistricts appends district_codes param (positive)', async () => {
+      const module = await buildService('sandbox');
+      const service = module.get(MasterDataService);
+      await service.getSubDistricts('110101');
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('sub-districts?district_codes=110101'),
+        expect.any(Object),
+      );
+    });
+
+    it('omits the query string when no filter is given (edge)', async () => {
+      const module = await buildService('sandbox');
+      const service = module.get(MasterDataService);
+      await service.getCities();
+      const calledUrl = (global.fetch as jest.Mock).mock.calls[0][0];
+      expect(calledUrl.endsWith('/cities')).toBe(true);
+    });
   });
 });

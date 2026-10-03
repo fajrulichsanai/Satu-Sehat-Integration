@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Patch,
   Post,
   Body,
   Query,
@@ -10,15 +11,18 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { PublicService } from './public.service';
 import {
-  AvailableSlotsQueryDto,
-  BookingDto,
-  QueueStatusQueryDto,
-} from './dto/public.dto';
+  PublicAvailableSlotsQueryDto,
+  PublicCancelReservationDto,
+  PublicCreateReservationDto,
+  PublicReservationStatusQueryDto,
+} from '../reservations/dto/reservation.dto';
 import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('public')
 @Public()
-@Throttle({ default: { limit: 10, ttl: 60000 } })
+// Per client IP. This limit only took effect once ThrottlerGuard became a
+// global guard, so browsing slots stays roomy while booking is kept tight.
+@Throttle({ default: { limit: 30, ttl: 60000 } })
 @Controller('public')
 export class PublicController {
   constructor(private readonly publicService: PublicService) {}
@@ -31,23 +35,42 @@ export class PublicController {
   }
 
   @Get('available-slots')
-  @ApiOperation({ summary: 'Get available booking slots' })
-  async getAvailableSlots(@Query() query: AvailableSlotsQueryDto) {
+  @ApiOperation({ summary: 'Get available reservation slots' })
+  async getAvailableSlots(@Query() query: PublicAvailableSlotsQueryDto) {
     const data = await this.publicService.getAvailableSlots(query);
     return { success: true, data };
   }
 
-  @Post('book')
-  @ApiOperation({ summary: 'Create online booking' })
-  async book(@Body() dto: BookingDto) {
-    const data = await this.publicService.book(dto);
-    return { success: true, message: 'Booking berhasil dibuat', data };
+  @Post('reservations')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({ summary: 'Create reservation from landing page' })
+  async createReservation(@Body() dto: PublicCreateReservationDto) {
+    const data = await this.publicService.createReservation(dto);
+    return {
+      success: true,
+      message:
+        'Reservasi berhasil dibuat, silakan tunggu konfirmasi dari klinik',
+      data,
+    };
   }
 
-  @Get('queue-status')
-  @ApiOperation({ summary: 'Check queue status by token' })
-  async getQueueStatus(@Query() query: QueueStatusQueryDto) {
-    const data = await this.publicService.getQueueStatus(query);
+  @Get('reservations/status')
+  @ApiOperation({ summary: 'Check reservation status by token' })
+  async getReservationStatus(@Query() query: PublicReservationStatusQueryDto) {
+    const data = await this.publicService.getReservationStatus(query);
     return { success: true, data };
+  }
+
+  @Patch('reservations/cancel')
+  @ApiOperation({
+    summary: 'Cancel a pending/confirmed reservation via token (self-service)',
+  })
+  async cancelReservation(@Body() dto: PublicCancelReservationDto) {
+    const data = await this.publicService.cancelReservation(dto.token);
+    return {
+      success: true,
+      message: 'Reservasi berhasil dibatalkan',
+      data,
+    };
   }
 }

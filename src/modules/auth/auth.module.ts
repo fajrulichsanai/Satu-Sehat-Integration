@@ -7,27 +7,31 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { User } from '../users/entities/user.entity';
+import { RevokedToken } from './entities/revoked-token.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { OwnerCodeModule } from '../owner-code/owner-code.module';
+import { AuditLogModule } from '../audit-log/audit-log.module';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Clinic]),
+    TypeOrmModule.forFeature([User, Clinic, RevokedToken]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>(
-          'JWT_SECRET',
-          'your-secret-key-change-in-production',
-        ),
+        secret: configService.getOrThrow<string>('JWT_SECRET'),
         signOptions: {
-          expiresIn: '24h',
+          // Short by default so a stolen token has a small window; revocation
+          // (logout/password reset) covers the rest — see JwtStrategy.
+          expiresIn: configService.get<string>('JWT_EXPIRES_IN', '8h') as any,
         },
       }),
       inject: [ConfigService],
     }),
     OwnerCodeModule,
+    AuditLogModule,
+    SubscriptionsModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

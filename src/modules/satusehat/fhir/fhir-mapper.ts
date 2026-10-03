@@ -2,24 +2,25 @@
  * Pemetaan data ApexRecord → resource FHIR SATUSEHAT.
  *
  * Mengikuti Playbook Interoperabilitas "RME Rawat Jalan" dan koleksi Postman
- * resmi "24. Use Case - Gigi" (lihat file *.postman_collection.json di root
- * repo). Semua referensi Patient/Practitioner/Location/Encounter memakai ID
+ * resmi "24. Use Case - Gigi" (file *.postman_collection.json di root repo).
+ * Semua referensi Patient/Practitioner/Location/Encounter memakai ID
  * SATUSEHAT (IHS), bukan ID lokal.
+ *
+ * Sumber data:
+ *   Encounter            ← encounters
+ *   Observation (vital)  ← physical_examinations
+ *   Observation (OHIS)   ← dental_examinations
+ *   Condition            ← encounter_soap_notes.diagnoses (ICD-10 / SNOMED CT)
+ *   Procedure            ← billing_items → tarifs.kode_icd9
+ *   Medication + Request ← prescription_items.kfa_code (+ detail KFA)
  */
 import { Encounter } from '../../encounters/entities/encounter.entity';
-import { Diagnosis } from '../../diagnoses/entities/diagnosis.entity';
-import { Procedure } from '../../procedures/entities/procedure.entity';
-import { VitalSign } from '../../vital-sign/entities/vital-sign.entity';
-import { Prescription } from '../../prescription/entities/prescription.entity';
-import { Medication } from '../../medications/entities/medication.entity';
-import { Dispense } from '../../dispense/entities/dispense.entity';
 import { Location } from '../../location/entities/location.entity';
-import {
-  Anamnesis,
-  BloodType,
-  PregnancyStatus,
-  Rhesus,
-} from '../../anamnesis/entities/anamnesis.entity';
+import { PhysicalExamination } from '../../physical-examination/entities/physical-examination.entity';
+import { DentalExamination } from '../../dental-examination/entities/dental-examination.entity';
+import { SoapDiagnosis } from '../../encounter-soap-notes/entities/encounter-soap-note.entity';
+import { PrescriptionItem } from '../../prescriptions/entities/prescription-item.entity';
+import { KfaProduct } from '../kfa/kfa.service';
 
 export const SYS = {
   ACT_CODE: 'http://terminology.hl7.org/CodeSystem/v3-ActCode',
@@ -32,15 +33,15 @@ export const SYS = {
   LOCATION_TYPE: 'http://terminology.hl7.org/CodeSystem/location-physical-type',
   MEDREQ_CATEGORY:
     'http://terminology.hl7.org/CodeSystem/medicationrequest-category',
-  MEDDISP_CATEGORY:
-    'http://terminology.hl7.org/fhir/CodeSystem/medicationdispense-category',
   LOINC: 'http://loinc.org',
   SNOMED: 'http://snomed.info/sct',
   UCUM: 'http://unitsofmeasure.org',
   ICD10: 'http://hl7.org/fhir/sid/icd-10',
   ICD9CM: 'http://hl7.org/fhir/sid/icd-9-cm',
   KFA: 'http://sys-ids.kemkes.go.id/kfa',
+  ATC_ROUTE: 'http://www.whocc.no/atc',
   CLINICAL_TERM: 'http://terminology.kemkes.go.id/CodeSystem/clinical-term',
+  MEDICATION_FORM: 'http://terminology.kemkes.go.id/CodeSystem/medication-form',
   MEDICATION_TYPE: 'http://terminology.kemkes.go.id/CodeSystem/medication-type',
   SERVICE_CLASS_OUTPATIENT:
     'http://terminology.kemkes.go.id/CodeSystem/locationServiceClass-Outpatient',
@@ -61,6 +62,13 @@ export interface FhirContext {
   encounterId?: string;
 }
 
+/** Hasil mapping yang ID-nya disimpan di satusehat_resource_links */
+export interface LinkedResource {
+  localType: string;
+  localId: number;
+  resource: Record<string, any>;
+}
+
 /**
  * Waktu wajib UTC+00 dengan format `2023-09-09T18:00:00+00:00`
  * dan tidak boleh sebelum 3 Juni 2014.
@@ -70,6 +78,23 @@ export function fhirDateTime(value?: Date | string | null): string | undefined {
   const d = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return undefined;
   return d.toISOString().replace(/\.\d{3}Z$/, '+00:00');
+}
+
+/** Angka pertama dalam teks bebas, mis. "15 tablet" → 15 */
+export function leadingNumber(text?: string | null): number | undefined {
+  const m = text?.replace(',', '.').match(/\d+(\.\d+)?/);
+  return m ? Number(m[0]) : undefined;
+}
+
+/** Durasi teks bebas → hari, mis. "5 hari" → 5, "2 minggu" → 14 */
+export function durationDays(text?: string | null): number | undefined {
+  const n = leadingNumber(text);
+  if (!n || !text) return undefined;
+  const t = text.toLowerCase();
+  if (/minggu|week/.test(t)) return n * 7;
+  if (/bulan|month/.test(t)) return n * 30;
+  if (/hari|day|^\s*\d+\s*$/.test(t)) return n;
+  return undefined;
 }
 
 const patientRef = (ctx: FhirContext) => ({
@@ -84,36 +109,71 @@ const encounterRef = (ctx: FhirContext) => ({
   reference: `Encounter/${ctx.encounterId}`,
 });
 
-/** Vital sign: LOINC → display resmi + satuan UCUM */
-const VITAL_SIGNS: Record<
-  string,
-  { display: string; unit: string; code: string }
-> = {
-  '8867-4': { display: 'Heart rate', unit: 'beats/minute', code: '/min' },
-  '9279-1': {
-    display: 'Respiratory rate',
-    unit: 'breaths/minute',
-    code: '/min',
-  },
-  '8480-6': {
+/** Tanda vital pemeriksaan fisik → LOINC + satuan UCUM */
+const VITAL_SIGNS: {
+  field: keyof PhysicalExamination;
+  loinc: string;
+  display: string;
+  unit: string;
+  code: string;
+}[] = [
+  {
+    field: 'bloodPressureSystolic',
+    loinc: '8480-6',
     display: 'Systolic blood pressure',
     unit: 'mm[Hg]',
     code: 'mm[Hg]',
   },
-  '8462-4': {
+  {
+    field: 'bloodPressureDiastolic',
+    loinc: '8462-4',
     display: 'Diastolic blood pressure',
     unit: 'mm[Hg]',
     code: 'mm[Hg]',
   },
-  '8310-5': { display: 'Body temperature', unit: 'C', code: 'Cel' },
-  '29463-7': { display: 'Body weight', unit: 'kg', code: 'kg' },
-  '8302-2': { display: 'Body height', unit: 'cm', code: 'cm' },
-  '59408-5': {
+  {
+    field: 'pulseRate',
+    loinc: '8867-4',
+    display: 'Heart rate',
+    unit: 'beats/minute',
+    code: '/min',
+  },
+  {
+    field: 'respiratoryRate',
+    loinc: '9279-1',
+    display: 'Respiratory rate',
+    unit: 'breaths/minute',
+    code: '/min',
+  },
+  {
+    field: 'temperature',
+    loinc: '8310-5',
+    display: 'Body temperature',
+    unit: 'C',
+    code: 'Cel',
+  },
+  {
+    field: 'oxygenSaturation',
+    loinc: '59408-5',
     display: 'Oxygen saturation in Arterial blood by Pulse oximetry',
     unit: '%',
     code: '%',
   },
-};
+  {
+    field: 'height',
+    loinc: '8302-2',
+    display: 'Body height',
+    unit: 'cm',
+    code: 'cm',
+  },
+  {
+    field: 'weight',
+    loinc: '29463-7',
+    display: 'Body weight',
+    unit: 'kg',
+    code: 'kg',
+  },
+];
 
 const ENCOUNTER_STATUS: Record<string, string> = {
   arrived: 'arrived',
@@ -122,15 +182,7 @@ const ENCOUNTER_STATUS: Record<string, string> = {
   cancelled: 'cancelled',
 };
 
-const PROCEDURE_STATUS: Record<string, string> = {
-  preparation: 'preparation',
-  in_progress: 'in-progress',
-  completed: 'completed',
-  not_done: 'not-done',
-  stopped: 'stopped',
-};
-
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const isFilled = (v: unknown) => v !== null && v !== undefined && v !== '';
 
 export class FhirMapper {
   // ── Prasyarat ──────────────────────────────────────────────────────────
@@ -170,9 +222,9 @@ export class FhirMapper {
   // ── 02. Pendaftaran Kunjungan & 12. Cara Keluar ───────────────────────
 
   /**
-   * Encounter rawat jalan. Status & statusHistory mengikuti waktu lokal:
+   * Encounter rawat jalan. statusHistory mengikuti waktu lokal
    * arrived → in-progress → finished. Saat finished, `diagnosis` (rank 1 =
-   * diagnosis primer) dan `hospitalization.dischargeDisposition` diisi.
+   * diagnosis utama) dan `hospitalization.dischargeDisposition` diisi.
    */
   static toEncounter(
     encounter: Encounter,
@@ -321,232 +373,117 @@ export class FhirMapper {
     };
   }
 
-  // ── 03. Anamnesis ─────────────────────────────────────────────────────
-
-  /** Golongan darah, rhesus, status kehamilan (yang terisi saja). */
-  static toAnamnesisObservations(anamnesis: Anamnesis, ctx: FhirContext) {
-    const issued = fhirDateTime(anamnesis.createdAt);
-    const base = (category: string, categoryDisplay: string) => ({
-      resourceType: 'Observation',
-      status: 'final',
-      category: [
-        {
-          coding: [
-            {
-              system: SYS.OBS_CATEGORY,
-              code: category,
-              display: categoryDisplay,
-            },
-          ],
-        },
-      ],
-      subject: patientRef(ctx),
-      performer: [practitionerRef(ctx)],
-      encounter: encounterRef(ctx),
-      effectiveDateTime: issued,
-      issued,
-    });
-
-    const out: { localType: string; resource: object }[] = [];
-
-    const ABO: Record<BloodType, [string, string]> = {
-      [BloodType.A]: ['LA19710-5', 'Group A'],
-      [BloodType.B]: ['LA19709-7', 'Group B'],
-      [BloodType.AB]: ['LA28449-9', 'Group AB'],
-      [BloodType.O]: ['LA19708-9', 'Group O'],
-    };
-    if (anamnesis.golonganDarah && ABO[anamnesis.golonganDarah]) {
-      const [code, display] = ABO[anamnesis.golonganDarah];
-      out.push({
-        localType: 'anamnesis_blood_type',
-        resource: {
-          ...base('laboratory', 'Laboratory'),
-          code: {
-            coding: [
-              {
-                system: SYS.LOINC,
-                code: '883-9',
-                display: 'ABO group [Type] in Blood',
-              },
-            ],
-          },
-          valueCodeableConcept: {
-            coding: [{ system: SYS.LOINC, code, display }],
-          },
-        },
-      });
-    }
-
-    if (anamnesis.rhesus) {
-      const [code, display] =
-        anamnesis.rhesus === Rhesus.POSITIVE
-          ? ['LA6576-8', 'Positive']
-          : ['LA6577-6', 'Negative'];
-      out.push({
-        localType: 'anamnesis_rhesus',
-        resource: {
-          ...base('laboratory', 'Laboratory'),
-          code: {
-            coding: [
-              {
-                system: SYS.LOINC,
-                code: '10331-7',
-                display: 'Rh [Type] in Blood',
-              },
-            ],
-          },
-          valueCodeableConcept: {
-            coding: [{ system: SYS.LOINC, code, display }],
-          },
-        },
-      });
-    }
-
-    if (anamnesis.statusKehamilan) {
-      const [code, display] =
-        anamnesis.statusKehamilan === PregnancyStatus.PREGNANT
-          ? ['77386006', 'Pregnant']
-          : ['60001007', 'Not pregnant'];
-      out.push({
-        localType: 'anamnesis_pregnancy',
-        resource: {
-          ...base('survey', 'Survey'),
-          code: {
-            coding: [
-              {
-                system: SYS.LOINC,
-                code: '82810-3',
-                display: 'Pregnancy status',
-              },
-            ],
-          },
-          valueCodeableConcept: {
-            coding: [{ system: SYS.SNOMED, code, display }],
-          },
-        },
-      });
-    }
-
-    return out;
-  }
-
   // ── 04. Pemeriksaan Fisik ─────────────────────────────────────────────
 
-  static toVitalSignObservation(vs: VitalSign, ctx: FhirContext) {
-    const def = VITAL_SIGNS[vs.loincCode];
-    const when = fhirDateTime(vs.recordedAt ?? vs.createdAt);
-    return {
-      resourceType: 'Observation',
-      status: 'final',
-      category: [
-        {
-          coding: [
-            {
-              system: SYS.OBS_CATEGORY,
-              code: 'vital-signs',
-              display: 'Vital Signs',
-            },
-          ],
-        },
-      ],
-      code: {
-        coding: [
+  /** Satu Observation per tanda vital yang terisi. */
+  static toVitalSignObservations(
+    pe: PhysicalExamination,
+    ctx: FhirContext,
+  ): LinkedResource[] {
+    const when = fhirDateTime(pe.updatedAt ?? pe.createdAt);
+    return VITAL_SIGNS.filter((v) => isFilled(pe[v.field])).map((v) => ({
+      localType: `pe_${v.loinc}`,
+      localId: pe.id,
+      resource: {
+        resourceType: 'Observation',
+        status: 'final',
+        category: [
           {
-            system: SYS.LOINC,
-            code: vs.loincCode,
-            display: def?.display ?? vs.name,
+            coding: [
+              {
+                system: SYS.OBS_CATEGORY,
+                code: 'vital-signs',
+                display: 'Vital Signs',
+              },
+            ],
           },
         ],
+        code: {
+          coding: [{ system: SYS.LOINC, code: v.loinc, display: v.display }],
+        },
+        subject: patientRef(ctx),
+        performer: [practitionerRef(ctx)],
+        encounter: encounterRef(ctx),
+        effectiveDateTime: when,
+        issued: when,
+        valueQuantity: {
+          value: Number(pe[v.field]),
+          unit: v.unit,
+          system: SYS.UCUM,
+          code: v.code,
+        },
       },
-      subject: patientRef(ctx),
-      performer: [practitionerRef(ctx)],
-      encounter: encounterRef(ctx),
-      effectiveDateTime: when,
-      issued: when,
-      valueQuantity: {
-        value: Number(vs.value),
-        unit: def?.unit ?? vs.unit,
-        system: SYS.UCUM,
-        code: def?.code ?? vs.unit,
-      },
-    };
+    }));
   }
 
   /** OHIS — skor total DI-S, CI-S, OHI-S (Postman "04. OHIS") */
   static toOhisObservations(
-    ohis: {
-      id: number;
-      diS: number;
-      ciS: number;
-      ohiS: number;
-      interpretation?: string;
-      createdAt: Date;
-    },
+    de: DentalExamination,
     ctx: FhirContext,
-  ) {
-    const when = fhirDateTime(ohis.createdAt);
+  ): LinkedResource[] {
+    const when = fhirDateTime(de.updatedAt ?? de.createdAt);
     const make = (
+      localType: string,
       code: string,
       display: string,
       value: number,
-      text?: string,
-    ) => ({
-      resourceType: 'Observation',
-      status: 'final',
-      category: [
-        {
-          coding: [{ system: SYS.OBS_CATEGORY, code: 'exam', display: 'Exam' }],
+    ): LinkedResource => ({
+      localType,
+      localId: de.id,
+      resource: {
+        resourceType: 'Observation',
+        status: 'final',
+        category: [
+          {
+            coding: [
+              { system: SYS.OBS_CATEGORY, code: 'exam', display: 'Exam' },
+            ],
+          },
+        ],
+        code: { coding: [{ system: SYS.CLINICAL_TERM, code, display }] },
+        subject: patientRef(ctx),
+        performer: [practitionerRef(ctx)],
+        encounter: encounterRef(ctx),
+        effectiveDateTime: when,
+        issued: when,
+        valueQuantity: {
+          value: Math.round(value * 10) / 10,
+          unit: '{score}',
+          system: SYS.UCUM,
+          code: '{score}',
         },
-      ],
-      code: { coding: [{ system: SYS.CLINICAL_TERM, code, display }] },
-      subject: patientRef(ctx),
-      performer: [practitionerRef(ctx)],
-      encounter: encounterRef(ctx),
-      effectiveDateTime: when,
-      issued: when,
-      valueQuantity: {
-        value: Number(value),
-        unit: '{score}',
-        system: SYS.UCUM,
-        code: '{score}',
       },
-      ...(text ? { interpretation: [{ text }] } : {}),
     });
-    return [
-      {
-        localType: 'ohis_di',
-        resource: make('OC000056', 'Skor Total Debris Indeks', ohis.diS),
-      },
-      {
-        localType: 'ohis_ci',
-        resource: make('OC000057', 'Skor Total Kalkulus Indeks', ohis.ciS),
-      },
-      {
-        localType: 'ohis_total',
-        resource: make(
+    const di = isFilled(de.ohisDebris) ? Number(de.ohisDebris) : null;
+    const ci = isFilled(de.ohisCalculus) ? Number(de.ohisCalculus) : null;
+    const out: LinkedResource[] = [];
+    if (di !== null)
+      out.push(make('ohis_di', 'OC000056', 'Skor Total Debris Indeks', di));
+    if (ci !== null)
+      out.push(make('ohis_ci', 'OC000057', 'Skor Total Kalkulus Indeks', ci));
+    if (di !== null && ci !== null) {
+      out.push(
+        make(
+          'ohis_total',
           'OC000058',
           'Skor Total Oral Hygiene Index Simplified (OHIS)',
-          ohis.ohiS,
-          ohis.interpretation,
+          di + ci,
         ),
-      },
-    ];
+      );
+    }
+    return out;
   }
 
   // ── 07. Diagnosis ─────────────────────────────────────────────────────
 
-  static toCondition(diagnosis: Diagnosis, ctx: FhirContext) {
-    const recorded = fhirDateTime(diagnosis.createdAt);
-    const category = diagnosis.category ?? 'encounter-diagnosis';
+  /** Diagnosis terkode dari SOAP (ICD-10 atau SNOMED CT). */
+  static toCondition(dx: SoapDiagnosis, recordedAt: Date, ctx: FhirContext) {
+    const recorded = fhirDateTime(recordedAt);
     return {
       resourceType: 'Condition',
       clinicalStatus: {
         coding: [
-          {
-            system: SYS.COND_CLINICAL,
-            code: diagnosis.clinicalStatus ?? 'active',
-            display: capitalize(diagnosis.clinicalStatus ?? 'active'),
-          },
+          { system: SYS.COND_CLINICAL, code: 'active', display: 'Active' },
         ],
       },
       category: [
@@ -554,11 +491,8 @@ export class FhirMapper {
           coding: [
             {
               system: SYS.COND_CATEGORY,
-              code: category,
-              display:
-                category === 'problem-list-item'
-                  ? 'Problem List Item'
-                  : 'Encounter Diagnosis',
+              code: 'encounter-diagnosis',
+              display: 'Encounter Diagnosis',
             },
           ],
         },
@@ -566,36 +500,37 @@ export class FhirMapper {
       code: {
         coding: [
           {
-            system: SYS.ICD10,
-            code: diagnosis.icd10Code,
-            display: diagnosis.icd10Display,
+            system: dx.system === 'snomed' ? SYS.SNOMED : SYS.ICD10,
+            code: dx.code,
+            display: dx.display,
           },
         ],
+        ...(dx.nameId ? { text: dx.nameId } : {}),
       },
       subject: patientRef(ctx),
       encounter: encounterRef(ctx),
-      onsetDateTime: fhirDateTime(diagnosis.onsetDate) ?? recorded,
+      onsetDateTime: recorded,
       recordedDate: recorded,
-      ...(diagnosis.note ? { note: [{ text: diagnosis.note }] } : {}),
+      ...(dx.note ? { note: [{ text: dx.note }] } : {}),
     };
   }
 
   // ── 08. Tindakan ──────────────────────────────────────────────────────
 
+  /** Tindakan dari item tagihan yang tarifnya punya kode ICD-9-CM. */
   static toProcedure(
-    procedure: Procedure,
+    item: { name: string; tarif: { kodeIcd9: string; name: string } },
+    encounter: Encounter,
     ctx: FhirContext,
-    reason?: Diagnosis | null,
+    reason?: SoapDiagnosis | null,
   ) {
-    const start = fhirDateTime(procedure.performedStart ?? procedure.createdAt);
-    const end = fhirDateTime(procedure.performedEnd) ?? start;
-    const notes = [
-      procedure.toothNumber ? `Gigi ${procedure.toothNumber}` : null,
-      procedure.note,
-    ].filter(Boolean);
+    const start = fhirDateTime(
+      encounter.inProgressTime ?? encounter.arrivedTime,
+    );
+    const end = fhirDateTime(encounter.finishedTime) ?? start;
     return {
       resourceType: 'Procedure',
-      status: PROCEDURE_STATUS[procedure.status] ?? 'completed',
+      status: 'completed',
       category: {
         coding: [
           {
@@ -610,10 +545,13 @@ export class FhirMapper {
         coding: [
           {
             system: SYS.ICD9CM,
-            code: procedure.icd9Code,
-            display: procedure.procedureName,
+            code: item.tarif.kodeIcd9,
+            display: item.tarif.name,
           },
         ],
+        ...(item.name && item.name !== item.tarif.name
+          ? { text: item.name }
+          : {}),
       },
       subject: patientRef(ctx),
       encounter: encounterRef(ctx),
@@ -625,24 +563,23 @@ export class FhirMapper {
               {
                 coding: [
                   {
-                    system: SYS.ICD10,
-                    code: reason.icd10Code,
-                    display: reason.icd10Display,
+                    system: reason.system === 'snomed' ? SYS.SNOMED : SYS.ICD10,
+                    code: reason.code,
+                    display: reason.display,
                   },
                 ],
               },
             ],
           }
         : {}),
-      ...(notes.length ? { note: [{ text: notes.join(' — ') }] } : {}),
     };
   }
 
-  // ── 09. Tatalaksana: Peresepan & Pengeluaran Obat ─────────────────────
+  // ── 09. Tatalaksana: Peresepan Obat ───────────────────────────────────
 
-  /** Medication "for Request" / "for Dispense" — wajib kode KFA. */
+  /** Medication "for Request" — kode KFA + bentuk sediaan & zat aktif dari KFA. */
   static toMedication(
-    medication: Medication,
+    kfa: KfaProduct,
     ctx: FhirContext,
     identifierValue: string,
   ) {
@@ -661,16 +598,33 @@ export class FhirMapper {
         },
       ],
       code: {
-        coding: [
-          {
-            system: SYS.KFA,
-            code: medication.kfaCode,
-            display: medication.name,
-          },
-        ],
+        coding: [{ system: SYS.KFA, code: kfa.kfaCode, display: kfa.name }],
       },
       status: 'active',
       manufacturer: { reference: `Organization/${ctx.orgId}` },
+      ...(kfa.dosageForm
+        ? {
+            form: {
+              coding: [
+                {
+                  system: SYS.MEDICATION_FORM,
+                  code: kfa.dosageForm.code,
+                  display: kfa.dosageForm.name,
+                },
+              ],
+            },
+          }
+        : {}),
+      ...(kfa.activeIngredients.length
+        ? {
+            ingredient: kfa.activeIngredients.map((i) => ({
+              itemCodeableConcept: {
+                coding: [{ system: SYS.KFA, code: i.kfaCode, display: i.name }],
+              },
+              isActive: true,
+            })),
+          }
+        : {}),
       extension: [
         {
           url: 'https://fhir.kemkes.go.id/r4/StructureDefinition/MedicationType',
@@ -688,51 +642,37 @@ export class FhirMapper {
     };
   }
 
-  private static durationInDays(rx: Prescription): number | undefined {
-    if (!rx.duration) return undefined;
-    const factor =
-      rx.durationUnit === 'weeks' ? 7 : rx.durationUnit === 'months' ? 30 : 1;
-    return rx.duration * factor;
-  }
-
-  private static dosage(rx: Prescription) {
-    return [
-      {
-        sequence: 1,
-        text: rx.dosageInstruction,
-        ...(rx.note ? { patientInstruction: rx.note } : {}),
-      },
-    ];
-  }
-
   static toMedicationRequest(
-    rx: Prescription,
-    medication: Medication,
+    item: PrescriptionItem,
+    kfa: KfaProduct,
     medicationId: string,
-    encounterLocalId: number,
+    encounter: Encounter,
     ctx: FhirContext,
   ) {
-    const days = this.durationInDays(rx);
+    const text = [
+      item.dosage,
+      item.frequency,
+      item.duration ? `selama ${item.duration}` : null,
+    ]
+      .filter(Boolean)
+      .join(', ');
+    const quantity = leadingNumber(item.quantity);
+    const days = durationDays(item.duration);
     return {
       resourceType: 'MedicationRequest',
       identifier: [
         {
           system: ids('prescription', ctx.orgId),
           use: 'official',
-          value: String(encounterLocalId),
+          value: String(encounter.id),
         },
         {
           system: ids('prescription-item', ctx.orgId),
           use: 'official',
-          value: `${encounterLocalId}-${rx.id}`,
+          value: `${encounter.id}-${item.id}`,
         },
       ],
-      status:
-        rx.status === 'cancelled'
-          ? 'cancelled'
-          : rx.status === 'dispensed'
-            ? 'completed'
-            : 'active',
+      status: encounter.status === 'cancelled' ? 'cancelled' : 'completed',
       intent: 'order',
       category: [
         {
@@ -748,15 +688,43 @@ export class FhirMapper {
       priority: 'routine',
       medicationReference: {
         reference: `Medication/${medicationId}`,
-        display: medication.name,
+        display: kfa.name,
       },
       subject: patientRef(ctx),
       encounter: encounterRef(ctx),
-      authoredOn: fhirDateTime(rx.createdAt),
+      authoredOn: fhirDateTime(item.createdAt),
       requester: practitionerRef(ctx),
-      dosageInstruction: this.dosage(rx),
+      dosageInstruction: [
+        {
+          sequence: 1,
+          text: text || item.drugName,
+          ...(item.instructions
+            ? { patientInstruction: item.instructions }
+            : {}),
+          ...(kfa.route
+            ? {
+                route: {
+                  coding: [
+                    {
+                      system: SYS.ATC_ROUTE,
+                      code: kfa.route.code,
+                      display: kfa.route.name,
+                    },
+                  ],
+                },
+              }
+            : {}),
+        },
+      ],
       dispenseRequest: {
-        quantity: { value: rx.quantity },
+        ...(quantity
+          ? {
+              quantity: {
+                value: quantity,
+                ...(kfa.uom ? { unit: kfa.uom } : {}),
+              },
+            }
+          : {}),
         ...(days
           ? {
               expectedSupplyDuration: {
@@ -769,72 +737,6 @@ export class FhirMapper {
           : {}),
         performer: { reference: `Organization/${ctx.orgId}` },
       },
-    };
-  }
-
-  static toMedicationDispense(
-    dispense: Dispense,
-    rx: Prescription,
-    medication: Medication,
-    medicationId: string,
-    medicationRequestId: string,
-    encounterLocalId: number,
-    ctx: FhirContext,
-  ) {
-    const when = fhirDateTime(dispense.dispensedAt ?? dispense.createdAt);
-    const days = this.durationInDays(rx);
-    return {
-      resourceType: 'MedicationDispense',
-      identifier: [
-        {
-          system: ids('prescription', ctx.orgId),
-          use: 'official',
-          value: String(encounterLocalId),
-        },
-        {
-          system: ids('prescription-item', ctx.orgId),
-          use: 'official',
-          value: `${encounterLocalId}-${rx.id}-D${dispense.id}`,
-        },
-      ],
-      status: 'completed',
-      category: {
-        coding: [
-          {
-            system: SYS.MEDDISP_CATEGORY,
-            code: 'outpatient',
-            display: 'Outpatient',
-          },
-        ],
-      },
-      medicationReference: {
-        reference: `Medication/${medicationId}`,
-        display: medication.name,
-      },
-      subject: patientRef(ctx),
-      context: encounterRef(ctx),
-      performer: [{ actor: practitionerRef(ctx) }],
-      location: {
-        reference: `Location/${ctx.location.id}`,
-        display: ctx.location.name,
-      },
-      authorizingPrescription: [
-        { reference: `MedicationRequest/${medicationRequestId}` },
-      ],
-      quantity: { value: dispense.quantityDispensed },
-      ...(days
-        ? {
-            daysSupply: {
-              value: days,
-              unit: 'Day',
-              system: SYS.UCUM,
-              code: 'd',
-            },
-          }
-        : {}),
-      whenPrepared: when,
-      whenHandedOver: when,
-      dosageInstruction: this.dosage(rx),
     };
   }
 }

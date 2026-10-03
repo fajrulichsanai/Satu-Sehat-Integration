@@ -1,12 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsNotEmpty,
-  IsEmail,
-  IsOptional,
-  MaxLength,
-  IsEnum,
-} from 'class-validator';
-import { SatusehatEnvironment } from '../../../enums';
+import { IsNotEmpty, IsEmail, IsOptional, MaxLength } from 'class-validator';
 
 export class UpdateClinicDto {
   @ApiProperty({ example: 'Klinik Sehat Bersama' })
@@ -70,32 +63,6 @@ export class UpdateClinicDto {
   website?: string;
 }
 
-export class SatusehatConfigDto {
-  @ApiProperty({ example: 'ORG123456' })
-  @IsNotEmpty()
-  @MaxLength(100)
-  satusehatOrgId: string;
-
-  @ApiProperty({ example: 'client_id_from_satusehat' })
-  @IsNotEmpty()
-  @MaxLength(255)
-  satusehatClientId: string;
-
-  @ApiProperty({ example: 'client_secret_from_satusehat' })
-  @IsNotEmpty()
-  @MaxLength(255)
-  satusehatClientSecret: string;
-
-  @ApiProperty({
-    example: 'sandbox',
-    enum: SatusehatEnvironment,
-    description: 'SATUSEHAT environment',
-  })
-  @IsEnum(SatusehatEnvironment)
-  @IsNotEmpty()
-  satusehatEnvironment: SatusehatEnvironment;
-}
-
 export class ClinicResponseDto {
   @ApiProperty({ example: 1 })
   id: number;
@@ -129,4 +96,10 @@ export class ClinicResponseDto {
 
   @ApiProperty({ example: true })
   setupComplete: boolean;
+
+  @ApiProperty({
+    example: 'https://is3.cloudhost.id/apex-record/clinics/1/logo-123.jpg',
+    required: false,
+  })
+  logoUrl?: string | null;
 }

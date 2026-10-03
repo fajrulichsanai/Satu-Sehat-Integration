@@ -37,7 +37,8 @@ function toQuery(params: Record<string, string | number | undefined>): string {
       qs.set(key, String(value));
     }
   }
-  const str = qs.toString();
+  // SATUSEHAT memakai daftar kode dipisah koma apa adanya (codes=11,12)
+  const str = qs.toString().replace(/%2C/gi, ',');
   return str ? `?${str}` : '';
 }
 

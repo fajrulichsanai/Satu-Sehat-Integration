@@ -1,43 +1,51 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   Put,
   Query,
+  Req,
   Res,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { BillingsService } from './billings.service';
 import { PaymentsService } from '../payments/payments.service';
-import { RefundsService } from './refunds.service';
 import { TarifsService } from './tarifs.service';
 import {
-  ApproveRefundDto,
   BillingQueryDto,
   CreateBillingDto,
   CreatePaymentDto,
-  CreateRefundRequestDto,
+  UpdateBillingDto,
 } from './dto/billing.dto';
 import { CreateTarifDto, TarifQueryDto, UpdateTarifDto } from './dto/tarif.dto';
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { InvoiceService } from './invoice.service';
+import { Audit } from '../audit-log/decorators/audit.decorator';
+import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
+import { AuditActionType } from '../audit-log/entities/audit-log.entity';
+import { Notify } from '../notifications/decorators/notify.decorator';
+import { NotificationInterceptor } from '../notifications/interceptors/notification.interceptor';
+import { NotificationType } from '../notifications/entities/notification.entity';
 
 @ApiTags('billing')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(ClinicContextGuard)
+@UseInterceptors(AuditInterceptor, NotificationInterceptor)
 @Controller()
 export class BillingController {
   constructor(
     private readonly billingsService: BillingsService,
     private readonly paymentsService: PaymentsService,
-    private readonly refundsService: RefundsService,
     private readonly tarifsService: TarifsService,
     private readonly invoiceService: InvoiceService,
   ) {}
@@ -50,10 +58,22 @@ export class BillingController {
     @ClinicId() clinicId: number,
     @Query() query: TarifQueryDto,
   ) {
-    return this.tarifsService.findAll(clinicId, query);
+    const result = await this.tarifsService.findAll(clinicId, query);
+    return { success: true, data: result };
+  }
+
+  @Get('settings/tarifs/:id')
+  @ApiOperation({ summary: 'Get tarif detail (settings)' })
+  async findOneTarif(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+  ) {
+    const data = await this.tarifsService.findOne(id, clinicId);
+    return { success: true, data };
   }
 
   @Post('settings/tarifs')
+  @Audit('Tarif', AuditActionType.CREATE, { labelField: 'name' })
   @ApiOperation({ summary: 'Create tarif' })
   async createTarif(
     @ClinicId() clinicId: number,
@@ -65,13 +85,16 @@ export class BillingController {
   }
 
   @Put('settings/tarifs/:id')
+  @Audit('Tarif', AuditActionType.UPDATE, { labelField: 'name' })
   @ApiOperation({ summary: 'Update tarif' })
   async updateTarif(
     @Param('id', ParseIntPipe) id: number,
     @ClinicId() clinicId: number,
     @Body() dto: UpdateTarifDto,
     @CurrentUser() user: any,
+    @Req() req: any,
   ) {
+    req.auditBefore = await this.tarifsService.findOne(id, clinicId);
     const data = await this.tarifsService.update(
       id,
       clinicId,
@@ -79,6 +102,22 @@ export class BillingController {
       user.userId,
     );
     return { success: true, data };
+  }
+
+  @Delete('settings/tarifs/:id')
+  @Audit('Tarif', AuditActionType.DELETE)
+  @ApiOperation({ summary: 'Delete (deactivate) tarif' })
+  async deleteTarif(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: any,
+    @Req() req: any,
+  ) {
+    const existing = await this.tarifsService.findOne(id, clinicId);
+    req.auditBefore = existing;
+    req.auditEntityLabel = existing?.name;
+    await this.tarifsService.remove(id, clinicId, user.userId);
+    return { success: true };
   }
 
   // ── Billings ──────────────────────────────────────────────────────────────
@@ -89,10 +128,12 @@ export class BillingController {
     @ClinicId() clinicId: number,
     @Query() query: BillingQueryDto,
   ) {
-    return this.billingsService.findAll(clinicId, query);
+    const data = await this.billingsService.findAll(clinicId, query);
+    return { success: true, data };
   }
 
   @Post('billings')
+  @Audit('Invoice', AuditActionType.CREATE, { labelField: 'invoiceNumber' })
   @ApiOperation({ summary: 'Create billing for encounter' })
   async createBilling(
     @ClinicId() clinicId: number,
@@ -103,6 +144,7 @@ export class BillingController {
     return { success: true, data };
   }
 
+  @Audit('Billing', AuditActionType.VIEW)
   @Get('billings/:id')
   @ApiOperation({ summary: 'Get billing detail with items and payments' })
   async findOneBilling(
@@ -113,9 +155,45 @@ export class BillingController {
     return { success: true, data };
   }
 
+  @Patch('billings/:id')
+  @Audit('Invoice', AuditActionType.UPDATE, { labelField: 'invoiceNumber' })
+  @ApiOperation({ summary: 'Update billing items, discount, fee, or notes' })
+  async updateBilling(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: UpdateBillingDto,
+    @CurrentUser() user: any,
+    @Req() req: any,
+  ) {
+    req.auditBefore = await this.billingsService.findOne(id, clinicId);
+    const data = await this.billingsService.update(
+      id,
+      clinicId,
+      dto,
+      user.userId,
+    );
+    return { success: true, data };
+  }
+
+  @Patch('billings/:id/cancel')
+  @Audit('Invoice', AuditActionType.UPDATE, { labelField: 'invoiceNumber' })
+  @ApiOperation({ summary: 'Batalkan billing (belum ada pembayaran) dan kembalikan stok BOM' })
+  async cancelBilling(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: any,
+    @Req() req: any,
+  ) {
+    req.auditBefore = await this.billingsService.findOne(id, clinicId);
+    const data = await this.billingsService.cancel(id, clinicId, user.userId);
+    return { success: true, data };
+  }
+
   // ── Payments ──────────────────────────────────────────────────────────────
 
   @Post('billings/:id/payments')
+  @Audit('Payment', AuditActionType.CREATE)
+  @Notify(NotificationType.PAYMENT_NEW, 'Pembayaran baru diterima', { labelField: 'amount' })
   @ApiOperation({ summary: 'Record payment for billing' })
   async createPayment(
     @Param('id', ParseIntPipe) id: number,
@@ -132,26 +210,9 @@ export class BillingController {
     return { success: true, data };
   }
 
-  // ── Refunds ───────────────────────────────────────────────────────────────
-
-  @Post('billings/:id/refund-request')
-  @ApiOperation({ summary: 'Submit refund request' })
-  async createRefund(
-    @Param('id', ParseIntPipe) id: number,
-    @ClinicId() clinicId: number,
-    @Body() dto: CreateRefundRequestDto,
-    @CurrentUser() user: any,
-  ) {
-    const data = await this.refundsService.createRequest(
-      id,
-      clinicId,
-      dto,
-      user.userId,
-    );
-    return { success: true, data };
-  }
-
+  @Audit('Billing', AuditActionType.VIEW)
   @Get('billings/:id/invoice')
+  @Audit('Invoice', AuditActionType.EXPORT)
   @ApiOperation({ summary: 'Download invoice as PDF' })
   async downloadInvoice(
     @Param('id', ParseIntPipe) id: number,
@@ -168,24 +229,5 @@ export class BillingController {
       `attachment; filename="invoice-${id}.pdf"`,
     );
     res.end(pdfBuffer);
-  }
-
-  @Post('billings/:id/refund-request/:refundId/approve')
-  @ApiOperation({ summary: 'Approve or reject refund request' })
-  async approveRefund(
-    @Param('id', ParseIntPipe) id: number,
-    @Param('refundId', ParseIntPipe) refundId: number,
-    @ClinicId() clinicId: number,
-    @Body() dto: ApproveRefundDto,
-    @CurrentUser() user: any,
-  ) {
-    const data = await this.refundsService.processApproval(
-      id,
-      refundId,
-      clinicId,
-      dto,
-      user.userId,
-    );
-    return { success: true, data };
   }
 }

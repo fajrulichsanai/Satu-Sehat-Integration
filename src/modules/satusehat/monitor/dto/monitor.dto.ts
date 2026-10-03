@@ -11,16 +11,27 @@ import {
 } from 'class-validator';
 import { SyncLogStatus } from '../../sync/entities/satusehat-sync-log.entity';
 
+/** Tab data di menu SATUSEHAT */
 export const SATUSEHAT_RESOURCE_TYPES = [
   'Patient',
   'Encounter',
-  'Condition',
   'Procedure',
-  'Observation',
   'MedicationRequest',
-  'MedicationDispense',
   'Practitioner',
   'Location',
+] as const;
+
+/** Filter log: dicocokkan sebagai awalan resource_type (mis. "Observation:pe_8480-6") */
+export const LOG_RESOURCE_TYPES = [
+  'Patient',
+  'Practitioner',
+  'Location',
+  'Encounter',
+  'Observation',
+  'Condition',
+  'Procedure',
+  'Medication',
+  'MedicationRequest',
 ] as const;
 
 export type SatusehatResourceType = (typeof SATUSEHAT_RESOURCE_TYPES)[number];
@@ -64,10 +75,10 @@ export class ListResourcesQueryDto extends PageQueryDto {
 }
 
 export class ListSyncLogsQueryDto extends PageQueryDto {
-  @ApiPropertyOptional({ enum: SATUSEHAT_RESOURCE_TYPES })
+  @ApiPropertyOptional({ enum: LOG_RESOURCE_TYPES })
   @IsOptional()
-  @IsIn(SATUSEHAT_RESOURCE_TYPES)
-  resourceType?: SatusehatResourceType;
+  @IsIn(LOG_RESOURCE_TYPES)
+  resourceType?: (typeof LOG_RESOURCE_TYPES)[number];
 
   @ApiPropertyOptional({ enum: SyncLogStatus })
   @IsOptional()

@@ -1,11 +1,22 @@
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { BaseEntity } from '../../../common/base.entity';
-import { Gender, SyncStatus, MaritalStatus } from '../../../enums';
+import { nikColumnTransformer } from '../../../common/utils/nik-crypto.util';
+import {
+  Gender,
+  SyncStatus,
+  MaritalStatus,
+  BloodType,
+  Rhesus,
+  HubunganWali,
+  SumberInformasi,
+  PreferensiKontak,
+  PreferensiJamKontak,
+} from '../../../enums';
 import { Clinic } from '../../clinics/entities/clinic.entity';
 
 @Entity('patients')
 @Index(['noRm', 'clinicId'], { unique: true })
-@Index(['nik', 'clinicId'], { unique: true })
+@Index(['nikHash', 'clinicId'], { unique: true })
 export class Patient extends BaseEntity {
   @Column({ name: 'clinic_id' })
   clinicId: number;
@@ -13,11 +24,37 @@ export class Patient extends BaseEntity {
   @Column({ name: 'no_rm', length: 20 })
   noRm: string;
 
-  @Column({ length: 16, nullable: true })
+  // Encrypted at rest (see nik-crypto.util) — never queried directly by
+  // value. Widened to fit ciphertext (iv:hex), which is longer than the
+  // plaintext 16-digit NIK.
+  @Column({ length: 255, nullable: true, transformer: nikColumnTransformer })
   nik: string;
 
-  @Column({ name: 'nik_ibu', length: 16, nullable: true })
+  // Deterministic HMAC of `nik`, maintained by PatientsService alongside
+  // every write to `nik`. This — not `nik` — is what search and duplicate
+  // checks query against, since the encrypted column can't support equality
+  // lookups.
+  @Column({ name: 'nik_hash', type: 'varchar', length: 64, nullable: true })
+  nikHash: string | null;
+
+  @Column({
+    name: 'nik_ibu',
+    length: 255,
+    nullable: true,
+    transformer: nikColumnTransformer,
+  })
   nikIbu: string;
+
+  @Column({ name: 'nama_wali', length: 100, nullable: true })
+  namaWali: string;
+
+  @Column({
+    name: 'hubungan_wali',
+    type: 'enum',
+    enum: HubunganWali,
+    nullable: true,
+  })
+  hubunganWali: HubunganWali;
 
   @Column({ length: 100 })
   name: string;
@@ -41,8 +78,17 @@ export class Patient extends BaseEntity {
   @Column({ length: 100, nullable: true })
   email: string;
 
+  @Column({ length: 100, nullable: true })
+  pekerjaan: string;
+
   @Column('text', { nullable: true })
   address: string;
+
+  @Column({ length: 100, nullable: true })
+  kelurahan: string;
+
+  @Column({ length: 100, nullable: true })
+  kecamatan: string;
 
   @Column({ length: 100, nullable: true })
   city: string;
@@ -61,9 +107,6 @@ export class Patient extends BaseEntity {
   })
   maritalStatus: MaritalStatus;
 
-  @Column({ name: 'ihs_number', length: 50, nullable: true })
-  ihsNumber: string;
-
   @Column({ name: 'satusehat_patient_id', length: 100, nullable: true })
   satusehatPatientId: string;
 
@@ -80,6 +123,97 @@ export class Patient extends BaseEntity {
 
   @Column({ name: 'last_sync_at', nullable: true })
   lastSyncAt: Date;
+
+  // Akuisisi & Marketing
+  @Column({
+    name: 'sumber_informasi',
+    type: 'enum',
+    enum: SumberInformasi,
+    nullable: true,
+  })
+  sumberInformasi: SumberInformasi;
+
+  @Column({ name: 'detail_sumber', length: 200, nullable: true })
+  detailSumber: string;
+
+  @Column({ name: 'referrer_patient_id', nullable: true })
+  referrerPatientId: number;
+
+  // Riwayat Medis Singkat
+  @Column({
+    name: 'golongan_darah',
+    type: 'enum',
+    enum: BloodType,
+    nullable: true,
+  })
+  golonganDarah: BloodType;
+
+  @Column({
+    type: 'enum',
+    enum: Rhesus,
+    nullable: true,
+  })
+  rhesus: Rhesus;
+
+  @Column({ name: 'punya_alergi', default: false })
+  punyaAlergi: boolean;
+
+  @Column('text', { name: 'catatan_alergi', nullable: true })
+  catatanAlergi: string;
+
+  @Column({ name: 'riwayat_hipertensi', default: false })
+  riwayatHipertensi: boolean;
+
+  @Column({ name: 'riwayat_diabetes', default: false })
+  riwayatDiabetes: boolean;
+
+  @Column({ name: 'riwayat_paru_paru', default: false })
+  riwayatParuParu: boolean;
+
+  @Column({ name: 'riwayat_syaraf', default: false })
+  riwayatSyaraf: boolean;
+
+  @Column({ name: 'riwayat_sistemik_lainnya', default: false })
+  riwayatSistemikLainnya: boolean;
+
+  @Column('text', { name: 'catatan_sistemik_lainnya', nullable: true })
+  catatanSistemikLainnya: string;
+
+  @Column({ name: 'alergi_obat', default: false })
+  alergiObat: boolean;
+
+  @Column({ name: 'alergi_makanan', default: false })
+  alergiMakanan: boolean;
+
+  // Preferensi
+  @Column({
+    name: 'preferensi_kontak',
+    type: 'enum',
+    enum: PreferensiKontak,
+    nullable: true,
+  })
+  preferensiKontak: PreferensiKontak;
+
+  @Column({
+    name: 'preferensi_jam_kontak',
+    type: 'enum',
+    enum: PreferensiJamKontak,
+    nullable: true,
+  })
+  preferensiJamKontak: PreferensiJamKontak;
+
+  @Column('text', { name: 'catatan_preferensi', nullable: true })
+  catatanPreferensi: string;
+
+  // Persetujuan
+  @Column({ name: 'consent_marketing', default: false })
+  consentMarketing: boolean;
+
+  @Column({ name: 'consent_tanggal', nullable: true })
+  consentTanggal: Date;
+
+  @Column({ name: 'consent_version', length: 20, nullable: true })
+  consentVersion: string;
 
   // Relations
   @ManyToOne(() => Clinic, { onDelete: 'CASCADE' })

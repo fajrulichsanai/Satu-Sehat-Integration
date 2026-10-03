@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsDateString,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -8,6 +9,7 @@ import {
   IsString,
   Min,
   ValidateNested,
+  Max,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -73,6 +75,43 @@ export class CreateBillingDto {
   @IsEnum(DiscountType)
   totalDiscountType?: DiscountType;
 
+  @ApiPropertyOptional({ default: 0, description: 'Biaya tambahan (nominal)' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  additionalFee?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+export class UpdateBillingDto {
+  @ApiPropertyOptional({ type: [BillingItemDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BillingItemDto)
+  items?: BillingItemDto[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  totalDiscount?: number;
+
+  @ApiPropertyOptional({ enum: DiscountType })
+  @IsOptional()
+  @IsEnum(DiscountType)
+  totalDiscountType?: DiscountType;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  additionalFee?: number;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -87,12 +126,12 @@ export class BillingQueryDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsString()
+  @IsDateString()
   dateFrom?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsString()
+  @IsDateString()
   dateTo?: string;
 
   @ApiPropertyOptional()
@@ -104,11 +143,16 @@ export class BillingQueryDto {
   @ApiPropertyOptional()
   @IsOptional()
   @Type(() => Number)
+  @IsInt()
+  @Min(1)
   page?: number = 1;
 
   @ApiPropertyOptional()
   @IsOptional()
   @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1000)
   limit?: number = 20;
 }
 
@@ -117,36 +161,16 @@ export class CreatePaymentDto {
   @IsEnum(PaymentMethod)
   method: PaymentMethod | undefined;
 
-  @ApiProperty()
+  @ApiProperty({
+    description:
+      'Jumlah dibayar (DP, cicilan, atau pelunasan), ≤ sisa tagihan. Rp 0 hanya untuk tagihan yang sisanya Rp 0.',
+  })
   @IsNumber()
-  @Min(0.01)
+  @Min(0)
   amount: number | undefined;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   note?: string;
-}
-
-export class CreateRefundRequestDto {
-  @ApiProperty()
-  @IsNumber()
-  @Min(0.01)
-  amount: number | undefined;
-
-  @ApiProperty()
-  @IsString()
-  @IsNotEmpty()
-  reason: string | undefined;
-}
-
-export class ApproveRefundDto {
-  @ApiProperty({ enum: ['approved', 'rejected'] })
-  @IsEnum(['approved', 'rejected'])
-  action: 'approved' | 'rejected' | undefined;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  approvalNote?: string;
 }

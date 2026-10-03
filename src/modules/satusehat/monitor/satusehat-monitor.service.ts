@@ -34,7 +34,7 @@ interface ResourceDef {
 
 /** Status log terakhir untuk (resourceType, x.id) */
 const lastLog = (type: string, col: 'status' | 'error_message') =>
-  `(SELECT l.${col} FROM satusehat_sync_logs l WHERE l.resource_type = '${type}' AND l.local_id = x.id ORDER BY l.id DESC LIMIT 1)`;
+  `(SELECT l.${col} FROM satusehat_sync_logs l WHERE l.clinic_id = :clinicId AND l.resource_type = '${type}' AND l.local_id = x.id ORDER BY l.id DESC LIMIT 1)`;
 
 /** Status untuk resource yang punya kolom satusehat_*_id + sync_status */
 const idStatus = (idCol: string, type: string) =>
@@ -49,18 +49,11 @@ const idOrLogStatus = (idCol: string, type: string) =>
 
 /** ID SATUSEHAT dari tabel satusehat_resource_links */
 const linkId = (localType: string) =>
-  `(SELECT k.satusehat_id FROM satusehat_resource_links k WHERE k.local_type = '${localType}' AND k.local_id = x.id LIMIT 1)`;
+  `(SELECT k.satusehat_id FROM satusehat_resource_links k WHERE k.clinic_id = :clinicId AND k.local_type = '${localType}' AND k.local_id = x.id LIMIT 1)`;
 
 const linkStatus = (localType: string, logType: string) =>
   `CASE WHEN ${linkId(localType)} IS NOT NULL THEN 'synced' ` +
   `WHEN ${lastLog(logType, 'status')} = 'failed' THEN 'failed' ELSE 'pending' END`;
-
-const encounterChild = (table: string) => (qb: SelectQueryBuilder<any>) =>
-  qb
-    .from(table, 'x')
-    .innerJoin('encounters', 'e', 'e.id = x.encounter_id')
-    .leftJoin('patients', 'pt', 'pt.id = e.patient_id')
-    .where('e.clinic_id = :clinicId');
 
 const RESOURCES: Record<SatusehatResourceType, ResourceDef> = {
   Patient: {
@@ -69,15 +62,16 @@ const RESOURCES: Record<SatusehatResourceType, ResourceDef> = {
     syncable: true,
     base: (qb) => qb.from('patients', 'x').where('x.clinic_id = :clinicId'),
     title: 'x.name',
+    // NIK terenkripsi — tidak ditampilkan
     subtitle:
-      "CONCAT('RM ', COALESCE(x.no_rm, '-'), ' · NIK ', COALESCE(x.nik, '-'))",
+      "CONCAT('RM ', COALESCE(x.no_rm, '-'), IF(x.nik IS NULL, ' · NIK belum diisi', ''))",
     date: 'x.created_at',
-    satusehatId: 'COALESCE(x.satusehat_patient_id, x.ihs_number)',
+    satusehatId: 'x.satusehat_patient_id',
     status:
-      "CASE WHEN COALESCE(x.satusehat_patient_id, x.ihs_number) IS NOT NULL THEN 'synced' " +
+      "CASE WHEN x.satusehat_patient_id IS NOT NULL AND x.satusehat_patient_id <> '' THEN 'synced' " +
       "WHEN x.sync_status = 'failed' THEN 'failed' ELSE 'pending' END",
     lastError: 'x.sync_error',
-    search: ['x.name', 'x.no_rm', 'x.nik'],
+    search: ['x.name', 'x.no_rm'],
   },
   Encounter: {
     label: 'Kunjungan (Encounter)',
@@ -95,76 +89,45 @@ const RESOURCES: Record<SatusehatResourceType, ResourceDef> = {
     lastError: `COALESCE(x.sync_error, ${lastLog('Encounter', 'error_message')})`,
     search: ['pt.name', 'pt.no_rm'],
   },
-  Condition: {
-    label: 'Diagnosis (Condition)',
-    syncable: true,
-    base: encounterChild('diagnoses'),
-    title: "CONCAT(x.icd10_code, ' — ', x.icd10_display)",
-    subtitle: "CONCAT('Pasien: ', COALESCE(pt.name, '-'))",
-    date: 'x.created_at',
-    satusehatId: 'x.satusehat_condition_id',
-    status: idStatus('x.satusehat_condition_id', 'Condition'),
-    lastError: lastLog('Condition', 'error_message'),
-    search: ['x.icd10_code', 'x.icd10_display', 'pt.name'],
-  },
   Procedure: {
     label: 'Tindakan (Procedure)',
+    // dikirim ulang lewat kunjungannya
     syncable: true,
-    base: encounterChild('procedures'),
-    title: "CONCAT(x.icd9_code, ' — ', x.procedure_name)",
+    base: (qb) =>
+      qb
+        .from('billing_items', 'x')
+        .innerJoin('billings', 'b', 'b.id = x.billing_id')
+        .innerJoin('tarifs', 't', 't.id = x.tarif_id')
+        .leftJoin('patients', 'pt', 'pt.id = b.patient_id')
+        .where('b.clinic_id = :clinicId')
+        .andWhere("t.kode_icd9 IS NOT NULL AND t.kode_icd9 <> ''")
+        .andWhere("b.status NOT IN ('cancelled', 'refunded')"),
+    title: "CONCAT(t.kode_icd9, ' — ', x.name)",
     subtitle: "CONCAT('Pasien: ', COALESCE(pt.name, '-'))",
     date: 'x.created_at',
-    satusehatId: 'x.satusehat_procedure_id',
-    status: idStatus('x.satusehat_procedure_id', 'Procedure'),
-    lastError: lastLog('Procedure', 'error_message'),
-    search: ['x.icd9_code', 'x.procedure_name', 'pt.name'],
-  },
-  Observation: {
-    label: 'Tanda Vital (Observation)',
-    syncable: true,
-    base: encounterChild('vital_signs'),
-    title: "CONCAT(x.name, ': ', x.value, ' ', COALESCE(x.unit, ''))",
-    subtitle: "CONCAT('Pasien: ', COALESCE(pt.name, '-'))",
-    date: 'COALESCE(x.recorded_at, x.created_at)',
-    // vital_signs tidak punya kolom id SATUSEHAT → pakai tabel link
-    satusehatId: linkId('vital_sign'),
-    status: linkStatus('vital_sign', 'Observation'),
-    lastError: lastLog('Observation', 'error_message'),
-    search: ['x.name', 'pt.name'],
+    satusehatId: linkId('billing_item'),
+    status: linkStatus('billing_item', 'Procedure:billing_item'),
+    lastError: lastLog('Procedure:billing_item', 'error_message'),
+    search: ['x.name', 't.kode_icd9', 'pt.name'],
   },
   MedicationRequest: {
     label: 'Resep (MedicationRequest)',
+    // dikirim ulang lewat kunjungannya
     syncable: true,
     base: (qb) =>
-      encounterChild('prescriptions')(qb).leftJoin(
-        'medications',
-        'm',
-        'm.id = x.medication_id',
-      ),
-    title: "CONCAT(COALESCE(m.name, '-'), ' × ', x.quantity)",
-    subtitle: "CONCAT('Pasien: ', COALESCE(pt.name, '-'))",
+      qb
+        .from('prescription_items', 'x')
+        .innerJoin('encounters', 'e', 'e.id = x.encounter_id')
+        .leftJoin('patients', 'pt', 'pt.id = e.patient_id')
+        .where('e.clinic_id = :clinicId'),
+    title: 'x.drug_name',
+    subtitle:
+      "CONCAT('Pasien: ', COALESCE(pt.name, '-'), IF(x.kfa_code IS NULL, ' · belum ada kode KFA', CONCAT(' · KFA ', x.kfa_code)))",
     date: 'x.created_at',
-    satusehatId: 'x.satusehat_medreq_id',
-    status: idStatus('x.satusehat_medreq_id', 'MedicationRequest'),
+    satusehatId: linkId('rx_item'),
+    status: linkStatus('rx_item', 'MedicationRequest'),
     lastError: lastLog('MedicationRequest', 'error_message'),
-    search: ['m.name', 'pt.name'],
-  },
-  MedicationDispense: {
-    label: 'Pengeluaran Obat (MedicationDispense)',
-    syncable: true,
-    base: (qb) =>
-      encounterChild('dispenses')(qb).leftJoin(
-        'medications',
-        'm',
-        'm.id = x.medication_id',
-      ),
-    title: "CONCAT(COALESCE(m.name, '-'), ' × ', x.quantity_dispensed)",
-    subtitle: "CONCAT('Pasien: ', COALESCE(pt.name, '-'))",
-    date: 'x.dispensed_at',
-    satusehatId: linkId('dispense'),
-    status: linkStatus('dispense', 'MedicationDispense'),
-    lastError: lastLog('MedicationDispense', 'error_message'),
-    search: ['m.name', 'pt.name'],
+    search: ['x.drug_name', 'x.kfa_code', 'pt.name'],
   },
   Practitioner: {
     label: 'Tenaga Kesehatan (Practitioner)',
@@ -174,12 +137,12 @@ const RESOURCES: Record<SatusehatResourceType, ResourceDef> = {
       qb.from('practitioners', 'x').where('x.clinic_id = :clinicId'),
     title: 'x.name',
     subtitle:
-      "CONCAT('NIK ', COALESCE(x.nik, '-'), ' · ', COALESCE(x.specialization, '-'))",
+      "CONCAT(COALESCE(x.specialization, '-'), IF(x.nik IS NULL, ' · NIK belum diisi', ''))",
     date: 'x.created_at',
     satusehatId: 'x.satusehat_practitioner_id',
     status: idOrLogStatus('x.satusehat_practitioner_id', 'Practitioner'),
     lastError: lastLog('Practitioner', 'error_message'),
-    search: ['x.name', 'x.nik'],
+    search: ['x.name'],
   },
   Location: {
     label: 'Lokasi / Ruangan (Location)',
@@ -351,8 +314,8 @@ export class SatusehatMonitorService {
       .take(limit);
 
     if (query.resourceType) {
-      qb.andWhere('l.resourceType = :resourceType', {
-        resourceType: query.resourceType,
+      qb.andWhere('l.resourceType LIKE :resourceType', {
+        resourceType: `${query.resourceType}%`,
       });
     }
     if (query.status) {
@@ -367,12 +330,6 @@ export class SatusehatMonitorService {
       total,
       totalPages: Math.max(1, Math.ceil(total / limit)),
     };
-  }
-
-  async getSyncLog(clinicId: number, id: number) {
-    const log = await this.syncLogRepo.findOne({ where: { id, clinicId } });
-    if (!log) throw new NotFoundException('Log sync tidak ditemukan');
-    return log;
   }
 
   private baseQuery(def: ResourceDef, clinicId: number) {

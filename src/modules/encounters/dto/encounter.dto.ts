@@ -1,13 +1,15 @@
 import {
+  IsBoolean,
   IsEnum,
   IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   Min,
+  Max,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { EncounterStatus, ServiceType } from '../../../enums';
 
 export class CreateEncounterDto {
@@ -21,16 +23,49 @@ export class CreateEncounterDto {
   @Min(1)
   practitionerId: number;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsInt()
   @Min(1)
-  locationId: number;
+  locationId?: number;
+
+  @ApiPropertyOptional({
+    description: 'ID reservasi yang di-check-in menjadi kunjungan ini',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  reservationId?: number;
+
+  @ApiPropertyOptional({ enum: ServiceType })
+  @IsOptional()
+  @IsEnum(ServiceType)
+  serviceType?: ServiceType;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  chiefComplaint?: string;
+}
+
+export class UpdateEncounterDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  patientId?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsInt()
   @Min(1)
-  queueId?: number;
+  practitionerId?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  locationId?: number;
 
   @ApiPropertyOptional({ enum: ServiceType })
   @IsOptional()
@@ -73,6 +108,15 @@ export class EncounterListQueryDto {
   @IsEnum(EncounterStatus)
   status?: EncounterStatus;
 
+  @ApiPropertyOptional({
+    description:
+      'Jika true, hanya tampilkan encounter yang belum memiliki billing aktif, lintas semua tanggal (tidak dibatasi filter tanggal default)',
+  })
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  unbilled?: boolean;
+
   @ApiPropertyOptional()
   @IsOptional()
   @Type(() => Number)
@@ -85,5 +129,6 @@ export class EncounterListQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(1000)
   limit?: number = 20;
 }

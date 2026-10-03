@@ -1,9 +1,21 @@
-import { Controller, Get, Put, Post, Body, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Put,
+  Post,
+  Body,
+  Req,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { ClinicsService } from './clinics.service';
 import { JwtAuthGuard, RolesGuard, ClinicContextGuard } from '../auth/guards';
@@ -11,15 +23,16 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { UserRole } from '../../enums';
-import {
-  UpdateClinicDto,
-  SatusehatConfigDto,
-  ClinicResponseDto,
-} from './dto/clinic.dto';
+import { UpdateClinicDto, ClinicResponseDto } from './dto/clinic.dto';
+import { Audit } from '../audit-log/decorators/audit.decorator';
+import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
+import { AuditActionType } from '../audit-log/entities/audit-log.entity';
+import { clinicLogoUploadOptions } from './upload/clinic-logo.upload';
 
 @ApiTags('settings')
 @Controller('settings/clinic')
 @UseGuards(JwtAuthGuard, RolesGuard, ClinicContextGuard)
+@UseInterceptors(AuditInterceptor)
 @ApiBearerAuth('JWT-auth')
 export class ClinicsController {
   constructor(private readonly clinicsService: ClinicsService) {}
@@ -38,6 +51,7 @@ export class ClinicsController {
   }
 
   @Put()
+  @Audit('Clinic', AuditActionType.UPDATE)
   @Roles(UserRole.OWNER)
   @ApiOperation({ summary: 'Update clinic profile (Owner only)' })
   @ApiResponse({ status: 200, description: 'Clinic updated successfully' })
@@ -46,30 +60,47 @@ export class ClinicsController {
     @Body() dto: UpdateClinicDto,
     @CurrentUser() user: any,
     @ClinicId() clinicId: number,
+    @Req() req: any,
   ) {
+    req.auditBefore = await this.clinicsService
+      .findOne(clinicId)
+      .catch(() => null);
     return this.clinicsService.update(clinicId, dto, user.userId);
   }
 
-  @Post('satusehat')
+  @Post('logo')
+  @Audit('Clinic', AuditActionType.UPDATE)
   @Roles(UserRole.OWNER)
-  @ApiOperation({ summary: 'Configure SATUSEHAT integration (Owner only)' })
-  @ApiResponse({ status: 200, description: 'SATUSEHAT config saved' })
-  @ApiResponse({ status: 404, description: 'Clinic not found' })
-  async configureSatusehat(
-    @Body() dto: SatusehatConfigDto,
-    @CurrentUser() user: any,
+  @ApiOperation({
+    summary: 'Upload logo/foto klinik ke object storage (Owner only)',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 200, description: 'Logo klinik berhasil diunggah' })
+  @UseInterceptors(FileInterceptor('file', clinicLogoUploadOptions))
+  async uploadLogo(
+    @UploadedFile() file: Express.Multer.File,
     @ClinicId() clinicId: number,
+    @Req() req: any,
   ) {
-    return this.clinicsService.configureSatusehat(clinicId, dto, user.userId);
+    req.auditBefore = await this.clinicsService
+      .findOne(clinicId)
+      .catch(() => null);
+    return this.clinicsService.uploadLogo(clinicId, file);
   }
+}
 
-  @Post('satusehat/test')
-  @Roles(UserRole.OWNER)
-  @ApiOperation({ summary: 'Test SATUSEHAT connection (Owner only)' })
-  @ApiResponse({ status: 200, description: 'Connection test result' })
-  @ApiResponse({ status: 400, description: 'Config incomplete' })
-  @ApiResponse({ status: 404, description: 'Clinic not found' })
-  async testSatusehat(@ClinicId() clinicId: number) {
-    return this.clinicsService.testSatusehatConnection(clinicId);
+@ApiTags('settings')
+@Controller('clinics')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@ApiBearerAuth('JWT-auth')
+export class ClinicsListController {
+  constructor(private readonly clinicsService: ClinicsService) {}
+
+  @Get()
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'List all clinics (Super Admin only)' })
+  @ApiResponse({ status: 200, description: 'Clinic list' })
+  async findAll() {
+    return this.clinicsService.findAllForSuperAdmin();
   }
 }

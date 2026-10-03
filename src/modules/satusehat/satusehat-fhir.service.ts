@@ -1,4 +1,8 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { SatusehatClientService } from './satusehat-client.service';
 
 interface OrganizationResponse {
@@ -15,7 +19,9 @@ interface LocationResponse {
 export class SatusehatFhirService {
   private readonly logger = new Logger(SatusehatFhirService.name);
 
-  constructor(private readonly satusehatClientService: SatusehatClientService) {}
+  constructor(
+    private readonly satusehatClientService: SatusehatClientService,
+  ) {}
 
   /**
    * Create Organization for Divisi Pelayanan Medik dan Penunjang
@@ -249,7 +255,8 @@ export class SatusehatFhirService {
       physicalType: {
         coding: [
           {
-            system: 'http://terminology.hl7.org/CodeSystem/location-physical-type',
+            system:
+              'http://terminology.hl7.org/CodeSystem/location-physical-type',
             code: 'ro',
             display: 'Room',
           },

@@ -1,4 +1,4 @@
-import { DataSource } from 'typeorm';
+import { DataSource, Table } from 'typeorm';
 
 const OWNER_CODES = ['APEX001', 'APEX002', 'APEX003', 'APEX004', 'APEX005'];
 
@@ -6,7 +6,7 @@ export async function seedOwnerCodes(dataSource: DataSource): Promise<void> {
   const queryRunner = dataSource.createQueryRunner();
 
   await queryRunner.createTable(
-    {
+    new Table({
       name: 'owner_codes',
       columns: [
         {
@@ -21,7 +21,7 @@ export async function seedOwnerCodes(dataSource: DataSource): Promise<void> {
         { name: 'used_by', type: 'int', isNullable: true },
         { name: 'created_at', type: 'timestamp', default: 'CURRENT_TIMESTAMP' },
       ],
-    } as any,
+    }),
     true,
   );
 

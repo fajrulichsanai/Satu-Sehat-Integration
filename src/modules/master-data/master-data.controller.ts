@@ -9,7 +9,9 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { MasterDataService } from './master-data.service';
 import { Public } from '../auth/decorators/public.decorator';
 import { ApiResponse } from '../../common/response/api-response';
+import { KfaService } from '../satusehat/kfa/kfa.service';
 import {
+  SearchKfaQueryDto,
   SearchSaranaQueryDto,
   WILAYAH_LEVELS,
   WilayahLevel,
@@ -18,12 +20,21 @@ import {
 
 @Controller('api/master-data')
 export class MasterDataController {
-  constructor(private readonly masterDataService: MasterDataService) {}
+  constructor(
+    private readonly masterDataService: MasterDataService,
+    private readonly kfaService: KfaService,
+  ) {}
+
+  // SatuSehat's masterdata API replies with its own envelope
+  // ({status, error, message, data}), not this app's {success, data}
+  // convention — re-wrap here so the frontend's generic apiClient unwrap
+  // (which only fires on `success: true`) actually kicks in.
 
   @Get('provinces')
   @Public()
   async getProvinces(@Query('codes') codes?: string) {
-    return this.masterDataService.getProvinces(codes);
+    const result = await this.masterDataService.getProvinces(codes);
+    return { success: true, data: result.data };
   }
 
   @Get('cities')
@@ -32,7 +43,8 @@ export class MasterDataController {
     @Query('province_codes') provinceCodes?: string,
     @Query('codes') codes?: string,
   ) {
-    return this.masterDataService.getCities(provinceCodes, codes);
+    const result = await this.masterDataService.getCities(provinceCodes, codes);
+    return { success: true, data: result.data };
   }
 
   @Get('districts')
@@ -41,7 +53,8 @@ export class MasterDataController {
     @Query('city_codes') cityCodes?: string,
     @Query('codes') codes?: string,
   ) {
-    return this.masterDataService.getDistricts(cityCodes, codes);
+    const result = await this.masterDataService.getDistricts(cityCodes, codes);
+    return { success: true, data: result.data };
   }
 
   @Get('sub-districts')
@@ -50,7 +63,11 @@ export class MasterDataController {
     @Query('district_codes') districtCodes?: string,
     @Query('codes') codes?: string,
   ) {
-    return this.masterDataService.getSubDistricts(districtCodes, codes);
+    const result = await this.masterDataService.getSubDistricts(
+      districtCodes,
+      codes,
+    );
+    return { success: true, data: result.data };
   }
 
   // ── Master Wilayah v2 (berhalaman) ────────────────────────────────────
@@ -101,5 +118,32 @@ export class MasterDataController {
     return ApiResponse.success(
       await this.masterDataService.getSaranaByKodeSatusehat(kodeSatusehat),
     );
+  }
+
+  // ── Kamus Farmasi & Alat Kesehatan (KFA) ──────────────────────────────
+
+  @Get('kfa/products')
+  @ApiTags('master-data')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Cari obat/alkes di KFA SATUSEHAT' })
+  async searchKfa(@Query() query: SearchKfaQueryDto) {
+    return ApiResponse.success(
+      await this.kfaService.search({
+        keyword: query.keyword,
+        page: query.page,
+        size: query.size,
+        productType: query.product_type,
+      }),
+    );
+  }
+
+  @Get('kfa/products/:kfaCode')
+  @ApiTags('master-data')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Detail produk KFA (bentuk sediaan, rute, zat aktif)',
+  })
+  async getKfaProduct(@Param('kfaCode') kfaCode: string) {
+    return ApiResponse.success(await this.kfaService.getProduct(kfaCode));
   }
 }

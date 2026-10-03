@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ClinicsController } from './clinics.controller';
+import { ClinicsController, ClinicsListController } from './clinics.controller';
 import { ClinicsService } from './clinics.service';
 import { Clinic } from './entities/clinic.entity';
-import { SatusehatModule } from '../satusehat/satusehat.module';
+import { AuditLogModule } from '../audit-log/audit-log.module';
+import { StorageModule } from '../../common/storage/storage.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Clinic]), SatusehatModule],
-  controllers: [ClinicsController],
+  imports: [TypeOrmModule.forFeature([Clinic]), AuditLogModule, StorageModule],
+  controllers: [ClinicsController, ClinicsListController],
   providers: [ClinicsService],
   exports: [ClinicsService],
 })

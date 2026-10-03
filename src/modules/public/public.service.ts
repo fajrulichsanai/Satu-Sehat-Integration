@@ -1,34 +1,47 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Clinic } from '../clinics/entities/clinic.entity';
-import { Patient } from '../patients/entities/patient.entity';
-import { Queue } from '../queues/entities/queue.entity';
-import { Gender, QueueStatus } from '../../enums';
+import { Practitioner } from '../practitioners/entities/practitioner.entity';
+import { ReservationsService } from '../reservations/reservations.service';
 import {
-  AvailableSlotsQueryDto,
-  BookingDto,
-  QueueStatusQueryDto,
-} from './dto/public.dto';
-import { QueuesService } from '../queues/queues.service';
-import { PatientsService } from '../patients/patients.service';
-import { startOfDay, endOfDay } from '../../common/utils/date.util';
+  PublicAvailableSlotsQueryDto,
+  PublicCreateReservationDto,
+  PublicReservationStatusQueryDto,
+} from '../reservations/dto/reservation.dto';
+
+const DAY_KEYS = [
+  'minggu',
+  'senin',
+  'selasa',
+  'rabu',
+  'kamis',
+  'jumat',
+  'sabtu',
+];
+
+const SLOT_INTERVAL_MINUTES = 30;
+
+/**
+ * The DB connection timezone is fixed at +07:00 (WIB, see data-source
+ * config), so "now" for comparing against a date/time-only slot must be
+ * computed on that same offset — the server this runs on may be in UTC,
+ * which would make every slot in the morning look "already past" to a
+ * naive `new Date()` comparison.
+ */
+function nowInClinicTimezone(): { date: string; time: string } {
+  const wib = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString();
+  return { date: wib.slice(0, 10), time: wib.slice(11, 16) };
+}
 
 @Injectable()
 export class PublicService {
   constructor(
     @InjectRepository(Clinic)
     private readonly clinicRepository: Repository<Clinic>,
-    @InjectRepository(Patient)
-    private readonly patientRepository: Repository<Patient>,
-    @InjectRepository(Queue)
-    private readonly queueRepository: Repository<Queue>,
-    private readonly queuesService: QueuesService,
-    private readonly patientsService: PatientsService,
+    @InjectRepository(Practitioner)
+    private readonly practitionerRepository: Repository<Practitioner>,
+    private readonly reservationsService: ReservationsService,
   ) {}
 
   async getClinicInfo(clinicId: number) {
@@ -48,82 +61,123 @@ export class PublicService {
     if (!clinic) {
       throw new NotFoundException('Klinik tidak ditemukan atau belum aktif');
     }
-    return clinic;
-  }
 
-  async getAvailableSlots(query: AvailableSlotsQueryDto) {
-    return this.queuesService.getAvailableSlots(query.clinicId, {
-      date: query.date,
-      locationId: query.locationId,
-      practitionerId: query.practitionerId,
-    });
-  }
-
-  async book(dto: BookingDto) {
-    let patient = await this.patientRepository.findOne({
-      where: { nik: dto.patientNik, clinicId: dto.clinicId },
+    const practitioners = await this.practitionerRepository.find({
+      where: { clinicId, isActive: true },
+      select: { id: true, name: true, specialization: true, photoUrl: true, jadwalPraktik: true },
+      order: { id: 'ASC' },
     });
 
-    if (!patient) {
-      patient = await this.patientsService.create(dto.clinicId, {
-        name: dto.patientName,
-        nik: dto.patientNik,
-        phone: dto.patientPhone,
-        gender: Gender.MALE, // default; frontend should correct later
+    return { ...clinic, practitioners };
+  }
+
+  async createReservation(dto: PublicCreateReservationDto) {
+    const reservation = await this.reservationsService.createPublic(dto);
+    return {
+      token: reservation.token,
+      reservationDate: reservation.reservationDate,
+      jamSlot: reservation.jamSlot,
+      patientName: reservation.patientName,
+      practitionerId: reservation.practitionerId,
+      status: reservation.status,
+    };
+  }
+
+  async getReservationStatus(query: PublicReservationStatusQueryDto) {
+    const reservation = await this.reservationsService.getStatusByToken(
+      query.token,
+    );
+    return {
+      token: reservation.token,
+      patientName: reservation.patientName,
+      reservationDate: reservation.reservationDate,
+      jamSlot: reservation.jamSlot,
+      status: reservation.status,
+      practitionerId: reservation.practitionerId,
+      practitionerName: reservation.practitioner?.name ?? null,
+    };
+  }
+
+  async cancelReservation(token: string) {
+    const reservation = await this.reservationsService.cancelByToken(token);
+    return {
+      token: reservation.token,
+      status: reservation.status,
+    };
+  }
+
+  async getAvailableSlots(query: PublicAvailableSlotsQueryDto) {
+    const clinic = await this.clinicRepository.findOne({
+      where: { id: query.clinicId, setupComplete: true },
+      select: { id: true, operationalHours: true },
+    });
+    if (!clinic) {
+      throw new NotFoundException('Klinik tidak ditemukan atau belum aktif');
+    }
+
+    const dayKey = DAY_KEYS[new Date(`${query.date}T00:00:00`).getDay()];
+    // A doctor's own practice hours (if set) take precedence over the clinic's.
+    let schedule: Record<string, string> | null | undefined = clinic.operationalHours;
+    if (query.practitionerId) {
+      const practitioner = await this.practitionerRepository.findOne({
+        where: { id: query.practitionerId, clinicId: query.clinicId },
+        select: { id: true, jadwalPraktik: true },
       });
+      if (!practitioner) {
+        throw new NotFoundException('Dokter tidak ditemukan di klinik ini');
+      }
+      if (practitioner.jadwalPraktik) schedule = practitioner.jadwalPraktik;
+    }
+    const hoursToday = schedule?.[dayKey];
+
+    if (!hoursToday || hoursToday.trim().toLowerCase() === 'tutup') {
+      return { date: query.date, isOpen: false, slots: [] };
     }
 
-    const queue = await this.queuesService.create(dto.clinicId, {
-      patientId: patient.id,
-      patientName: patient.name,
-      phone: dto.patientPhone,
-      practitionerId: dto.practitionerId || 0,
-      appointmentDate: dto.appointmentDate,
-      jamSlot: dto.jamSlot,
-      serviceType: dto.serviceType,
-      locationId: dto.locationId,
-      isFirstVisit: false,
-    });
+    const [openTime, closeTime] = hoursToday.split('-');
+    const allSlots = this.generateSlots(openTime, closeTime);
+
+    const bookedSlots = await this.reservationsService.getBookedSlots(
+      query.clinicId,
+      query.date,
+      query.practitionerId,
+    );
+
+    let slots = allSlots.filter((slot) => !bookedSlots.includes(slot));
+
+    const { date: todayWib, time: nowWib } = nowInClinicTimezone();
+    if (query.date === todayWib) {
+      slots = slots.filter((slot) => slot > nowWib);
+    }
 
     return {
-      bookingToken: queue.token,
-      queueNumber: queue.nomorAntrian,
-      patientName: patient.name,
-      appointmentDate: dto.appointmentDate,
-      jamSlot: dto.jamSlot,
+      date: query.date,
+      isOpen: true,
+      slots,
     };
   }
 
-  async getQueueStatus(query: QueueStatusQueryDto) {
-    const queue = await this.queueRepository.findOne({
-      where: { token: query.token },
-      select: {
-        id: true,
-        nomorAntrian: true,
-        status: true,
-        tanggal: true,
-        jamSlot: true,
-        patientName: true,
-      },
-    });
-    if (!queue) {
-      throw new NotFoundException('Token antrian tidak ditemukan');
-    }
-
-    const waitingAhead = await this.queueRepository.count({
-      where: {
-        clinicId: (queue as any).clinicId,
-        status: QueueStatus.WAITING,
-      },
-    });
-
-    return {
-      queueNumber: queue.nomorAntrian,
-      status: queue.status,
-      date: queue.tanggal,
-      jamSlot: queue.jamSlot,
-      patientName: queue.patientName,
-      estimatedWaitMinutes: waitingAhead * 15,
+  private generateSlots(openTime: string, closeTime: string): string[] {
+    const toMinutes = (time: string) => {
+      const [hour, minute] = time.split(':').map(Number);
+      return hour * 60 + minute;
     };
+    const toTimeString = (minutes: number) => {
+      const hour = Math.floor(minutes / 60)
+        .toString()
+        .padStart(2, '0');
+      const minute = (minutes % 60).toString().padStart(2, '0');
+      return `${hour}:${minute}`;
+    };
+
+    const slots: string[] = [];
+    for (
+      let minutes = toMinutes(openTime);
+      minutes < toMinutes(closeTime);
+      minutes += SLOT_INTERVAL_MINUTES
+    ) {
+      slots.push(toTimeString(minutes));
+    }
+    return slots;
   }
 }

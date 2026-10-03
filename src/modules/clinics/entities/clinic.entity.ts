@@ -1,6 +1,6 @@
 import { Entity, Column, OneToMany } from 'typeorm';
+import { SatusehatEnvironment } from '../../../enums/satusehat-environment.enum';
 import { BaseEntity } from '../../../common/base.entity';
-import { SatusehatEnvironment } from '../../../enums';
 
 @Entity('clinics')
 export class Clinic extends BaseEntity {
@@ -34,14 +34,23 @@ export class Clinic extends BaseEntity {
   @Column({ name: 'operational_hours', type: 'json', nullable: true })
   operationalHours: Record<string, any>;
 
-  @Column({ name: 'satusehat_org_id', length: 100, nullable: true })
-  satusehatOrgId: string;
+  @Column({ name: 'setup_complete', default: false })
+  setupComplete: boolean;
 
-  @Column({ name: 'satusehat_client_id', length: 255, nullable: true })
-  satusehatClientId: string;
+  @Column({ name: 'logo_url', type: 'varchar', length: 500, nullable: true })
+  logoUrl: string | null;
 
-  @Column({ name: 'satusehat_client_secret', length: 255, nullable: true })
-  satusehatClientSecret: string;
+  // ── Integrasi SATUSEHAT (Kemenkes) ─────────────────────────────────────
+  // Client secret disimpan terenkripsi (crypto.util); token di-cache di sini.
+
+  @Column({ name: 'satusehat_org_id', type: 'varchar', length: 100, nullable: true })
+  satusehatOrgId: string | null;
+
+  @Column({ name: 'satusehat_client_id', type: 'varchar', length: 255, nullable: true })
+  satusehatClientId: string | null;
+
+  @Column({ name: 'satusehat_client_secret', type: 'varchar', length: 512, nullable: true })
+  satusehatClientSecret: string | null;
 
   @Column({
     name: 'satusehat_environment',
@@ -52,34 +61,12 @@ export class Clinic extends BaseEntity {
   satusehatEnvironment: SatusehatEnvironment;
 
   @Column({ name: 'satusehat_token', type: 'text', nullable: true })
-  satusehatToken: string | undefined;
+  satusehatToken: string | null;
 
-  @Column({ name: 'satusehat_token_expires_at', nullable: true })
-  satusehatTokenExpiresAt: Date;
+  @Column({ name: 'satusehat_token_expires_at', type: 'datetime', nullable: true })
+  satusehatTokenExpiresAt: Date | null;
 
-  @Column({ name: 'setup_complete', default: false })
-  setupComplete: boolean;
-
-  // Satu Sehat FHIR Resource IDs
-  @Column({ name: 'satusehat_divisi_org_id', length: 100, nullable: true })
-  satusehatDivisiOrgId: string;
-
-  @Column({ name: 'satusehat_layanan_org_id', length: 100, nullable: true })
-  satusehatLayananOrgId: string;
-
-  @Column({ name: 'satusehat_poli_location_id', length: 100, nullable: true })
-  satusehatPoliLocationId: string;
-
-  // Satu Sehat Kewilayahan codes
-  @Column({ name: 'satusehat_province_code', length: 10, nullable: true })
-  satusehatProvinceCode: string;
-
-  @Column({ name: 'satusehat_city_code', length: 10, nullable: true })
-  satusehatCityCode: string;
-
-  @Column({ name: 'satusehat_district_code', length: 10, nullable: true })
-  satusehatDistrictCode: string;
-
-  @Column({ name: 'satusehat_village_code', length: 10, nullable: true })
-  satusehatVillageCode: string;
+  /** Location "Poli Gigi" default bila kunjungan tidak punya ruangan */
+  @Column({ name: 'satusehat_poli_location_id', type: 'varchar', length: 100, nullable: true })
+  satusehatPoliLocationId: string | null;
 }

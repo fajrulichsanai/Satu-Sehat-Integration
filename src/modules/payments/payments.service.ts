@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { randomUUID } from 'crypto';
 import { Billing, BillingStatus } from '../billing/entities/billing.entity';
 import { Payment } from './entities/payment.entity';
 import { CreatePaymentDto } from '../billing/dto/billing.dto';
@@ -35,11 +36,18 @@ export class PaymentsService {
 
       if (
         billing.status === BillingStatus.PAID ||
-        billing.status === BillingStatus.CANCELLED
+        billing.status === BillingStatus.CANCELLED ||
+        billing.status === BillingStatus.REFUNDED
       ) {
         throw new BadRequestException(
           `Billing sudah berstatus '${billing.status}'`,
         );
+      }
+
+      // Rp 0 is only a real payment when nothing is owed (free visit, a
+      // follow-up already paid for); otherwise it would record nothing.
+      if (!dto.amount && Number(billing.outstandingAmount) > 0) {
+        throw new BadRequestException('Jumlah pembayaran harus lebih dari 0');
       }
 
       if ((dto.amount || 0) > billing.outstandingAmount) {
@@ -48,17 +56,20 @@ export class PaymentsService {
         );
       }
 
-      const receiptNumber = await this.generateReceiptNumber(manager, clinicId);
-
+      const paidAt = new Date();
       const payment = await manager.save(Payment, {
         billingId,
-        receiptNumber,
+        receiptNumber: `TMP-${randomUUID()}`,
         method: dto.method,
         amount: dto.amount,
         note: dto.note,
-        paidAt: new Date(),
+        paidAt,
         createdBy: userId,
       });
+
+      const receiptNumber = this.generateReceiptNumber(paidAt, payment.id);
+      payment.receiptNumber = receiptNumber;
+      await manager.save(Payment, payment);
 
       billing.paidAmount = Number(billing.paidAmount) + (dto.amount || 0);
       billing.outstandingAmount =
@@ -84,18 +95,13 @@ export class PaymentsService {
     });
   }
 
-  private async generateReceiptNumber(
-    manager: any,
-    clinicId: number,
-  ): Promise<string> {
-    const year = new Date().getFullYear();
-    const result = await manager.query(
-      `SELECT COUNT(*) AS total FROM payments p
-       INNER JOIN billings b ON p.billing_id = b.id
-       WHERE b.clinic_id = ? AND YEAR(p.paid_at) = ?`,
-      [clinicId, year],
-    );
-    const seq = parseInt(result[0].total, 10) + 1;
-    return `RCP-${year}-${String(seq).padStart(5, '0')}`;
+  private generateReceiptNumber(paidAt: Date, paymentId: number): string {
+    const year = paidAt.getFullYear();
+    const day = String(paidAt.getDate()).padStart(2, '0');
+    const month = String(paidAt.getMonth() + 1).padStart(2, '0');
+    const hours = String(paidAt.getHours()).padStart(2, '0');
+    const minutes = String(paidAt.getMinutes()).padStart(2, '0');
+    const seconds = String(paidAt.getSeconds()).padStart(2, '0');
+    return `RCP-${year}-${day}${month}-${hours}${minutes}${seconds}-${paymentId}`;
   }
 }

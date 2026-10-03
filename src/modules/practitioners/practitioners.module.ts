@@ -1,12 +1,17 @@
+import { SatusehatModule } from '../satusehat/satusehat.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PractitionersController } from './practitioners.controller';
 import { PractitionersService } from './practitioners.service';
 import { Practitioner } from './entities/practitioner.entity';
-import { SatusehatModule } from '../satusehat/satusehat.module';
+import { AuditLogModule } from '../audit-log/audit-log.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Practitioner]), SatusehatModule],
+  imports: [
+    TypeOrmModule.forFeature([Practitioner]),
+    AuditLogModule,
+    SatusehatModule,
+  ],
   controllers: [PractitionersController],
   providers: [PractitionersService],
   exports: [PractitionersService],

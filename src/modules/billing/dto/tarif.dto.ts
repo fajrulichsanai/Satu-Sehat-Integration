@@ -5,6 +5,8 @@ import {
   IsOptional,
   IsString,
   Min,
+  IsInt,
+  Max,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -24,6 +26,11 @@ export class CreateTarifDto {
   @IsOptional()
   @IsString()
   kodeIcd9?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  deskripsi?: string | null;
 
   @ApiPropertyOptional({ default: 0 })
   @IsOptional()
@@ -58,6 +65,11 @@ export class UpdateTarifDto {
   @IsOptional()
   @IsString()
   kodeIcd9?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  deskripsi?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -97,10 +109,15 @@ export class TarifQueryDto {
   @ApiPropertyOptional()
   @IsOptional()
   @Type(() => Number)
+  @IsInt()
+  @Min(1)
   page?: number = 1;
 
   @ApiPropertyOptional()
   @IsOptional()
   @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1000)
   limit?: number = 50;
 }

@@ -15,10 +15,13 @@ import {
 } from '../billing-item/entities/billing-item.entity';
 import { Tarif } from '../tarif/entities/tarif.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
+import { GudangService } from '../gudang/gudang.service';
+import { PatientRecallsService } from '../recalls/patient-recalls.service';
 import {
   BillingItemDto,
   BillingQueryDto,
   CreateBillingDto,
+  UpdateBillingDto,
 } from './dto/billing.dto';
 
 @Injectable()
@@ -34,11 +37,15 @@ export class BillingsService {
     private readonly tarifRepository: Repository<Tarif>,
     @InjectRepository(Encounter)
     private readonly encounterRepository: Repository<Encounter>,
+    private readonly gudangService: GudangService,
+    private readonly patientRecallsService: PatientRecallsService,
     private readonly dataSource: DataSource,
   ) {}
 
   async findAll(clinicId: number, query: BillingQueryDto) {
-    this.logger.log(`[GET-ALL] Mengambil daftar billing | clinicId=${clinicId}, status=${query.status || 'all'}`);
+    this.logger.log(
+      `[GET-ALL] Mengambil daftar billing | clinicId=${clinicId}, status=${query.status || 'all'}`,
+    );
     const qb = this.billingRepository
       .createQueryBuilder('b')
       .leftJoinAndSelect('b.patient', 'patient')
@@ -85,20 +92,26 @@ export class BillingsService {
   }
 
   async findOne(id: number, clinicId: number) {
-    this.logger.log(`[GET] Mengambil detail billing | id=${id}, clinicId=${clinicId}`);
+    this.logger.log(
+      `[GET] Mengambil detail billing | id=${id}, clinicId=${clinicId}`,
+    );
     const billing = await this.billingRepository.findOne({
       where: { id, clinicId },
-      relations: { patient: true, items: true },
+      relations: { patient: true, items: true, payments: true },
     });
     if (!billing) {
-      this.logger.warn(`[GET] Billing tidak ditemukan | id=${id}, clinicId=${clinicId}`);
+      this.logger.warn(
+        `[GET] Billing tidak ditemukan | id=${id}, clinicId=${clinicId}`,
+      );
       throw new NotFoundException(`Billing dengan ID ${id} tidak ditemukan`);
     }
     return billing;
   }
 
   async create(clinicId: number, dto: CreateBillingDto, userId: number) {
-    this.logger.log(`[CREATE] Membuat billing baru | clinicId=${clinicId}, encounterId=${dto.encounterId}`);
+    this.logger.log(
+      `[CREATE] Membuat billing baru | clinicId=${clinicId}, encounterId=${dto.encounterId}`,
+    );
     const encounter = await this.encounterRepository.findOne({
       where: { id: dto.encounterId, clinicId },
     });
@@ -115,67 +128,11 @@ export class BillingsService {
     }
 
     return this.dataSource.transaction(async (manager) => {
-      let subtotal = 0;
-      const processedItems: Array<{
-        tarifId?: number;
-        name: string;
-        quantity: number;
-        unitPrice: number;
-        discount: number;
-        discountType: DiscountType;
-        subtotal: number;
-      }> = [];
-
-      for (const item of dto.items!) {
-        const qty = item.quantity || 1;
-        const discountType = item.discountType || DiscountType.NOMINAL;
-        const discountValue = item.discount || 0;
-
-        if (item.tarifId) {
-          const tarif = await manager.findOne(Tarif, {
-            where: { id: item.tarifId, clinicId },
-          });
-          if (!tarif)
-            throw new NotFoundException(
-              `Tarif ID ${item.tarifId} tidak ditemukan`,
-            );
-
-          if (
-            discountType === DiscountType.NOMINAL &&
-            discountValue > tarif.diskonMaksimal
-          ) {
-            throw new UnprocessableEntityException(
-              `Diskon untuk '${tarif.name}' melebihi batas maksimal (Rp ${tarif.diskonMaksimal})`,
-            );
-          }
-          if (
-            discountType === DiscountType.PERCENT &&
-            discountValue > (tarif.diskonMaksimal / tarif.hargaJual) * 100
-          ) {
-            throw new UnprocessableEntityException(
-              `Diskon % untuk '${tarif.name}' melebihi batas maksimal`,
-            );
-          }
-        }
-
-        const discountNominal =
-          discountType === DiscountType.PERCENT
-            ? (item.unitPrice! * discountValue) / 100
-            : discountValue;
-
-        const itemSubtotal = (item.unitPrice! - discountNominal) * qty;
-        subtotal += itemSubtotal;
-
-        processedItems.push({
-          tarifId: item.tarifId ?? undefined,
-          name: item.name!,
-          quantity: qty,
-          unitPrice: item.unitPrice!,
-          discount: discountValue,
-          discountType,
-          subtotal: itemSubtotal,
-        });
-      }
+      const { processedItems, subtotal } = await this.processItems(
+        manager,
+        clinicId,
+        dto.items!,
+      );
 
       // Apply total discount
       let totalDiscountNominal = 0;
@@ -185,26 +142,30 @@ export class BillingsService {
             ? (subtotal * dto.totalDiscount) / 100
             : dto.totalDiscount;
       }
-      const grandTotal = subtotal - totalDiscountNominal;
+      // A bill discount can't exceed what is billed, or the total goes negative.
+      totalDiscountNominal = Math.min(totalDiscountNominal, subtotal);
+      const additionalFee =
+        dto.additionalFee && dto.additionalFee > 0 ? dto.additionalFee : 0;
+      const grandTotal = subtotal - totalDiscountNominal + additionalFee;
 
-      const invoiceNumber = await this.generateInvoiceNumber(manager, clinicId);
-
-      const billing = await manager.save(Billing, {
+      const billing = await this.saveBillingWithInvoiceNumber(manager, {
         clinicId,
         encounterId: dto.encounterId,
         patientId: encounter.patientId,
-        invoiceNumber,
         subtotal,
         totalDiscount: totalDiscountNominal,
+        additionalFee,
         grandTotal,
         paidAmount: 0,
-        outstandingAmount: grandTotal,
-        status: BillingStatus.UNPAID,
+        outstandingAmount: Math.max(0, grandTotal),
+        // Nothing to pay (free consultation, a follow-up visit already paid
+        // for) — settled from the start instead of 'Belum Bayar' forever.
+        status: grandTotal <= 0 ? BillingStatus.PAID : BillingStatus.UNPAID,
         notes: dto.notes,
         createdBy: userId,
       });
 
-      await manager.save(
+      const savedItems = await manager.save(
         BillingItem,
         processedItems.map((i) => ({
           ...i,
@@ -213,21 +174,303 @@ export class BillingsService {
         })),
       );
 
-      this.logger.log(`[CREATE] Billing berhasil dibuat | id=${billing.id}, invoiceNumber=${billing.invoiceNumber}, clinicId=${clinicId}`);
+      for (const item of processedItems) {
+        if (item.tarifId) {
+          await this.gudangService.deductForTindakan(
+            manager,
+            clinicId,
+            item.tarifId,
+            item.quantity,
+            userId,
+          );
+        }
+      }
+
+      // Recall dijadwalkan otomatis kalau tarif-nya punya interval recall
+      // terkonfigurasi (PRD 5.10) — kegagalan di sini tidak boleh
+      // membatalkan billing yang sudah tersimpan.
+      try {
+        await this.patientRecallsService.scheduleFromBillingItems(
+          manager,
+          clinicId,
+          encounter.patientId,
+          savedItems
+            .filter((i) => i.tarifId)
+            .map((i) => ({ tarifId: i.tarifId, billingItemId: i.id })),
+          userId,
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Gagal menjadwalkan recall untuk billing baru: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+
+      this.logger.log(
+        `[CREATE] Billing berhasil dibuat | id=${billing.id}, invoiceNumber=${billing.invoiceNumber}, clinicId=${clinicId}`,
+      );
       return billing;
     });
   }
 
-  private async generateInvoiceNumber(
+  async cancel(id: number, clinicId: number, userId: number) {
+    this.logger.log(
+      `[CANCEL] Membatalkan billing | id=${id}, clinicId=${clinicId}`,
+    );
+    return this.dataSource.transaction(async (manager) => {
+      const billing = await manager.findOne(Billing, {
+        where: { id, clinicId },
+        relations: { items: true },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!billing) {
+        throw new NotFoundException(`Billing dengan ID ${id} tidak ditemukan`);
+      }
+      if (
+        billing.status === BillingStatus.CANCELLED ||
+        billing.status === BillingStatus.REFUNDED
+      ) {
+        throw new BadRequestException(
+          `Billing sudah berstatus '${billing.status}'`,
+        );
+      }
+      if (Number(billing.paidAmount) > 0) {
+        throw new BadRequestException(
+          'Billing yang sudah memiliki pembayaran tidak dapat dibatalkan langsung, gunakan refund',
+        );
+      }
+
+      for (const item of billing.items) {
+        if (item.tarifId) {
+          await this.gudangService.restoreForTindakan(
+            manager,
+            clinicId,
+            item.tarifId,
+            item.quantity,
+            userId,
+          );
+        }
+      }
+
+      billing.status = BillingStatus.CANCELLED;
+      billing.updatedBy = userId;
+      await manager.save(billing);
+
+      this.logger.log(
+        `[CANCEL] Billing berhasil dibatalkan | id=${billing.id}, clinicId=${clinicId}`,
+      );
+      return billing;
+    });
+  }
+
+  async update(
+    id: number,
+    clinicId: number,
+    dto: UpdateBillingDto,
+    userId: number,
+  ) {
+    this.logger.log(
+      `[UPDATE] Memperbarui billing | id=${id}, clinicId=${clinicId}`,
+    );
+    return this.dataSource.transaction(async (manager) => {
+      const billing = await manager.findOne(Billing, {
+        where: { id, clinicId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!billing)
+        throw new NotFoundException(`Billing dengan ID ${id} tidak ditemukan`);
+
+      if (
+        billing.status === BillingStatus.CANCELLED ||
+        billing.status === BillingStatus.REFUNDED
+      ) {
+        throw new BadRequestException(
+          `Billing berstatus '${billing.status}' tidak dapat diedit`,
+        );
+      }
+
+      let subtotal = Number(billing.subtotal);
+      if (dto.items) {
+        const processed = await this.processItems(manager, clinicId, dto.items);
+        subtotal = processed.subtotal;
+
+        await manager.delete(BillingItem, { billingId: billing.id });
+        await manager.save(
+          BillingItem,
+          processed.processedItems.map((i) => ({
+            ...i,
+            billingId: billing.id,
+            createdBy: userId,
+          })),
+        );
+      }
+
+      const totalDiscountInput =
+        dto.totalDiscount ?? Number(billing.totalDiscount);
+      const totalDiscountNominal = Math.min(
+        dto.totalDiscount !== undefined &&
+          dto.totalDiscountType === DiscountType.PERCENT
+          ? (subtotal * dto.totalDiscount) / 100
+          : totalDiscountInput,
+        subtotal,
+      );
+      const additionalFee = dto.additionalFee ?? Number(billing.additionalFee);
+      const grandTotal = subtotal - totalDiscountNominal + additionalFee;
+
+      // Lowering the bill below what the patient already paid would mark it
+      // paid and silently lose the overpayment.
+      const alreadyPaid = Number(billing.paidAmount);
+      if (grandTotal < alreadyPaid) {
+        throw new BadRequestException(
+          `Total baru (Rp ${Math.round(grandTotal).toLocaleString('id-ID')}) lebih kecil dari yang sudah dibayar (Rp ${Math.round(alreadyPaid).toLocaleString('id-ID')}). Kurangi pembayaran lewat refund terlebih dahulu.`,
+        );
+      }
+
+      billing.subtotal = subtotal;
+      billing.totalDiscount = totalDiscountNominal;
+      billing.additionalFee = additionalFee;
+      billing.grandTotal = grandTotal;
+      billing.notes = dto.notes ?? billing.notes;
+      billing.updatedBy = userId;
+
+      const outstandingAmount = grandTotal - Number(billing.paidAmount);
+      if (outstandingAmount <= 0) {
+        billing.status = BillingStatus.PAID;
+        billing.outstandingAmount = 0;
+      } else {
+        billing.status =
+          Number(billing.paidAmount) > 0
+            ? BillingStatus.PARTIAL
+            : BillingStatus.UNPAID;
+        billing.outstandingAmount = outstandingAmount;
+      }
+
+      await manager.save(billing);
+
+      this.logger.log(
+        `[UPDATE] Billing berhasil diperbarui | id=${billing.id}, clinicId=${clinicId}`,
+      );
+      return manager.findOne(Billing, {
+        where: { id: billing.id },
+        relations: { patient: true, items: true, payments: true },
+      });
+    });
+  }
+
+  private async processItems(
     manager: any,
     clinicId: number,
-  ): Promise<string> {
-    const year = new Date().getFullYear();
-    const result = await manager.query(
-      `SELECT COUNT(*) AS total FROM billings WHERE clinic_id = ? AND YEAR(created_at) = ?`,
-      [clinicId, year],
-    );
-    const seq = parseInt(result[0].total, 10) + 1;
-    return `INV-${year}-${String(seq).padStart(5, '0')}`;
+    items: BillingItemDto[],
+  ): Promise<{
+    processedItems: Array<{
+      tarifId?: number;
+      name: string;
+      quantity: number;
+      unitPrice: number;
+      discount: number;
+      discountType: DiscountType;
+      subtotal: number;
+    }>;
+    subtotal: number;
+  }> {
+    let subtotal = 0;
+    const processedItems: Array<{
+      tarifId?: number;
+      name: string;
+      quantity: number;
+      unitPrice: number;
+      discount: number;
+      discountType: DiscountType;
+      subtotal: number;
+    }> = [];
+
+    for (const item of items) {
+      const qty = item.quantity || 1;
+      const discountType = item.discountType || DiscountType.NOMINAL;
+      const discountValue = item.discount || 0;
+
+      if (item.tarifId) {
+        const tarif = await manager.findOne(Tarif, {
+          where: { id: item.tarifId, clinicId },
+        });
+        if (!tarif)
+          throw new NotFoundException(
+            `Tarif ID ${item.tarifId} tidak ditemukan`,
+          );
+
+        if (
+          discountType === DiscountType.NOMINAL &&
+          discountValue > tarif.diskonMaksimal
+        ) {
+          throw new UnprocessableEntityException(
+            `Diskon untuk '${tarif.name}' melebihi batas maksimal (Rp ${tarif.diskonMaksimal})`,
+          );
+        }
+        if (
+          discountType === DiscountType.PERCENT &&
+          discountValue > (tarif.diskonMaksimal / tarif.hargaJual) * 100
+        ) {
+          throw new UnprocessableEntityException(
+            `Diskon % untuk '${tarif.name}' melebihi batas maksimal`,
+          );
+        }
+      }
+
+      const discountNominal =
+        discountType === DiscountType.PERCENT
+          ? (item.unitPrice! * discountValue) / 100
+          : discountValue;
+
+      const itemSubtotal = (item.unitPrice! - discountNominal) * qty;
+      subtotal += itemSubtotal;
+
+      processedItems.push({
+        tarifId: item.tarifId ?? undefined,
+        name: item.name!,
+        quantity: qty,
+        unitPrice: item.unitPrice!,
+        discount: discountValue,
+        discountType,
+        subtotal: itemSubtotal,
+      });
+    }
+
+    return { processedItems, subtotal };
+  }
+
+  private generateInvoiceNumber(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hour = String(now.getHours()).padStart(2, '0');
+    const minute = String(now.getMinutes()).padStart(2, '0');
+    const second = String(now.getSeconds()).padStart(2, '0');
+    const millisecond = String(now.getMilliseconds()).padStart(3, '0');
+    return `INV-${year}-${month}${day}-${hour}${minute}${second}${millisecond}`;
+  }
+
+  private async saveBillingWithInvoiceNumber(
+    manager: any,
+    billingData: Omit<Partial<Billing>, 'invoiceNumber'>,
+  ): Promise<Billing> {
+    const maxAttempts = 5;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const invoiceNumber = this.generateInvoiceNumber();
+      try {
+        return await manager.save(Billing, { ...billingData, invoiceNumber });
+      } catch (error: any) {
+        const isDuplicateInvoiceNumber =
+          error?.code === 'ER_DUP_ENTRY' &&
+          typeof error?.sqlMessage === 'string' &&
+          error.sqlMessage.includes(invoiceNumber);
+        if (!isDuplicateInvoiceNumber || attempt === maxAttempts) {
+          throw error;
+        }
+        this.logger.warn(
+          `[CREATE] Invoice number ${invoiceNumber} bentrok, mencoba ulang (attempt ${attempt})`,
+        );
+      }
+    }
+    throw new Error('Gagal menghasilkan nomor invoice yang unik.');
   }
 }

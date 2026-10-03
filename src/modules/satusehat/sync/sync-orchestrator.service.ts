@@ -1,28 +1,31 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 import { Encounter } from '../../encounters/entities/encounter.entity';
 import { Patient } from '../../patients/entities/patient.entity';
-import { Diagnosis } from '../../diagnoses/entities/diagnosis.entity';
-import { Procedure } from '../../procedures/entities/procedure.entity';
-import { VitalSign } from '../../vital-sign/entities/vital-sign.entity';
-import { Prescription } from '../../prescription/entities/prescription.entity';
 import { Clinic } from '../../clinics/entities/clinic.entity';
 import { Practitioner } from '../../practitioners/entities/practitioner.entity';
 import { Location } from '../../location/entities/location.entity';
-import { Anamnesis } from '../../anamnesis/entities/anamnesis.entity';
-import { OhisData } from '../../ohis-data/entities/ohis-data.entity';
-import { Dispense } from '../../dispense/entities/dispense.entity';
-import { Medication } from '../../medications/entities/medication.entity';
+import { PhysicalExamination } from '../../physical-examination/entities/physical-examination.entity';
+import { DentalExamination } from '../../dental-examination/entities/dental-examination.entity';
+import {
+  EncounterSoapNote,
+  SoapDiagnosis,
+} from '../../encounter-soap-notes/entities/encounter-soap-note.entity';
+import { Billing, BillingStatus } from '../../billing/entities/billing.entity';
+import { BillingItem } from '../../billing-item/entities/billing-item.entity';
+import { PrescriptionItem } from '../../prescriptions/entities/prescription-item.entity';
 import {
   SatusehatSyncLog,
   SyncLogStatus,
   SyncOperation,
+  redactSyncError,
 } from './entities/satusehat-sync-log.entity';
 import { SatusehatResourceLink } from './entities/satusehat-resource-link.entity';
 import { SyncStatus } from '../../../enums/sync-status.enum';
 import { SatusehatClientService } from '../satusehat-client.service';
-import { FhirContext, FhirMapper } from '../fhir/fhir-mapper';
+import { KfaProduct, KfaService } from '../kfa/kfa.service';
+import { FhirContext, FhirMapper, LinkedResource } from '../fhir/fhir-mapper';
 import { readableFhirError } from '../fhir/fhir-error';
 
 export interface SyncStep {
@@ -44,18 +47,24 @@ export interface SyncResult {
 
 class StepError extends Error {}
 
+/** localType link untuk satu diagnosis SOAP (unik per kode di satu catatan) */
+const diagnosisLinkType = (dx: SoapDiagnosis) =>
+  `soap_dx:${dx.system}:${dx.code}`.slice(0, 50);
+
 /**
- * Pengiriman data kunjungan rawat jalan ke SATUSEHAT mengikuti Playbook
+ * Pengiriman data kunjungan rawat jalan gigi ke SATUSEHAT, mengikuti Playbook
  * "RME Rawat Jalan" / Postman "Use Case - Gigi":
  *
  *   01 Prasyarat  : Patient & Practitioner (cari by NIK), Location (buat bila belum)
- *   02 Encounter  : POST saat kunjungan (arrived / in-progress)
- *   03 Anamnesis  : Observation golongan darah, rhesus, status kehamilan
- *   04 Pemeriksaan: Observation tanda vital, OHIS
- *   07 Diagnosis  : Condition (ICD-10)
- *   08 Tindakan   : Procedure (ICD-9-CM)
- *   09 Obat       : Medication + MedicationRequest, Medication + MedicationDispense
+ *   02 Encounter  : POST (arrived / in-progress)
+ *   04 Pemeriksaan: Observation tanda vital (pemeriksaan fisik), OHIS
+ *   07 Diagnosis  : Condition dari diagnosis SOAP (ICD-10 / SNOMED CT)
+ *   08 Tindakan   : Procedure dari tagihan bertarif ICD-9-CM
+ *   09 Obat       : Medication (KFA) + MedicationRequest dari resep
  *   12 Pulang     : PUT Encounter finished + diagnosis + dischargeDisposition
+ *
+ * Log sync tidak menyimpan payload FHIR (data sensitif) dan pesan error
+ * disamarkan dengan redactSyncError.
  */
 @Injectable()
 export class SyncOrchestratorService {
@@ -66,30 +75,29 @@ export class SyncOrchestratorService {
     private readonly encounterRepo: Repository<Encounter>,
     @InjectRepository(Patient)
     private readonly patientRepo: Repository<Patient>,
-    @InjectRepository(Diagnosis)
-    private readonly diagnosisRepo: Repository<Diagnosis>,
-    @InjectRepository(Procedure)
-    private readonly procedureRepo: Repository<Procedure>,
-    @InjectRepository(VitalSign)
-    private readonly vitalSignRepo: Repository<VitalSign>,
-    @InjectRepository(Prescription)
-    private readonly prescriptionRepo: Repository<Prescription>,
     @InjectRepository(Clinic) private readonly clinicRepo: Repository<Clinic>,
     @InjectRepository(Practitioner)
     private readonly practitionerRepo: Repository<Practitioner>,
     @InjectRepository(Location)
     private readonly locationRepo: Repository<Location>,
-    @InjectRepository(Anamnesis)
-    private readonly anamnesisRepo: Repository<Anamnesis>,
-    @InjectRepository(OhisData)
-    private readonly ohisRepo: Repository<OhisData>,
-    @InjectRepository(Dispense)
-    private readonly dispenseRepo: Repository<Dispense>,
+    @InjectRepository(PhysicalExamination)
+    private readonly physicalRepo: Repository<PhysicalExamination>,
+    @InjectRepository(DentalExamination)
+    private readonly dentalRepo: Repository<DentalExamination>,
+    @InjectRepository(EncounterSoapNote)
+    private readonly soapRepo: Repository<EncounterSoapNote>,
+    @InjectRepository(Billing)
+    private readonly billingRepo: Repository<Billing>,
+    @InjectRepository(BillingItem)
+    private readonly billingItemRepo: Repository<BillingItem>,
+    @InjectRepository(PrescriptionItem)
+    private readonly prescriptionRepo: Repository<PrescriptionItem>,
     @InjectRepository(SatusehatSyncLog)
     private readonly syncLogRepo: Repository<SatusehatSyncLog>,
     @InjectRepository(SatusehatResourceLink)
     private readonly linkRepo: Repository<SatusehatResourceLink>,
     private readonly satusehatClient: SatusehatClientService,
+    private readonly kfaService: KfaService,
   ) {}
 
   /** Dipanggil saat kunjungan selesai (fire-and-forget dari EncountersService). */
@@ -126,7 +134,7 @@ export class SyncOrchestratorService {
           'Organization',
           'clinic',
           clinicId,
-          'Konfigurasi SATUSEHAT belum lengkap',
+          'Konfigurasi SATUSEHAT klinik belum lengkap',
         ),
       );
       return { success: false, steps };
@@ -201,11 +209,7 @@ export class SyncOrchestratorService {
       }
       ctx.encounterId = encounter.satusehatEncounterId;
     } catch (err) {
-      await this.encounterRepo.update(encounter.id, {
-        syncStatus: SyncStatus.FAILED,
-        syncError: (err as Error).message.slice(0, 5000),
-        lastSyncAt: new Date(),
-      });
+      await this.markEncounterFailed(encounter.id, err);
       steps.push(
         this.fail(
           '02. Kunjungan',
@@ -218,110 +222,76 @@ export class SyncOrchestratorService {
       return { success: false, steps };
     }
 
-    // 03. Anamnesis
-    const anamnesis = await this.anamnesisRepo.findOne({
-      where: { encounterId },
-    });
-    if (anamnesis) {
-      for (const { localType, resource } of FhirMapper.toAnamnesisObservations(
-        anamnesis,
-        ctx,
-      )) {
-        steps.push(
-          await this.sendLinked(
-            clinicId,
-            '03. Anamnesis',
-            'Observation',
-            localType,
-            anamnesis.id,
-            resource,
-          ),
-        );
-      }
-    }
-
     // 04. Pemeriksaan fisik — tanda vital
-    for (const vs of await this.vitalSignRepo.find({
+    const physical = await this.physicalRepo.findOne({
       where: { encounterId },
-    })) {
-      steps.push(
-        await this.sendLinked(
-          clinicId,
-          '04. Tanda Vital',
-          'Observation',
-          'vital_sign',
-          vs.id,
-          FhirMapper.toVitalSignObservation(vs, ctx),
-        ),
-      );
-    }
-
-    // 04. Pemeriksaan fisik — OHIS
-    const ohis = await this.ohisRepo.findOne({ where: { encounterId } });
-    if (ohis) {
-      for (const { localType, resource } of FhirMapper.toOhisObservations(
-        ohis,
-        ctx,
-      )) {
-        steps.push(
-          await this.sendLinked(
-            clinicId,
-            '04. OHIS',
-            'Observation',
-            localType,
-            ohis.id,
-            resource,
-          ),
-        );
+    });
+    if (physical) {
+      for (const r of FhirMapper.toVitalSignObservations(physical, ctx)) {
+        steps.push(await this.sendLinked(clinicId, '04. Tanda Vital', r));
       }
     }
 
-    // 07. Diagnosis
-    const diagnoses = await this.diagnosisRepo.find({
-      where: { encounterId },
-      order: { isPrimary: 'DESC', id: 'ASC' },
-    });
-    for (const d of diagnoses) {
-      steps.push(await this.syncCondition(clinicId, d, ctx));
+    // 04. Pemeriksaan gigi — OHIS
+    const dental = await this.dentalRepo.findOne({ where: { encounterId } });
+    if (dental) {
+      for (const r of FhirMapper.toOhisObservations(dental, ctx)) {
+        steps.push(await this.sendLinked(clinicId, '04. OHIS', r));
+      }
     }
 
-    // 08. Tindakan
-    for (const p of await this.procedureRepo.find({ where: { encounterId } })) {
-      steps.push(await this.syncProcedure(clinicId, p, ctx));
+    // 07. Diagnosis (SOAP) — utama dulu
+    const soap = await this.soapRepo.findOne({ where: { encounterId } });
+    const diagnoses = [...(soap?.diagnoses ?? [])].sort(
+      (a, b) => Number(b.primary) - Number(a.primary),
+    );
+    const conditionIds: { conditionId: string; display: string }[] = [];
+    for (const dx of diagnoses) {
+      const step = await this.sendLinked(clinicId, '07. Diagnosis', {
+        localType: diagnosisLinkType(dx),
+        localId: soap!.id,
+        resource: FhirMapper.toCondition(
+          dx,
+          soap!.updatedAt ?? soap!.createdAt,
+          ctx,
+        ),
+      });
+      steps.push(step);
+      if (step.status === 'success') {
+        conditionIds.push({
+          conditionId: step.satusehatId!,
+          display: dx.nameId || dx.display,
+        });
+      }
     }
+    const primaryDx = diagnoses.find((d) => d.primary) ?? diagnoses[0] ?? null;
 
-    // 09. Peresepan & pengeluaran obat
-    for (const rx of await this.prescriptionRepo.find({
-      where: { encounterId },
-      relations: { medication: true },
-    })) {
+    // 08. Tindakan — item tagihan bertarif ICD-9-CM
+    for (const item of await this.procedureItems(encounterId)) {
       steps.push(
-        ...(await this.syncPrescription(clinicId, rx, encounter.id, ctx)),
+        await this.sendLinked(clinicId, '08. Tindakan', {
+          localType: 'billing_item',
+          localId: item.id,
+          resource: FhirMapper.toProcedure(item, encounter, ctx, primaryDx),
+        }),
       );
     }
-    for (const dp of await this.dispenseRepo.find({
+
+    // 09. Peresepan obat (KFA)
+    const prescriptions = await this.prescriptionRepo.find({
       where: { encounterId },
-      relations: { medication: true, prescription: true },
-    })) {
-      steps.push(...(await this.syncDispense(clinicId, dp, encounter.id, ctx)));
+      order: { sortOrder: 'ASC', id: 'ASC' },
+    });
+    for (const rx of prescriptions) {
+      steps.push(
+        ...(await this.syncPrescription(clinicId, rx, encounter, ctx)),
+      );
     }
 
     // 12. Cara keluar — PUT Encounter finished dengan diagnosis
     if (encounter.status === 'finished' || encounter.status === 'cancelled') {
       try {
-        const fresh = await this.diagnosisRepo.find({
-          where: { encounterId },
-          order: { isPrimary: 'DESC', id: 'ASC' },
-        });
-        const dx = fresh
-          .filter(
-            (d) => d.satusehatConditionId && d.category !== 'problem-list-item',
-          )
-          .map((d) => ({
-            conditionId: d.satusehatConditionId,
-            display: d.icd10Display,
-          }));
-        const body = FhirMapper.toEncounter(encounter, ctx, dx);
+        const body = FhirMapper.toEncounter(encounter, ctx, conditionIds);
         await this.send(
           clinicId,
           'Encounter',
@@ -344,11 +314,7 @@ export class SyncOrchestratorService {
           ),
         );
       } catch (err) {
-        await this.encounterRepo.update(encounter.id, {
-          syncStatus: SyncStatus.FAILED,
-          syncError: (err as Error).message.slice(0, 5000),
-          lastSyncAt: new Date(),
-        });
+        await this.markEncounterFailed(encounter.id, err);
         steps.push(
           this.fail(
             '12. Kunjungan Selesai',
@@ -365,8 +331,9 @@ export class SyncOrchestratorService {
   }
 
   /**
-   * Kirim satu resource (tombol "Kirim" di menu SATUSEHAT / antrean retry).
-   * Encounter mengirim seluruh kunjungan.
+   * Kirim satu baris dari menu SATUSEHAT / antrean retry. Data klinis
+   * (resep, tindakan) bergantung pada Encounter, jadi dikirim ulang lewat
+   * kunjungannya.
    */
   async syncResource(
     resourceType: string,
@@ -375,28 +342,14 @@ export class SyncOrchestratorService {
   ): Promise<SyncResult> {
     const clinic = await this.clinicRepo.findOne({ where: { id: clinicId } });
     if (!clinic || !this.isConfigured(clinic)) {
-      return { success: false, error: 'Konfigurasi SATUSEHAT tidak lengkap' };
+      return {
+        success: false,
+        error: 'Konfigurasi SATUSEHAT klinik belum lengkap',
+      };
     }
 
     try {
       switch (resourceType) {
-        case 'Encounter': {
-          const { success, steps } = await this.syncEncounterFull(
-            localId,
-            clinicId,
-          );
-          const failed = steps.filter((s) => s.status === 'failed');
-          return success
-            ? {
-                success: true,
-                satusehatId: steps.find((s) => s.resourceType === 'Encounter')
-                  ?.satusehatId,
-              }
-            : {
-                success: false,
-                error: failed.map((s) => `${s.step}: ${s.message}`).join(' | '),
-              };
-        }
         case 'Patient': {
           const p = await this.patientRepo.findOne({
             where: { id: localId, clinicId },
@@ -433,94 +386,27 @@ export class SyncOrchestratorService {
         }
       }
 
-      // Resource turunan kunjungan: butuh konteks encounter yang sudah terkirim
       const encounterId = await this.findEncounterIdFor(resourceType, localId);
-      if (!encounterId)
+      if (!encounterId) {
         return {
           success: false,
-          error: `${resourceType} #${localId} tidak ditemukan`,
-        };
-      const encounter = await this.encounterRepo.findOne({
-        where: { id: encounterId, clinicId },
-        relations: { patient: true, practitioner: true, location: true },
-      });
-      if (!encounter)
-        return { success: false, error: 'Kunjungan tidak ditemukan' };
-      if (!encounter.satusehatEncounterId) {
-        return {
-          success: false,
-          error:
-            'Kunjungan belum dikirim ke SATUSEHAT — kirim kunjungannya dulu',
+          error: `Resource type '${resourceType}' #${localId} tidak dikenali`,
         };
       }
-      const steps: SyncStep[] = [];
-      let ctx: FhirContext;
-      try {
-        ctx = await this.buildContext(clinic, encounter, steps);
-      } catch {
-        return {
-          success: false,
-          error: steps.find((s) => s.status === 'failed')?.message,
-        };
-      }
-      ctx.encounterId = encounter.satusehatEncounterId;
-
-      let result: SyncStep[];
-      switch (resourceType) {
-        case 'Condition': {
-          const d = await this.diagnosisRepo.findOneByOrFail({ id: localId });
-          result = [await this.syncCondition(clinicId, d, ctx)];
-          break;
-        }
-        case 'Procedure': {
-          const p = await this.procedureRepo.findOneByOrFail({ id: localId });
-          result = [await this.syncProcedure(clinicId, p, ctx)];
-          break;
-        }
-        case 'Observation': {
-          const vs = await this.vitalSignRepo.findOneByOrFail({ id: localId });
-          result = [
-            await this.sendLinked(
-              clinicId,
-              '04. Tanda Vital',
-              'Observation',
-              'vital_sign',
-              vs.id,
-              FhirMapper.toVitalSignObservation(vs, ctx),
-            ),
-          ];
-          break;
-        }
-        case 'MedicationRequest': {
-          const rx = await this.prescriptionRepo.findOneOrFail({
-            where: { id: localId },
-            relations: { medication: true },
-          });
-          result = await this.syncPrescription(clinicId, rx, encounter.id, ctx);
-          break;
-        }
-        case 'MedicationDispense': {
-          const dp = await this.dispenseRepo.findOneOrFail({
-            where: { id: localId },
-            relations: { medication: true, prescription: true },
-          });
-          result = await this.syncDispense(clinicId, dp, encounter.id, ctx);
-          break;
-        }
-        default:
-          return {
-            success: false,
-            error: `Resource type '${resourceType}' tidak dikenali`,
-          };
-      }
-      const failed = result.find(
-        (s) => s.status === 'failed' || s.status === 'skipped',
+      const { success, steps } = await this.syncEncounterFull(
+        encounterId,
+        clinicId,
       );
-      return failed
-        ? { success: false, error: failed.message }
-        : {
+      const failed = steps.filter((s) => s.status === 'failed');
+      return success
+        ? {
             success: true,
-            satusehatId: result[result.length - 1]?.satusehatId,
+            satusehatId: steps.find((s) => s.resourceType === 'Encounter')
+              ?.satusehatId,
+          }
+        : {
+            success: false,
+            error: failed.map((s) => `${s.step}: ${s.message}`).join(' | '),
           };
     } catch (err) {
       return { success: false, error: (err as Error).message };
@@ -605,7 +491,7 @@ export class SyncOrchestratorService {
         };
       } else {
         throw new StepError(
-          'Kunjungan tidak memiliki lokasi/ruangan dan Location Poli klinik belum dibuat',
+          'Kunjungan tidak memiliki ruangan dan Location ID Poli klinik belum diisi di Konfigurasi SATUSEHAT',
         );
       }
       steps.push(
@@ -631,7 +517,7 @@ export class SyncOrchestratorService {
     }
 
     return {
-      orgId: clinic.satusehatOrgId,
+      orgId: clinic.satusehatOrgId as string,
       patient: { id: patientId, name: encounter.patient.name },
       practitioner: { id: practitionerId, name: encounter.practitioner.name },
       location,
@@ -654,42 +540,29 @@ export class SyncOrchestratorService {
       );
       const id: string | undefined = bundle?.entry?.[0]?.resource?.id;
       if (!id)
-        throw new StepError(`NIK ${patient.nik} tidak ditemukan di SATUSEHAT`);
+        throw new StepError(
+          `NIK pasien ${patient.name} tidak ditemukan di SATUSEHAT`,
+        );
       await this.patientRepo.update(patient.id, {
         satusehatPatientId: id,
-        ihsNumber: id,
         syncStatus: SyncStatus.SYNCED,
         syncError: null as unknown as string,
         lastSyncAt: new Date(),
       });
-      await this.saveLog(
-        clinicId,
-        'Patient',
-        patient.id,
-        id,
-        200,
-        undefined,
-        undefined,
-      );
+      await this.saveLog(clinicId, 'Patient', patient.id, {
+        satusehatId: id,
+        httpStatus: 200,
+      });
       patient.satusehatPatientId = id;
       return id;
     } catch (err) {
       const message = (err as Error).message;
       await this.patientRepo.update(patient.id, {
         syncStatus: SyncStatus.FAILED,
-        syncError: message,
+        syncError: redactSyncError(message) as string,
         lastSyncAt: new Date(),
       });
-      await this.saveLog(
-        clinicId,
-        'Patient',
-        patient.id,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        message,
-      );
+      await this.saveLog(clinicId, 'Patient', patient.id, { error: message });
       throw err;
     }
   }
@@ -712,33 +585,21 @@ export class SyncOrchestratorService {
       const id: string | undefined = bundle?.entry?.[0]?.resource?.id;
       if (!id)
         throw new StepError(
-          `NIK ${practitioner.nik} (${practitioner.name}) tidak ditemukan di SATUSEHAT`,
+          `NIK ${practitioner.name} tidak ditemukan di SATUSEHAT`,
         );
       await this.practitionerRepo.update(practitioner.id, {
         satusehatPractitionerId: id,
       });
-      await this.saveLog(
-        clinicId,
-        'Practitioner',
-        practitioner.id,
-        id,
-        200,
-        undefined,
-        undefined,
-      );
+      await this.saveLog(clinicId, 'Practitioner', practitioner.id, {
+        satusehatId: id,
+        httpStatus: 200,
+      });
       practitioner.satusehatPractitionerId = id;
       return id;
     } catch (err) {
-      await this.saveLog(
-        clinicId,
-        'Practitioner',
-        practitioner.id,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        (err as Error).message,
-      );
+      await this.saveLog(clinicId, 'Practitioner', practitioner.id, {
+        error: (err as Error).message,
+      });
       throw err;
     }
   }
@@ -751,7 +612,10 @@ export class SyncOrchestratorService {
   ): Promise<string> {
     if (!force && location.satusehatLocationId)
       return location.satusehatLocationId;
-    const body = FhirMapper.toLocation(location, clinic.satusehatOrgId);
+    const body = FhirMapper.toLocation(
+      location,
+      clinic.satusehatOrgId as string,
+    );
     const id = await this.send(
       clinic.id,
       'Location',
@@ -766,220 +630,97 @@ export class SyncOrchestratorService {
 
   // ── Resource klinis ────────────────────────────────────────────────────
 
-  private async syncCondition(
-    clinicId: number,
-    d: Diagnosis,
-    ctx: FhirContext,
-  ): Promise<SyncStep> {
-    const step = '07. Diagnosis';
-    try {
-      const id = await this.send(
-        clinicId,
-        'Condition',
-        d.id,
-        FhirMapper.toCondition(d, ctx),
-        d.satusehatConditionId || undefined,
-      );
-      await this.diagnosisRepo.update(d.id, {
-        satusehatConditionId: id,
-        syncStatus: SyncStatus.SYNCED,
-      });
-      d.satusehatConditionId = id;
-      return this.ok(step, 'Condition', 'condition', d.id, id);
-    } catch (err) {
-      await this.diagnosisRepo.update(d.id, { syncStatus: SyncStatus.FAILED });
-      return this.fail(
-        step,
-        'Condition',
-        'condition',
-        d.id,
-        (err as Error).message,
-      );
-    }
-  }
-
-  private async syncProcedure(
-    clinicId: number,
-    p: Procedure,
-    ctx: FhirContext,
-  ): Promise<SyncStep> {
-    const step = '08. Tindakan';
-    try {
-      const reason = p.reasonDiagnosisId
-        ? await this.diagnosisRepo.findOne({
-            where: { id: p.reasonDiagnosisId },
-          })
-        : null;
-      const id = await this.send(
-        clinicId,
-        'Procedure',
-        p.id,
-        FhirMapper.toProcedure(p, ctx, reason),
-        p.satusehatProcedureId || undefined,
-      );
-      await this.procedureRepo.update(p.id, {
-        satusehatProcedureId: id,
-        syncStatus: SyncStatus.SYNCED,
-      });
-      return this.ok(step, 'Procedure', 'procedure', p.id, id);
-    } catch (err) {
-      await this.procedureRepo.update(p.id, { syncStatus: SyncStatus.FAILED });
-      return this.fail(
-        step,
-        'Procedure',
-        'procedure',
-        p.id,
-        (err as Error).message,
-      );
-    }
+  private async procedureItems(encounterId: number) {
+    const billings = await this.billingRepo.find({
+      where: {
+        encounterId,
+        status: Not(In([BillingStatus.CANCELLED, BillingStatus.REFUNDED])),
+      },
+      select: { id: true },
+    });
+    if (!billings.length) return [];
+    const items = await this.billingItemRepo.find({
+      where: { billingId: In(billings.map((b) => b.id)) },
+      relations: { tarif: true },
+      order: { id: 'ASC' },
+    });
+    return items.filter(
+      (i): i is BillingItem & { tarif: { kodeIcd9: string; name: string } } =>
+        !!i.tarif?.kodeIcd9?.trim(),
+    );
   }
 
   private async syncPrescription(
     clinicId: number,
-    rx: Prescription,
-    encounterLocalId: number,
+    rx: PrescriptionItem,
+    encounter: Encounter,
     ctx: FhirContext,
   ): Promise<SyncStep[]> {
     const step = '09. Peresepan Obat';
-    if (!rx.medication?.kfaCode) {
-      const message = `Obat "${rx.medication?.name ?? rx.medicationId}" belum punya kode KFA — lengkapi di data obat`;
-      await this.prescriptionRepo.update(rx.id, {
-        syncStatus: SyncStatus.FAILED,
+    if (!rx.kfaCode) {
+      const message = `Obat "${rx.drugName}" belum dipilih dari KFA — pilih ulang obat di resep agar bisa dikirim`;
+      await this.saveLog(clinicId, 'MedicationRequest', rx.id, {
+        error: message,
       });
-      await this.saveLog(
-        clinicId,
-        'MedicationRequest',
-        rx.id,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        message,
-      );
-      return [
-        this.fail(step, 'MedicationRequest', 'prescription', rx.id, message),
-      ];
+      return [this.fail(step, 'MedicationRequest', 'rx_item', rx.id, message)];
     }
-    const out: SyncStep[] = [];
-    const med = await this.sendLinked(
-      clinicId,
-      step,
-      'Medication',
-      'rx_medication',
-      rx.id,
-      FhirMapper.toMedication(rx.medication, ctx, `RX-${rx.id}`),
-    );
-    out.push(med);
-    if (med.status !== 'success') {
-      await this.prescriptionRepo.update(rx.id, {
-        syncStatus: SyncStatus.FAILED,
-      });
-      return out;
-    }
-    try {
-      const body = FhirMapper.toMedicationRequest(
-        rx,
-        rx.medication,
-        med.satusehatId!,
-        encounterLocalId,
-        ctx,
-      );
-      const id = await this.send(
-        clinicId,
-        'MedicationRequest',
-        rx.id,
-        body,
-        rx.satusehatMedreqId || undefined,
-      );
-      await this.prescriptionRepo.update(rx.id, {
-        satusehatMedreqId: id,
-        syncStatus: SyncStatus.SYNCED,
-      });
-      rx.satusehatMedreqId = id;
-      out.push(this.ok(step, 'MedicationRequest', 'prescription', rx.id, id));
-    } catch (err) {
-      await this.prescriptionRepo.update(rx.id, {
-        syncStatus: SyncStatus.FAILED,
-      });
-      out.push(
-        this.fail(
-          step,
-          'MedicationRequest',
-          'prescription',
-          rx.id,
-          (err as Error).message,
-        ),
-      );
-    }
-    return out;
-  }
 
-  private async syncDispense(
-    clinicId: number,
-    dp: Dispense,
-    encounterLocalId: number,
-    ctx: FhirContext,
-  ): Promise<SyncStep[]> {
-    const step = '09. Pengeluaran Obat';
-    const rx = dp.prescription;
-    if (!rx?.satusehatMedreqId) {
-      return [
-        this.skip(
-          step,
-          'MedicationDispense',
-          'dispense',
-          dp.id,
-          'Resep belum terkirim ke SATUSEHAT',
-        ),
-      ];
+    let kfa: KfaProduct;
+    try {
+      kfa = await this.kfaService.getProduct(rx.kfaCode);
+    } catch {
+      // Detail KFA opsional (bentuk sediaan/zat aktif); kode & nama tetap cukup
+      kfa = {
+        kfaCode: rx.kfaCode,
+        name: rx.kfaName || rx.drugName,
+        active: true,
+        group: 'farmasi',
+        dosageForm: null,
+        route: null,
+        uom: null,
+        manufacturer: null,
+        nie: null,
+        generic: null,
+        template: null,
+        activeIngredients: [],
+      };
     }
-    if (!dp.medication?.kfaCode) {
-      const message = `Obat "${dp.medication?.name ?? dp.medicationId}" belum punya kode KFA`;
-      await this.saveLog(
-        clinicId,
-        'MedicationDispense',
-        dp.id,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        message,
-      );
-      return [
-        this.fail(step, 'MedicationDispense', 'dispense', dp.id, message),
-      ];
-    }
+
     const out: SyncStep[] = [];
-    const med = await this.sendLinked(
-      clinicId,
-      step,
-      'Medication',
-      'dispense_medication',
-      dp.id,
-      FhirMapper.toMedication(dp.medication, ctx, `DISP-${dp.id}`),
-    );
+    const med = await this.sendLinked(clinicId, step, {
+      localType: 'rx_medication',
+      localId: rx.id,
+      resource: FhirMapper.toMedication(kfa, ctx, `RX-${rx.id}`),
+    });
     out.push(med);
     if (med.status !== 'success') return out;
     out.push(
       await this.sendLinked(
         clinicId,
         step,
-        'MedicationDispense',
-        'dispense',
-        dp.id,
-        FhirMapper.toMedicationDispense(
-          dp,
-          rx,
-          dp.medication,
-          med.satusehatId!,
-          rx.satusehatMedreqId,
-          encounterLocalId,
-          ctx,
-        ),
-        'MedicationDispense',
+        {
+          localType: 'rx_item',
+          localId: rx.id,
+          resource: FhirMapper.toMedicationRequest(
+            rx,
+            kfa,
+            med.satusehatId!,
+            encounter,
+            ctx,
+          ),
+        },
+        'MedicationRequest',
       ),
     );
     return out;
+  }
+
+  private async markEncounterFailed(encounterId: number, err: unknown) {
+    await this.encounterRepo.update(encounterId, {
+      syncStatus: SyncStatus.FAILED,
+      syncError: redactSyncError((err as Error).message) as string,
+      lastSyncAt: new Date(),
+    });
   }
 
   // ── Infrastruktur kirim ────────────────────────────────────────────────
@@ -998,7 +739,7 @@ export class SyncOrchestratorService {
   ): Promise<string> {
     const path = existingId ? `${resourceType}/${existingId}` : resourceType;
     const payload = existingId ? { ...body, id: existingId } : body;
-    let status: number | undefined;
+    let status: number;
     let data: any;
     try {
       ({ status, data } = await this.satusehatClient.sendFhirResource(
@@ -1008,65 +749,41 @@ export class SyncOrchestratorService {
         payload,
       ));
     } catch (err) {
-      await this.saveLog(
-        clinicId,
-        logResourceType,
-        localId,
-        undefined,
-        undefined,
-        payload,
-        undefined,
-        (err as Error).message,
+      await this.saveLog(clinicId, logResourceType, localId, {
+        error: (err as Error).message,
         existingId,
-      );
+      });
       throw err;
     }
     const ok = status >= 200 && status < 300;
     const id: string | undefined = data?.id ?? existingId;
     if (!ok || !id) {
       const message = `HTTP ${status}: ${readableFhirError(data)}`;
-      await this.saveLog(
-        clinicId,
-        logResourceType,
-        localId,
-        undefined,
-        status,
-        payload,
-        data,
-        message,
+      await this.saveLog(clinicId, logResourceType, localId, {
+        httpStatus: status,
+        error: message,
         existingId,
-      );
+      });
       throw new StepError(message);
     }
-    await this.saveLog(
-      clinicId,
-      logResourceType,
-      localId,
-      id,
-      status,
-      payload,
-      data,
-      undefined,
+    await this.saveLog(clinicId, logResourceType, localId, {
+      satusehatId: id,
+      httpStatus: status,
       existingId,
-    );
+    });
     return id;
   }
 
-  /** Kirim resource yang ID-nya disimpan di tabel link (tanpa kolom khusus). */
+  /** Kirim resource yang ID-nya disimpan di satusehat_resource_links. */
   private async sendLinked(
     clinicId: number,
     step: string,
-    resourceType: string,
-    localType: string,
-    localId: number,
-    body: Record<string, any>,
+    { localType, localId, resource }: LinkedResource,
     logResourceType?: string,
   ): Promise<SyncStep> {
+    const resourceType: string = resource.resourceType;
     const logType =
-      logResourceType ??
-      (localType === 'vital_sign'
-        ? 'Observation'
-        : `${resourceType}:${localType}`);
+      logResourceType ?? `${resourceType}:${localType}`.slice(0, 50);
     const link = await this.linkRepo.findOne({
       where: { clinicId, localType, localId },
     });
@@ -1075,7 +792,7 @@ export class SyncOrchestratorService {
         clinicId,
         resourceType,
         localId,
-        body,
+        resource,
         link?.satusehatId,
         logType,
       );
@@ -1104,23 +821,26 @@ export class SyncOrchestratorService {
     resourceType: string,
     localId: number,
   ): Promise<number | undefined> {
-    const repo: Record<
-      string,
-      Repository<{ id: number; encounterId: number }>
-    > = {
-      Condition: this.diagnosisRepo,
-      Procedure: this.procedureRepo,
-      Observation: this.vitalSignRepo,
-      MedicationRequest: this.prescriptionRepo,
-      MedicationDispense: this.dispenseRepo,
-    } as never;
-    const r = repo[resourceType];
-    if (!r) return undefined;
-    const row = await r.findOne({
-      where: { id: localId },
-      select: { id: true, encounterId: true } as never,
-    });
-    return row?.encounterId;
+    switch (resourceType) {
+      case 'Encounter':
+        return localId;
+      case 'MedicationRequest':
+        return (
+          await this.prescriptionRepo.findOne({
+            where: { id: localId },
+            select: { id: true, encounterId: true },
+          })
+        )?.encounterId;
+      case 'Procedure': {
+        const item = await this.billingItemRepo.findOne({
+          where: { id: localId },
+          relations: { billing: true },
+        });
+        return item?.billing?.encounterId;
+      }
+      default:
+        return undefined;
+    }
   }
 
   private isConfigured(clinic: Clinic | null): clinic is Clinic {
@@ -1161,7 +881,7 @@ export class SyncOrchestratorService {
       localType,
       localId,
       status: 'failed',
-      message,
+      message: redactSyncError(message),
     };
   }
 
@@ -1186,25 +906,25 @@ export class SyncOrchestratorService {
     clinicId: number,
     resourceType: string,
     localId: number,
-    satusehatId?: string,
-    httpStatus?: number,
-    requestPayload?: object,
-    responsePayload?: object,
-    errorMessage?: string,
-    existingId?: string,
+    opts: {
+      satusehatId?: string;
+      httpStatus?: number;
+      error?: string;
+      existingId?: string;
+    },
   ): Promise<void> {
     try {
       await this.syncLogRepo.save({
         clinicId,
-        resourceType,
+        resourceType: resourceType.slice(0, 50),
         localId,
-        satusehatId: satusehatId ?? existingId,
-        operation: existingId ? SyncOperation.UPDATE : SyncOperation.CREATE,
-        status: errorMessage ? SyncLogStatus.FAILED : SyncLogStatus.SUCCESS,
-        httpStatus,
-        requestPayload,
-        responsePayload,
-        errorMessage,
+        satusehatId: opts.satusehatId ?? opts.existingId,
+        operation: opts.existingId
+          ? SyncOperation.UPDATE
+          : SyncOperation.CREATE,
+        status: opts.error ? SyncLogStatus.FAILED : SyncLogStatus.SUCCESS,
+        httpStatus: opts.httpStatus,
+        errorMessage: redactSyncError(opts.error),
       });
     } catch (err) {
       this.logger.warn(`Gagal menyimpan log sync: ${(err as Error).message}`);

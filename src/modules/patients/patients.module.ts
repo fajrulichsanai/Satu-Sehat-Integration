@@ -2,14 +2,42 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Patient } from './entities/patient.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
+import { EncounterSoapNote } from '../encounter-soap-notes/entities/encounter-soap-note.entity';
+import { PhysicalExamination } from '../physical-examination/entities/physical-examination.entity';
+import { DentalExamination } from '../dental-examination/entities/dental-examination.entity';
+import { PrescriptionItem } from '../prescriptions/entities/prescription-item.entity';
+import { Billing } from '../billing/entities/billing.entity';
+import { SupportingExamImage } from '../supporting-exam/entities/supporting-exam-image.entity';
+import { PatientRecall } from '../recalls/entities/patient-recall.entity';
 import { PatientsController } from './patients.controller';
 import { PatientsService } from './patients.service';
+import { PatientImportController } from './patient-import.controller';
+import { PatientImportService } from './patient-import.service';
 import { SatusehatModule } from '../satusehat/satusehat.module';
+import { TreatmentPlansModule } from '../treatment-plans/treatment-plans.module';
+import { AuditLogModule } from '../audit-log/audit-log.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Patient, Encounter]), SatusehatModule],
-  controllers: [PatientsController],
-  providers: [PatientsService],
+  imports: [
+    TypeOrmModule.forFeature([
+      Patient,
+      Encounter,
+      EncounterSoapNote,
+      PhysicalExamination,
+      DentalExamination,
+      PrescriptionItem,
+      Billing,
+      SupportingExamImage,
+      PatientRecall,
+    ]),
+    SatusehatModule,
+    TreatmentPlansModule,
+    AuditLogModule,
+    NotificationsModule,
+  ],
+  controllers: [PatientsController, PatientImportController],
+  providers: [PatientsService, PatientImportService],
   exports: [PatientsService],
 })
 export class PatientsModule {}

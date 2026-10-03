@@ -1,0 +1,757 @@
+{
+  "info": {
+    "_postman_id": "65f9e151-8223-4334-aff0-ad94d1e86961",
+    "name": "Treasury Portal Macroeconomic",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "27494141"
+  },
+  "item": [
+    {
+      "name": "Foreign Ownership",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "password",
+              "value": "a5tr4tr345ry_#5up3r_4dm1n",
+              "type": "string"
+            },
+            {
+              "key": "username",
+              "value": "tr3as5ury#u53r",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transactionDate\": \"2026-01-13\",\n  \"foreignPercentage\": \"10.50\",\n  \"domesticPercentage\": \"1.0\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/o/treasury-api/foreign-ownership",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "o",
+            "treasury-api",
+            "foreign-ownership"
+          ]
+        },
+        "description": "Update foreign ownership data with transaction date, foreign percentage, and domestic percentage"
+      },
+      "response": []
+    },
+    {
+      "name": "LDR Ratio",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "password",
+              "value": "a5tr4tr345ry_#5up3r_4dm1n",
+              "type": "string"
+            },
+            {
+              "key": "username",
+              "value": "tr3as5ury#u53r",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bankCode\": \"BANK001\",\n  \"periodDate\": \"2026-05-16\",\n  \"ldrRatio\": 85.1\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/o/treasury-api/ldr-ratio",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "o",
+            "treasury-api",
+            "ldr-ratio"
+          ]
+        },
+        "description": "Upsert LDR Ratio data\n\nParameter:\n- bankCode: String (required) - Bank code, will be auto-uppercase\n- periodDate: String (required) - Period date in format yyyy-MM-dd\n- ldrRatio: Number (required) - LDR Ratio value"
+      },
+      "response": []
+    },
+    {
+      "name": "Insert Bond Issue",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "{{restApiUser}}",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "{{restApiPassword}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "title",
+              "value": "Ringkasan Hasil Penerbitan SBN Tahun 2026",
+              "type": "text"
+            },
+            {
+              "key": "description",
+              "value": "Ringkasan Hasil Penerbitan SBN s.d. Januari 2026",
+              "type": "text"
+            },
+            {
+              "key": "month",
+              "value": "1",
+              "type": "text"
+            },
+            {
+              "key": "year",
+              "value": "2026",
+              "type": "text"
+            },
+            {
+              "key": "pdfFileName",
+              "value": "bond-issue-2026-01.pdf",
+              "type": "text"
+            },
+            {
+              "key": "pdfFile",
+              "type": "file",
+              "value": null
+            },
+            {
+              "key": "xlsFileName",
+              "value": "bond-issue-2026-01.xlsx",
+              "type": "text"
+            },
+            {
+              "key": "xlsFile",
+              "type": "file",
+              "value": null
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/o/treasury-api/bond-issue/",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "o",
+            "treasury-api",
+            "bond-issue",
+            ""
+          ]
+        },
+        "description": "Insert Bond Issue baru (multipart/form-data). Field pdfFileName/xlsFileName opsional — kalau kosong, nama file diambil dari file yang di-upload. Record aktif lain pada periode (month+year) yang sama akan otomatis di-soft-delete."
+      },
+      "response": []
+    },
+    {
+      "name": "SUN SBN Data",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "password",
+              "value": "a5tr4tr345ry_#5up3r_4dm1n",
+              "type": "string"
+            },
+            {
+              "key": "username",
+              "value": "tr3as5ury#u53r",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"date\": \"2000-01-01\",\r\n    \"sunValue\": \"24.81\",\r\n    \"equityValue\": \"0\",\r\n    \"sbnValue\": \"6.10\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://astranetpoc.astra.co.id/o/treasury-api/sun-sbn-data",
+          "protocol": "https",
+          "host": [
+            "astranetpoc",
+            "astra",
+            "co",
+            "id"
+          ],
+          "path": [
+            "o",
+            "treasury-api",
+            "sun-sbn-data"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "JIBOR",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "tr3as5ury#u53r",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "a5tr4tr345ry_#5up3r_4dm1n",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"date\": \"2000-01-01\",\r\n    \"indoniaRate\": 7,\r\n    \"overnightRate\": 10.00,\r\n    \"weekRate\": 10.30,\r\n    \"monthRate\": 4.50,\r\n    \"threeMonthRate\": 7.75,\r\n    \"sixMonthRate\": 19.00,\r\n    \"yearRate\": 2.25\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://astranetpoc.astra.co.id/o/treasury-api/jibor-data",
+          "protocol": "https",
+          "host": [
+            "astranetpoc",
+            "astra",
+            "co",
+            "id"
+          ],
+          "path": [
+            "o",
+            "treasury-api",
+            "jibor-data"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Inflation",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "tr3as5ury#u53r",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "a5tr4tr345ry_#5up3r_4dm1n",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"exchangeDate\": \"2024-11-01\",\r\n  \"rate\": \"9.57\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://astranetpoc.astra.co.id/o/treasury-api/inflation",
+          "protocol": "https",
+          "host": [
+            "astranetpoc",
+            "astra",
+            "co",
+            "id"
+          ],
+          "path": [
+            "o",
+            "treasury-api",
+            "inflation"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Volatility Index",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "tr3as5ury#u53r",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "a5tr4tr345ry_#5up3r_4dm1n",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"exchangeDate\": \"2025-07-22\",\r\n  \"final\": \"15.85\",\r\n  \"opening\": \"15.42\",\r\n  \"highest\": \"16.20\",\r\n  \"lowest\": \"15.30\",\r\n  \"vol\": \"1250000\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://127.0.0.1:8080/o/treasury-api/volatility-index",
+          "protocol": "http",
+          "host": [
+            "127",
+            "0",
+            "0",
+            "1"
+          ],
+          "port": "8080",
+          "path": [
+            "o",
+            "treasury-api",
+            "volatility-index"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Baltic Dry Index",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "tr3as5ury#u53r",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "a5tr4tr345ry_#5up3r_4dm1n",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"date\": \"2025-07-28\",\r\n  \"priceValue\": \"10.50\",\r\n  \"openingValue\": \"12\",\r\n  \"highestValue\": \"1255.25\",\r\n  \"lowestValue\": \"1225.00\",\r\n  \"volValue\": \"125.00\",\r\n  \"changeValue\": \"0.1\" \r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://astranetpoc.astra.co.id/o/treasury-api/baltic-dry-index",
+          "protocol": "https",
+          "host": [
+            "astranetpoc",
+            "astra",
+            "co",
+            "id"
+          ],
+          "path": [
+            "o",
+            "treasury-api",
+            "baltic-dry-index"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Latest Poll",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "tr3as5ury#u53r",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "a5tr4tr345ry_#5up3r_4dm1n",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"date\": \"2025-10-16\",\r\n    \"quarter\": \"Q4_2025\",\r\n    \"median\": 7.5,\r\n    \"mean\": 7.8,\r\n    \"mode\": 7.0,\r\n    \"min\": 5.2,\r\n    \"max\": 10.1,\r\n    \"standard_deviation\": 1.3,\r\n    \"forecasts\": [\r\n      {\r\n        \"contributor\": \"Bank Indonesia\",\r\n        \"value\": 7.5\r\n      },\r\n      {\r\n        \"contributor\": \"JP Morgan\",\r\n        \"value\": 8.2\r\n      },\r\n      {\r\n        \"contributor\": \"Goldman Sachs\",\r\n        \"value\": 7.1\r\n      },\r\n      {\r\n        \"contributor\": \"Deutsche Bank\",\r\n        \"value\": 7.9\r\n      },\r\n      {\r\n        \"contributor\": \"CIMB Securities\",\r\n        \"value\": 6.8\r\n      },\r\n      {\r\n        \"contributor\": \"Mandiri Sekuritas\",\r\n        \"value\": 8.5\r\n      },\r\n      {\r\n        \"contributor\": \"BCA Securities\",\r\n        \"value\": 7.3\r\n      },\r\n      {\r\n        \"contributor\": \"Danareksa Sekuritas\",\r\n        \"value\": 7.7\r\n      }\r\n    ]\r\n}\r\n"
+        },
+        "url": {
+          "raw": "http://127.0.0.1:8080/o/treasury-api/latest-poll",
+          "protocol": "http",
+          "host": [
+            "127",
+            "0",
+            "0",
+            "1"
+          ],
+          "port": "8080",
+          "path": [
+            "o",
+            "treasury-api",
+            "latest-poll"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Kurs Acuan Non USD/IDR",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "tr3as5ury#u53r",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "a5tr4tr345ry_#5up3r_4dm1n",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "\r\n{\r\n    \"date\": \"2025-01-01\",\r\n    \"currencyCode\": \"JPG\",\r\n    \"value\": 7,\r\n    \"rate\": \"10.00\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://astranetpoc.astra.co.id/o/treasury-api/bi-central-bank-rate",
+          "protocol": "https",
+          "host": [
+            "astranetpoc",
+            "astra",
+            "co",
+            "id"
+          ],
+          "path": [
+            "o",
+            "treasury-api",
+            "bi-central-bank-rate"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Kurs Transaksi BI",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "tr3as5ury#u53r",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "a5tr4tr345ry_#5up3r_4dm1n",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"date\": \"2025-01-01\",\r\n    \"currencyCode\": \"USD\",\r\n    \"value\": 1,\r\n    \"sellRate\": \"15250.50\",\r\n    \"buyRate\": \"15150.25\",\r\n    \"middleRate\": \"15200.00\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://astranetpoc.astra.co.id/o/treasury-api/bi-exchange-rate",
+          "protocol": "https",
+          "host": [
+            "astranetpoc",
+            "astra",
+            "co",
+            "id"
+          ],
+          "path": [
+            "o",
+            "treasury-api",
+            "bi-exchange-rate"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "JISDOR",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "tr3as5ury#u53r",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "a5tr4tr345ry_#5up3r_4dm1n",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"date\": \"2025-01-01\",\r\n    \"rate\": \"15200.75\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://astranetpoc.astra.co.id/o/treasury-api/bi-jisdor",
+          "protocol": "https",
+          "host": [
+            "astranetpoc",
+            "astra",
+            "co",
+            "id"
+          ],
+          "path": [
+            "o",
+            "treasury-api",
+            "bi-jisdor"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "BI Rate",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "tr3as5ury#u53r",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "a5tr4tr345ry_#5up3r_4dm1n",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"date\": \"2025-01-01\",\r\n  \"rate\": \"6.75\"\r\n}\r\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://astranetpoc.astra.co.id/o/treasury-api/bi-rate",
+          "protocol": "https",
+          "host": [
+            "astranetpoc",
+            "astra",
+            "co",
+            "id"
+          ],
+          "path": [
+            "o",
+            "treasury-api",
+            "bi-rate"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Term SOFR",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "tr3as5ury#u53r",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "a5tr4tr345ry_#5up3r_4dm1n",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"date\": \"2025-01-01\",\r\n  \"index\": \"5.25\",\r\n  \"monthAverage\": \"5.30\",\r\n  \"threeMonthAverage\": \"5.28\",\r\n  \"sixMonthAverage\": \"5.20\"\r\n}\r\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://astranetpoc.astra.co.id/o/treasury-api/term-sofr",
+          "protocol": "https",
+          "host": [
+            "astranetpoc",
+            "astra",
+            "co",
+            "id"
+          ],
+          "path": [
+            "o",
+            "treasury-api",
+            "term-sofr"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "SUN SBN Data Copy",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "password",
+              "value": "a5tr4tr345ry_#5up3r_4dm1n",
+              "type": "string"
+            },
+            {
+              "key": "username",
+              "value": "tr3as5ury#u53r",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"date\": \"2000-01-01\",\r\n    \"sunValue\": \"24.81\",\r\n    \"equityValue\": \"0\",\r\n    \"sbnValue\": \"6.10\"\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://astranetpoc.astra.co.id/o/treasury-api/sun-sbn-data",
+          "protocol": "https",
+          "host": [
+            "astranetpoc",
+            "astra",
+            "co",
+            "id"
+          ],
+          "path": [
+            "o",
+            "treasury-api",
+            "sun-sbn-data"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

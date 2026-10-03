@@ -40,12 +40,9 @@ export class SatusehatSyncLog extends BaseEntity {
   @Column({ name: 'http_status', nullable: true })
   httpStatus: number;
 
-  @Column({ name: 'request_payload', type: 'json', nullable: true })
-  requestPayload: object;
-
-  @Column({ name: 'response_payload', type: 'json', nullable: true })
-  responsePayload: object;
-
+  // No request/response payloads here on purpose: FHIR bodies carry patient
+  // identity and clinical data, and this is a transaction log (SATUSEHAT
+  // self-assessment No. 15). Always write errors through redactSyncError().
   @Column({ name: 'error_message', type: 'text', nullable: true })
   errorMessage: string;
 
@@ -58,4 +55,16 @@ export class SatusehatSyncLog extends BaseEntity {
   @ManyToOne(() => Clinic, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'clinic_id' })
   clinic: Clinic;
+}
+
+/**
+ * Makes an error string safe for the sync log: masks anything shaped like a
+ * NIK/IHS number or email, and caps the length.
+ */
+export function redactSyncError(message: string | undefined | null): string | undefined {
+  if (!message) return undefined;
+  return message
+    .replace(/\b\d{10,}\b/g, (m) => `${m.slice(0, 4)}${'*'.repeat(m.length - 4)}`)
+    .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '[email]')
+    .slice(0, 500);
 }

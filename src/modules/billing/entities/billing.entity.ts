@@ -7,6 +7,7 @@ import {
   Index,
 } from 'typeorm';
 import { BillingItem } from '../../billing-item/entities/billing-item.entity';
+import { Payment } from '../../payments/entities/payment.entity';
 import { BaseEntity } from '../../../common/base.entity';
 import { Clinic } from '../../clinics/entities/clinic.entity';
 import { Encounter } from '../../encounters/entities/encounter.entity';
@@ -48,6 +49,14 @@ export class Billing extends BaseEntity {
   })
   totalDiscount: number;
 
+  @Column('decimal', {
+    name: 'additional_fee',
+    precision: 10,
+    scale: 2,
+    default: 0,
+  })
+  additionalFee: number;
+
   @Column('decimal', { name: 'grand_total', precision: 10, scale: 2 })
   grandTotal: number;
 
@@ -75,6 +84,9 @@ export class Billing extends BaseEntity {
   // Relations
   @OneToMany(() => BillingItem, (item) => item.billing)
   items: BillingItem[];
+
+  @OneToMany(() => Payment, (payment) => payment.billing)
+  payments: Payment[];
 
   @ManyToOne(() => Clinic, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'clinic_id' })

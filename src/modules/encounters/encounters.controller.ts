@@ -7,22 +7,32 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { EncountersService } from './encounters.service';
 import {
   CreateEncounterDto,
   EncounterListQueryDto,
+  UpdateEncounterDto,
   UpdateEncounterStatusDto,
 } from './dto/encounter.dto';
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Audit } from '../audit-log/decorators/audit.decorator';
+import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
+import { AuditActionType } from '../audit-log/entities/audit-log.entity';
+import { Notify } from '../notifications/decorators/notify.decorator';
+import { NotificationInterceptor } from '../notifications/interceptors/notification.interceptor';
+import { NotificationType } from '../notifications/entities/notification.entity';
 
 @ApiTags('encounters')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(ClinicContextGuard)
+@UseInterceptors(AuditInterceptor, NotificationInterceptor)
 @Controller('encounters')
 export class EncountersController {
   constructor(private readonly encountersService: EncountersService) {}
@@ -34,11 +44,14 @@ export class EncountersController {
     @Query() query: EncounterListQueryDto,
     @CurrentUser() user: any,
   ) {
-    return this.encountersService.findAll(clinicId, query, user);
+    const result = await this.encountersService.findAll(clinicId, query, user);
+    return { success: true, data: result };
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create encounter (from queue or walk-in)' })
+  @Audit('MedicalRecord', AuditActionType.CREATE)
+  @Notify(NotificationType.KUNJUNGAN_NEW, 'Kunjungan baru dibuat')
+  @ApiOperation({ summary: 'Create encounter (from reservation check-in or walk-in)' })
   async create(
     @ClinicId() clinicId: number,
     @Body() dto: CreateEncounterDto,
@@ -52,6 +65,7 @@ export class EncountersController {
     return { success: true, data: encounter };
   }
 
+  @Audit('Encounter', AuditActionType.VIEW)
   @Get(':id')
   @ApiOperation({ summary: 'Get encounter detail' })
   async findOne(
@@ -63,7 +77,28 @@ export class EncountersController {
     return { success: true, data: encounter };
   }
 
+  @Patch(':id')
+  @Audit('MedicalRecord', AuditActionType.UPDATE)
+  @ApiOperation({ summary: 'Update encounter data' })
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: UpdateEncounterDto,
+    @CurrentUser() user: any,
+    @Req() req: any,
+  ) {
+    req.auditBefore = await this.encountersService.findOne(id, clinicId, user).catch(() => null);
+    const encounter = await this.encountersService.update(
+      id,
+      clinicId,
+      dto,
+      user,
+    );
+    return { success: true, data: encounter };
+  }
+
   @Patch(':id/status')
+  @Audit('MedicalRecord', AuditActionType.UPDATE)
   @ApiOperation({ summary: 'Update encounter status' })
   async updateStatus(
     @Param('id', ParseIntPipe) id: number,

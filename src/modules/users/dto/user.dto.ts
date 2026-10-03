@@ -5,6 +5,7 @@ import {
   MinLength,
   IsEnum,
   IsOptional,
+  IsInt,
   MaxLength,
 } from 'class-validator';
 import { UserRole } from '../../../enums/user-role.enum';
@@ -35,7 +36,48 @@ export class CreateUserDto {
   practitionerId?: number;
 }
 
-export class UpdateUserDto extends PartialType(CreateUserDto) {}
+export class InviteUserDto {
+  @ApiProperty({ example: 'dokter@clinic.com' })
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+
+  @ApiProperty({ example: 'Dr. Jane Smith' })
+  @IsNotEmpty()
+  @MaxLength(100)
+  name: string;
+
+  @ApiProperty({
+    example: 'dokter',
+    enum: UserRole,
+    description: 'Role yang akan diberikan ke user baru',
+  })
+  @IsEnum(UserRole)
+  @IsNotEmpty()
+  role: UserRole;
+
+  @ApiProperty({
+    example: 1,
+    required: false,
+    description: 'Wajib diisi oleh Super Admin untuk menentukan klinik tujuan',
+  })
+  @IsOptional()
+  @IsInt()
+  clinicId?: number;
+}
+
+export class UpdateUserDto {
+  @ApiProperty({ example: 'Dr. Jane Smith', required: false })
+  @IsOptional()
+  @IsNotEmpty()
+  @MaxLength(100)
+  name?: string;
+
+  @ApiProperty({ example: 'dokter@clinic.com', required: false })
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+}
 
 export class UpdateUserRoleDto {
   @ApiProperty({ example: 'admin', enum: UserRole })

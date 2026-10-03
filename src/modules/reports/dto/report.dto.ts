@@ -4,6 +4,8 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Max,
+  Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -32,11 +34,16 @@ export class VisitReportQueryDto {
   @ApiPropertyOptional()
   @IsOptional()
   @Type(() => Number)
+  @IsInt()
+  @Min(1)
   page?: number = 1;
 
   @ApiPropertyOptional()
   @IsOptional()
   @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1000)
   limit?: number = 50;
 }
 
@@ -53,6 +60,31 @@ export class FinancialReportQueryDto {
   @IsOptional()
   @IsString()
   type?: 'summary' | 'detailed' = 'summary';
+}
+
+export class FinancialVisitDetailQueryDto {
+  @ApiProperty()
+  @IsDateString()
+  dateFrom: string;
+
+  @ApiProperty()
+  @IsDateString()
+  dateTo: string;
+
+  @ApiPropertyOptional({ default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @ApiPropertyOptional({ default: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number = 20;
 }
 
 export class SatusehatSyncReportQueryDto {
@@ -78,6 +110,20 @@ export class SatusehatSyncReportQueryDto {
   @IsOptional()
   @IsString()
   syncStatus?: string;
+}
+
+export class DoctorFeeShareReportQueryDto {
+  @ApiProperty({ example: 2026 })
+  @Type(() => Number)
+  @IsInt()
+  year: number;
+
+  @ApiProperty({ example: 6, minimum: 1, maximum: 12 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  month: number;
 }
 
 export class RetrySyncDto {

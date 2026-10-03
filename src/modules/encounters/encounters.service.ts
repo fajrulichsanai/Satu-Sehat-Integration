@@ -5,23 +5,33 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Encounter } from './entities/encounter.entity';
-import { Queue } from '../queues/entities/queue.entity';
-import { Anamnesis } from '../anamnesis/entities/anamnesis.entity';
-import { VitalSign } from '../vital-sign/entities/vital-sign.entity';
-import { Diagnosis } from '../diagnoses/entities/diagnosis.entity';
+import { Reservation } from '../reservations/entities/reservation.entity';
+import { Billing, BillingStatus } from '../billing/entities/billing.entity';
 import { EncounterStatus, ServiceType } from '../../enums';
-import { QueueStatus } from '../../enums/queue-status.enum';
+import { ReservationStatus } from '../../enums/reservation-status.enum';
 import { UserRole } from '../../enums/user-role.enum';
 import {
   CreateEncounterDto,
   EncounterListQueryDto,
+  UpdateEncounterDto,
   UpdateEncounterStatusDto,
 } from './dto/encounter.dto';
+
+/**
+ * The DB connection timezone is fixed at +07:00 (WIB, see data-source
+ * config), so "today" for a date-only filter must be computed on that same
+ * offset. `new Date().toISOString().slice(0, 10)` is UTC and drifts a whole
+ * day off between 00:00-06:59 WIB — an encounter created at 01:00 WIB would
+ * be dated "today" in the DB but excluded from a list defaulting to the
+ * UTC date, which is still "yesterday" at that hour.
+ */
+function todayInClinicTimezone(): string {
+  return new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
 
 @Injectable()
 export class EncountersService {
@@ -30,14 +40,8 @@ export class EncountersService {
   constructor(
     @InjectRepository(Encounter)
     private readonly encounterRepository: Repository<Encounter>,
-    @InjectRepository(Queue)
-    private readonly queueRepository: Repository<Queue>,
-    @InjectRepository(Anamnesis)
-    private readonly anamnesisRepository: Repository<Anamnesis>,
-    @InjectRepository(VitalSign)
-    private readonly vitalSignRepository: Repository<VitalSign>,
-    @InjectRepository(Diagnosis)
-    private readonly diagnosisRepository: Repository<Diagnosis>,
+    @InjectRepository(Reservation)
+    private readonly reservationRepository: Repository<Reservation>,
     private readonly syncOrchestrator: SyncOrchestratorService,
   ) {}
 
@@ -65,11 +69,35 @@ export class EncountersService {
       });
     }
 
-    const date = query.date || new Date().toISOString().split('T')[0];
-    qb.andWhere('DATE(e.arrivedTime) = :date', { date });
-
     if (query.status) {
       qb.andWhere('e.status = :status', { status: query.status });
+    }
+
+    if (query.unbilled) {
+      // Dipakai untuk backlog "belum ditagih" di halaman Billing — harus
+      // lintas semua tanggal, bukan cuma hari ini, supaya kunjungan lama
+      // yang belum dibuatkan tagihan tetap kelihatan.
+      qb.leftJoin(
+        Billing,
+        'activeBilling',
+        'activeBilling.encounterId = e.id AND activeBilling.status != :cancelledBillingStatus',
+        { cancelledBillingStatus: BillingStatus.CANCELLED },
+      ).andWhere('activeBilling.id IS NULL');
+    }
+
+    // Encounter yang masih terbuka (arrived/in_progress) adalah backlog aktif
+    // yang harus tetap terlihat lintas tanggal sampai diselesaikan/dibatalkan —
+    // membatasinya ke hari ini membuat kunjungan yang belum selesai kemarin
+    // jadi "hilang" dan tidak bisa dibuka lagi hari ini.
+    const isOpenStatusQuery =
+      query.status === EncounterStatus.ARRIVED ||
+      query.status === EncounterStatus.IN_PROGRESS;
+
+    if (query.date) {
+      qb.andWhere('DATE(e.arrivedTime) = :date', { date: query.date });
+    } else if (!isOpenStatusQuery && !query.unbilled) {
+      const date = todayInClinicTimezone();
+      qb.andWhere('DATE(e.arrivedTime) = :date', { date });
     }
 
     qb.orderBy('e.arrivedTime', 'DESC');
@@ -108,7 +136,7 @@ export class EncountersService {
         patient: true,
         practitioner: true,
         location: true,
-        queue: true,
+        reservation: true,
       },
     });
     if (!encounter) {
@@ -139,17 +167,19 @@ export class EncountersService {
     this.logger.log(
       `[CREATE] Membuat encounter baru | clinicId=${clinicId}, patientId=${dto.patientId}, practitionerId=${dto.practitionerId}`,
     );
-    if (dto.queueId) {
-      const queue = await this.queueRepository.findOne({
-        where: { id: dto.queueId, clinicId },
+    if (dto.reservationId) {
+      const reservation = await this.reservationRepository.findOne({
+        where: { id: dto.reservationId, clinicId },
       });
-      if (!queue) {
+      if (!reservation) {
         throw new NotFoundException(
-          `Antrian dengan ID ${dto.queueId} tidak ditemukan`,
+          `Reservasi dengan ID ${dto.reservationId} tidak ditemukan`,
         );
       }
-      if (queue.status !== QueueStatus.WAITING) {
-        throw new BadRequestException('Antrian tidak dalam status waiting');
+      if (reservation.status !== ReservationStatus.CONFIRMED) {
+        throw new BadRequestException(
+          'Reservasi harus berstatus confirmed sebelum check-in',
+        );
       }
     }
 
@@ -158,7 +188,7 @@ export class EncountersService {
       patientId: dto.patientId,
       practitionerId: dto.practitionerId,
       locationId: dto.locationId,
-      queueId: dto.queueId,
+      reservationId: dto.reservationId,
       serviceType: dto.serviceType || ServiceType.OUTPATIENT,
       chiefComplaint: dto.chiefComplaint,
       status: EncounterStatus.ARRIVED,
@@ -171,9 +201,9 @@ export class EncountersService {
       `[CREATE] Encounter berhasil dibuat | id=${saved.id}, clinicId=${clinicId}`,
     );
 
-    if (dto.queueId) {
-      await this.queueRepository.update(dto.queueId, {
-        status: QueueStatus.CALLED,
+    if (dto.reservationId) {
+      await this.reservationRepository.update(dto.reservationId, {
+        status: ReservationStatus.COMPLETED,
       });
     }
 
@@ -215,10 +245,6 @@ export class EncountersService {
       throw new BadRequestException('Alasan pembatalan wajib diisi');
     }
 
-    if (dto.status === EncounterStatus.FINISHED) {
-      await this.validateFinished(id);
-    }
-
     const now = new Date();
     encounter.status = dto.status;
     encounter.updatedBy = user.userId;
@@ -227,18 +253,8 @@ export class EncountersService {
       encounter.inProgressTime = now;
     } else if (dto.status === EncounterStatus.FINISHED) {
       encounter.finishedTime = now;
-      if (encounter.queueId) {
-        await this.queueRepository.update(encounter.queueId, {
-          status: QueueStatus.DONE,
-        });
-      }
     } else if (dto.status === EncounterStatus.CANCELLED) {
       encounter.cancelledReason = dto.reason as string;
-      if (encounter.queueId) {
-        await this.queueRepository.update(encounter.queueId, {
-          status: QueueStatus.CANCELLED,
-        });
-      }
     }
 
     const result = await this.encounterRepository.save(encounter);
@@ -250,6 +266,55 @@ export class EncountersService {
     if (dto.status === EncounterStatus.FINISHED) {
       void this.syncOrchestrator.syncEncounterOnFinish(id, clinicId);
     }
+    return result;
+  }
+
+  async update(
+    id: number,
+    clinicId: number,
+    dto: UpdateEncounterDto,
+    user: any,
+  ): Promise<Encounter> {
+    this.logger.log(
+      `[UPDATE] Memperbarui data encounter | id=${id}, clinicId=${clinicId}`,
+    );
+    const encounter = await this.encounterRepository.findOne({
+      where: { id, clinicId },
+    });
+    if (!encounter) {
+      throw new NotFoundException(`Encounter dengan ID ${id} tidak ditemukan`);
+    }
+
+    if (user.role === UserRole.DOKTER) {
+      const isOwn = await this.isDokterOwn(
+        encounter.practitionerId,
+        user.userId,
+      );
+      if (!isOwn) {
+        throw new ForbiddenException('Akses ditolak: bukan kunjungan Anda');
+      }
+    }
+
+    if (
+      encounter.status === EncounterStatus.FINISHED ||
+      encounter.status === EncounterStatus.CANCELLED
+    ) {
+      throw new BadRequestException(
+        'Kunjungan yang sudah selesai atau dibatalkan tidak dapat diedit',
+      );
+    }
+
+    if (dto.patientId !== undefined) encounter.patientId = dto.patientId;
+    if (dto.practitionerId !== undefined)
+      encounter.practitionerId = dto.practitionerId;
+    if (dto.locationId !== undefined) encounter.locationId = dto.locationId;
+    if (dto.serviceType !== undefined) encounter.serviceType = dto.serviceType;
+    if (dto.chiefComplaint !== undefined)
+      encounter.chiefComplaint = dto.chiefComplaint;
+    encounter.updatedBy = user.userId;
+
+    const result = await this.encounterRepository.save(encounter);
+    this.logger.log(`[UPDATE] Encounter berhasil diperbarui | id=${id}`);
     return result;
   }
 
@@ -271,33 +336,6 @@ export class EncountersService {
       throw new BadRequestException(
         `Transisi status dari '${from}' ke '${to}' tidak diizinkan`,
       );
-    }
-  }
-
-  private async validateFinished(encounterId: number): Promise<void> {
-    const missing: string[] = [];
-
-    const anamnesis = await this.anamnesisRepository.findOne({
-      where: { encounterId },
-    });
-    if (!anamnesis) missing.push('anamnesis');
-
-    const vitalCount = await this.vitalSignRepository.count({
-      where: { encounterId },
-    });
-    if (vitalCount === 0) missing.push('vitalSigns');
-
-    const diagnosisCount = await this.diagnosisRepository.count({
-      where: { encounterId },
-    });
-    if (diagnosisCount === 0) missing.push('diagnosis');
-
-    if (missing.length > 0) {
-      throw new UnprocessableEntityException({
-        code: 'INCOMPLETE_DOCUMENTATION',
-        missing,
-        message: 'Data klinis belum lengkap untuk menyelesaikan kunjungan',
-      });
     }
   }
 

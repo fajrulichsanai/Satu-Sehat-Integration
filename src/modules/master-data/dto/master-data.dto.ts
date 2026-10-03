@@ -9,6 +9,7 @@ import {
   Matches,
   Max,
   MaxLength,
+  MinLength,
   Min,
 } from 'class-validator';
 
@@ -275,4 +276,36 @@ export interface SaranaListResponse {
   page: number;
   totalPage: number;
   items: SaranaItem[];
+}
+
+// ── Kamus Farmasi & Alat Kesehatan (KFA) ──────────────────────────────────
+
+export class SearchKfaQueryDto {
+  @ApiPropertyOptional({
+    description: 'Kata kunci nama obat/alkes (min. 3 huruf)',
+  })
+  @IsString()
+  @MinLength(3, { message: 'Kata kunci minimal 3 huruf' })
+  @MaxLength(100)
+  keyword: string;
+
+  @ApiPropertyOptional({ default: 1, minimum: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page = 1;
+
+  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  size = 20;
+
+  @ApiPropertyOptional({ enum: ['farmasi', 'alkes'], default: 'farmasi' })
+  @IsOptional()
+  @IsIn(['farmasi', 'alkes'])
+  product_type?: 'farmasi' | 'alkes' = 'farmasi';
 }

@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  Equals,
   IsEmail,
   IsNotEmpty,
   MinLength,
@@ -35,6 +36,15 @@ export class RegisterDto {
   @IsOptional()
   @MaxLength(20)
   ownerCode?: string;
+
+  @ApiProperty({
+    example: true,
+    description: 'Menyetujui Syarat & Ketentuan dan Kebijakan Privasi (wajib true)',
+  })
+  @Equals(true, {
+    message: 'Anda harus menyetujui Syarat & Ketentuan dan Kebijakan Privasi',
+  })
+  acceptTerms: boolean | undefined;
 }
 
 export class LoginDto {
@@ -106,6 +116,24 @@ export class RefreshTokenDto {
   @ApiProperty({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' })
   @IsNotEmpty()
   refreshToken: string | undefined;
+}
+
+export class ForgotPasswordDto {
+  @ApiProperty({ example: 'admin@clinic.com' })
+  @IsEmail()
+  @IsNotEmpty()
+  email: string | undefined;
+}
+
+export class ResetPasswordDto {
+  @ApiProperty({ example: 'a1b2c3...' })
+  @IsNotEmpty()
+  token: string | undefined;
+
+  @ApiProperty({ example: 'NewSecurePass123!' })
+  @IsNotEmpty()
+  @MinLength(8)
+  password: string | undefined;
 }
 
 export class ActivationStatusResponseDto {

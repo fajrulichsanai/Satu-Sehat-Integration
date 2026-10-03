@@ -1,7 +1,8 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -11,10 +12,9 @@ import { ClinicsModule } from './modules/clinics/clinics.module';
 import { PractitionersModule } from './modules/practitioners/practitioners.module';
 import { LocationsModule } from './modules/locations/locations.module';
 import { PatientsModule } from './modules/patients/patients.module';
-import { QueuesModule } from './modules/queues/queues.module';
+import { ReservationsModule } from './modules/reservations/reservations.module';
 import { PublicModule } from './modules/public/public.module';
 import { EncountersModule } from './modules/encounters/encounters.module';
-import { MedicationsModule } from './modules/medications/medications.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SatusehatModule } from './modules/satusehat/satusehat.module';
@@ -22,7 +22,32 @@ import { MasterDataModule } from './modules/master-data/master-data.module';
 import { SoapTemplatesModule } from './modules/soap-templates/soap-templates.module';
 import { IcdModule } from './modules/icd/icd.module';
 import { OwnerCodeModule } from './modules/owner-code/owner-code.module';
+import { ApiKeysModule } from './modules/api-keys/api-keys.module';
+import { DataRequestsModule } from './modules/data-requests/data-requests.module';
+import { ContentsModule } from './modules/contents/contents.module';
+import { TerminologyModule } from './modules/terminology/terminology.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { OperationalRecordsModule } from './modules/operational-records/operational-records.module';
+import { DoctorFeeModule } from './modules/doctor-fee/doctor-fee.module';
+import { EncounterSoapNotesModule } from './modules/encounter-soap-notes/encounter-soap-notes.module';
+import { PhysicalExaminationModule } from './modules/physical-examination/physical-examination.module';
+import { PrescriptionsModule } from './modules/prescriptions/prescriptions.module';
+import { OdontogramModule } from './modules/odontogram/odontogram.module';
+import { DentalExaminationModule } from './modules/dental-examination/dental-examination.module';
+import { SupportingExamModule } from './modules/supporting-exam/supporting-exam.module';
+import { TreatmentPlansModule } from './modules/treatment-plans/treatment-plans.module';
+import { AuditLogModule } from './modules/audit-log/audit-log.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { GudangModule } from './modules/gudang/gudang.module';
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
+import { RecallsModule } from './modules/recalls/recalls.module';
+import { ConsentsModule } from './modules/consents/consents.module';
+import { MultiClinicModule } from './modules/multi-clinic/multi-clinic.module';
+import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
+import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
+import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
+import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.guard';
 
 @Module({
   imports: [
@@ -30,7 +55,23 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
       isGlobal: true,
       envFilePath: '.env',
     }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [
+          {
+            name: 'default',
+            ttl: 60_000,
+            // Per signed-in user (or per IP when anonymous) per minute. Auth
+            // and public endpoints set much lower limits with @Throttle.
+            limit: parseInt(config.get<string>('THROTTLE_LIMIT', '300'), 10),
+          },
+        ],
+        errorMessage: 'Terlalu banyak permintaan. Silakan coba lagi sebentar lagi.',
+      }),
+    }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
@@ -45,12 +86,15 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
           host: configService.get('DB_HOST', 'localhost'),
           port: parseInt(configService.get('DB_PORT', '3306')),
           username: configService.get('DB_USERNAME', 'root'),
-          password: configService.get('DB_PASSWORD', 'root'),
+          password: configService.getOrThrow('DB_PASSWORD'),
           database: configService.get('DB_DATABASE', 'dental_clinic'),
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
           synchronize,
           charset: 'utf8mb4',
           timezone: '+07:00',
+          extra: {
+            dateStrings: ['DATE'],
+          },
           logging: nodeEnv === 'development' ? ['error', 'warn'] : false,
         };
       },
@@ -62,10 +106,9 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     PractitionersModule,
     LocationsModule,
     PatientsModule,
-    QueuesModule,
+    ReservationsModule,
     PublicModule,
     EncountersModule,
-    MedicationsModule,
     BillingModule,
     ReportsModule,
     SatusehatModule,
@@ -73,15 +116,53 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
     SoapTemplatesModule,
     IcdModule,
     OwnerCodeModule,
+    ApiKeysModule,
+    DataRequestsModule,
+    TerminologyModule,
+    DashboardModule,
+    OperationalRecordsModule,
+    DoctorFeeModule,
+    EncounterSoapNotesModule,
+    PhysicalExaminationModule,
+    PrescriptionsModule,
+    OdontogramModule,
+    DentalExaminationModule,
+    SupportingExamModule,
+    TreatmentPlansModule,
+    AuditLogModule,
+    NotificationsModule,
+    GudangModule,
+    SubscriptionsModule,
+    RecallsModule,
+    ConsentsModule,
+    MultiClinicModule,
+    OnboardingModule,
+    ContentsModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
+    // Rate limiting runs first, so rejected floods never reach the DB-backed
+    // JWT validation. Per-user when signed in — see AppThrottlerGuard.
+    {
+      provide: APP_GUARD,
+      useClass: AppThrottlerGuard,
+    },
     // Global JWT guard (can be overridden with @Public() decorator)
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
     },
+    // Global subscription-expiry gate on every mutating request — see
+    // SubscriptionGuard for the exemptions (SUPER_ADMIN, @SkipSubscriptionCheck routes).
+    {
+      provide: APP_GUARD,
+      useExisting: SubscriptionGuard,
+    },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestLoggerMiddleware).forRoutes('{*splat}');
+  }
+}

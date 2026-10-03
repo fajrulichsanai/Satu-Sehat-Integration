@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Get,
   Param,
   ParseIntPipe,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -12,6 +14,8 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SyncOrchestratorService } from './sync/sync-orchestrator.service';
 import { SyncQueueService } from './sync/sync-queue.service';
 import { SatusehatMonitorService } from './monitor/satusehat-monitor.service';
+import { SatusehatConfigService } from './satusehat-config.service';
+import { SaveSatusehatConfigDto } from './dto/satusehat-config.dto';
 import {
   ListResourcesQueryDto,
   ListSyncLogsQueryDto,
@@ -22,24 +26,64 @@ import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserRole } from '../../enums/user-role.enum';
 import { ApiResponse } from '../../common/response/api-response';
 import { readableFhirError } from './fhir/fhir-error';
 
+const OWNERS = [UserRole.OWNER, UserRole.MULTI_CLINIC_OWNER];
+const VIEWERS = [...OWNERS, UserRole.ADMIN];
+
 @ApiTags('satusehat')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(ClinicContextGuard, RolesGuard)
-@Roles(UserRole.OWNER)
+@Roles(...OWNERS)
 @Controller('satusehat')
 export class SatusehatController {
   constructor(
     private readonly syncOrchestrator: SyncOrchestratorService,
     private readonly syncQueue: SyncQueueService,
     private readonly monitor: SatusehatMonitorService,
+    private readonly config: SatusehatConfigService,
   ) {}
 
+  // ── Konfigurasi klinik ────────────────────────────────────────────────
+
+  @Get('config')
+  @Roles(...VIEWERS)
+  @ApiOperation({
+    summary: 'Status konfigurasi SATUSEHAT klinik (tanpa secret)',
+  })
+  async getConfig(@ClinicId() clinicId: number) {
+    return ApiResponse.success(await this.config.get(clinicId));
+  }
+
+  @Put('config')
+  @ApiOperation({ summary: 'Simpan kredensial SATUSEHAT klinik' })
+  async saveConfig(
+    @Body() dto: SaveSatusehatConfigDto,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: { userId: number },
+  ) {
+    return ApiResponse.success(
+      await this.config.save(clinicId, dto, user.userId),
+      'Konfigurasi SATUSEHAT disimpan',
+    );
+  }
+
+  @Post('config/test')
+  @ApiOperation({ summary: 'Uji koneksi: minta token OAuth ke SATUSEHAT' })
+  async testConfig(@ClinicId() clinicId: number) {
+    return ApiResponse.success(
+      await this.config.test(clinicId),
+      'Koneksi ke SATUSEHAT berhasil',
+    );
+  }
+
+  // ── Monitoring ────────────────────────────────────────────────────────
+
   @Get('summary')
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Roles(...VIEWERS)
   @ApiOperation({
     summary: 'Ringkasan status integrasi & sinkronisasi SATUSEHAT klinik',
   })
@@ -48,7 +92,7 @@ export class SatusehatController {
   }
 
   @Get('resources/:resourceType')
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Roles(...VIEWERS)
   @ApiOperation({
     summary: 'Daftar data lokal per resource beserta status sync SATUSEHAT',
   })
@@ -74,7 +118,7 @@ export class SatusehatController {
   }
 
   @Get('sync-logs')
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Roles(...VIEWERS)
   @ApiOperation({ summary: 'Riwayat pengiriman data ke SATUSEHAT' })
   async listSyncLogs(
     @Query() query: ListSyncLogsQueryDto,
@@ -85,15 +129,7 @@ export class SatusehatController {
     );
   }
 
-  @Get('sync-logs/:id')
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
-  @ApiOperation({ summary: 'Detail log sync (payload request & response)' })
-  async getSyncLog(
-    @Param('id', ParseIntPipe) id: number,
-    @ClinicId() clinicId: number,
-  ) {
-    return ApiResponse.success(await this.monitor.getSyncLog(clinicId, id));
-  }
+  // ── Pengiriman ────────────────────────────────────────────────────────
 
   @Post('sync-queue/process')
   @ApiOperation({ summary: 'Proses ulang antrean sync yang tertunda' })
@@ -116,13 +152,13 @@ export class SatusehatController {
   }
 
   @Post('sync/:resourceType/:localId')
-  @ApiOperation({ summary: 'Manual sync a resource to SATUSEHAT' })
+  @ApiOperation({ summary: 'Kirim satu data ke SATUSEHAT' })
   async manualSync(
     @Param('resourceType') resourceType: string,
     @Param('localId', ParseIntPipe) localId: number,
     @ClinicId() clinicId: number,
   ) {
-    // Terima juga huruf kecil (mis. /satusehat/sync/encounter/1 dari halaman kunjungan)
+    // Terima juga huruf kecil (mis. /satusehat/sync/encounter/1)
     const canonical =
       SATUSEHAT_RESOURCE_TYPES.find(
         (t) => t.toLowerCase() === resourceType.toLowerCase(),
