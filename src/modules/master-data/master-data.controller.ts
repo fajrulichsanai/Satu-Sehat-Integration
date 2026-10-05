@@ -1,15 +1,22 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Get,
+  HttpCode,
   Param,
+  Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { MasterDataService } from './master-data.service';
 import { Public } from '../auth/decorators/public.decorator';
 import { ApiResponse } from '../../common/response/api-response';
 import { KfaService } from '../satusehat/kfa/kfa.service';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../../enums/user-role.enum';
 import {
   SearchKfaQueryDto,
   SearchSaranaQueryDto,
@@ -135,6 +142,31 @@ export class MasterDataController {
         productType: query.product_type,
       }),
     );
+  }
+
+  @Get('kfa/catalog/status')
+  @ApiTags('master-data')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Status salinan lokal katalog obat KFA' })
+  async kfaCatalogStatus() {
+    return ApiResponse.success(await this.kfaService.catalogStatus());
+  }
+
+  @Post('kfa/catalog/sync')
+  @HttpCode(202)
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiTags('master-data')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Mulai sinkron katalog obat KFA ke database lokal (super admin)',
+  })
+  async syncKfaCatalog(@Body() body: { full?: boolean }) {
+    // Sinkron penuh bisa memakan waktu lama — jalankan di latar belakang
+    this.kfaService
+      .syncCatalog({ full: body?.full === true })
+      .catch(() => undefined);
+    return ApiResponse.success(await this.kfaService.catalogStatus());
   }
 
   @Get('kfa/products/:kfaCode')

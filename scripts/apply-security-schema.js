@@ -20,6 +20,7 @@ const MIGRATIONS = [
   '1789970000000-CreateClinicContents',
   '1789980000000-CreateContentTemplates',
   '1789990000000-RestoreSatusehatIntegration',
+  '1790000000000-SatusehatRmeRawatJalan',
 ];
 
 async function main() {

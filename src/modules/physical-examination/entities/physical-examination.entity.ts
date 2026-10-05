@@ -2,6 +2,22 @@ import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { BaseEntity } from '../../../common/base.entity';
 import { Encounter } from '../../encounters/entities/encounter.entity';
 
+export const PSYCHOLOGICAL_STATUSES = [
+  'normal',
+  'anxious',
+  'afraid',
+  'angry',
+  'sad',
+  'other',
+] as const;
+export type PsychologicalStatus = (typeof PSYCHOLOGICAL_STATUSES)[number];
+export const PREGNANCY_STATUSES = [
+  'pregnant',
+  'not_pregnant',
+  'unknown',
+] as const;
+export type PregnancyStatus = (typeof PREGNANCY_STATUSES)[number];
+
 /**
  * Head-to-toe physical examination ("status present") for one encounter —
  * the standard structure taught/used in Indonesian clinical documentation:
@@ -156,6 +172,31 @@ export class PhysicalExamination extends BaseEntity {
 
   @Column({ type: 'text', nullable: true })
   rectal: string;
+
+  // ── Pemeriksaan fungsional (Playbook RME Rawat Jalan bab 5) ──
+  @Column({
+    name: 'psychological_status',
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
+  psychologicalStatus: PsychologicalStatus | null;
+
+  @Column({
+    name: 'psychological_note',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  psychologicalNote: string | null;
+
+  @Column({
+    name: 'pregnancy_status',
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
+  pregnancyStatus: PregnancyStatus | null;
 
   @ManyToOne(() => Encounter, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'encounter_id' })

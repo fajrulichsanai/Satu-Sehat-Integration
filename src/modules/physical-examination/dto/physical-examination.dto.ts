@@ -1,14 +1,24 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import {
+  PREGNANCY_STATUSES,
+  PSYCHOLOGICAL_STATUSES,
+} from '../entities/physical-examination.entity';
+import type {
+  PregnancyStatus,
+  PsychologicalStatus,
+} from '../entities/physical-examination.entity';
 
 export class UpsertPhysicalExaminationDto {
   @ApiPropertyOptional({
@@ -137,4 +147,28 @@ export class UpsertPhysicalExaminationDto {
   @ApiPropertyOptional() @IsOptional() @IsString() extremities?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() genitalia?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() rectal?: string;
+
+  @ApiPropertyOptional({
+    enum: PSYCHOLOGICAL_STATUSES,
+    description: 'Status psikologis',
+  })
+  @IsOptional()
+  @IsIn(PSYCHOLOGICAL_STATUSES)
+  psychologicalStatus?: PsychologicalStatus | null;
+
+  @ApiPropertyOptional({
+    description: 'Keterangan status psikologis (mis. bila "lainnya")',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  psychologicalNote?: string | null;
+
+  @ApiPropertyOptional({
+    enum: PREGNANCY_STATUSES,
+    description: 'Status kehamilan (pasien perempuan)',
+  })
+  @IsOptional()
+  @IsIn(PREGNANCY_STATUSES)
+  pregnancyStatus?: PregnancyStatus | null;
 }

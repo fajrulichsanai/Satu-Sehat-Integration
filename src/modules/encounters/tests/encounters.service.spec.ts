@@ -27,7 +27,7 @@ function buildQb(result: [any[], number] = [[], 0]) {
 }
 
 describe('EncountersService', () => {
-  let syncOrchestrator: { syncEncounterOnFinish: jest.Mock };
+  let syncOrchestrator: { syncEncounterInBackground: jest.Mock };
   let service: EncountersService;
   let encounterRepo: {
     createQueryBuilder: jest.Mock;
@@ -43,7 +43,7 @@ describe('EncountersService', () => {
 
   beforeEach(async () => {
     syncOrchestrator = {
-      syncEncounterOnFinish: jest.fn().mockResolvedValue(undefined),
+      syncEncounterInBackground: jest.fn().mockResolvedValue(undefined),
     };
     encounterRepo = {
       createQueryBuilder: jest.fn(() => buildQb()),
@@ -73,7 +73,7 @@ describe('EncountersService', () => {
       const qb = buildQb();
       encounterRepo.createQueryBuilder.mockReturnValue(qb);
 
-      await service.findAll(1, {} as any, dokter);
+      await service.findAll(1, {}, dokter);
 
       expect(qb.andWhere).toHaveBeenCalledWith(
         expect.stringContaining('practitioners WHERE user_id'),
@@ -85,7 +85,7 @@ describe('EncountersService', () => {
       const qb = buildQb();
       encounterRepo.createQueryBuilder.mockReturnValue(qb);
 
-      await service.findAll(1, { practitionerId: 7 } as any, admin);
+      await service.findAll(1, { practitionerId: 7 }, admin);
 
       expect(qb.andWhere).toHaveBeenCalledWith(
         'e.practitionerId = :practitionerId',
@@ -97,7 +97,7 @@ describe('EncountersService', () => {
       const qb = buildQb();
       encounterRepo.createQueryBuilder.mockReturnValue(qb);
 
-      await service.findAll(1, {} as any, admin);
+      await service.findAll(1, {}, admin);
 
       const dateCalls = qb.andWhere.mock.calls.filter((c: any[]) =>
         c[0].includes('DATE(e.arrivedTime)'),
@@ -109,11 +109,7 @@ describe('EncountersService', () => {
       const qb = buildQb();
       encounterRepo.createQueryBuilder.mockReturnValue(qb);
 
-      await service.findAll(
-        1,
-        { status: EncounterStatus.ARRIVED } as any,
-        admin,
-      );
+      await service.findAll(1, { status: EncounterStatus.ARRIVED }, admin);
 
       const dateCalls = qb.andWhere.mock.calls.filter((c: any[]) =>
         c[0].includes('DATE(e.arrivedTime)'),
@@ -125,7 +121,7 @@ describe('EncountersService', () => {
       const qb = buildQb();
       encounterRepo.createQueryBuilder.mockReturnValue(qb);
 
-      await service.findAll(1, { unbilled: true } as any, admin);
+      await service.findAll(1, { unbilled: true }, admin);
 
       const dateCalls = qb.andWhere.mock.calls.filter((c: any[]) =>
         c[0].includes('DATE(e.arrivedTime)'),
@@ -138,7 +134,7 @@ describe('EncountersService', () => {
       const qb = buildQb();
       encounterRepo.createQueryBuilder.mockReturnValue(qb);
 
-      await service.findAll(1, { date: '2026-01-01' } as any, admin);
+      await service.findAll(1, { date: '2026-01-01' }, admin);
 
       expect(qb.andWhere).toHaveBeenCalledWith('DATE(e.arrivedTime) = :date', {
         date: '2026-01-01',
@@ -235,7 +231,7 @@ describe('EncountersService', () => {
       const result = await service.updateStatus(
         1,
         1,
-        { status: EncounterStatus.IN_PROGRESS } as any,
+        { status: EncounterStatus.IN_PROGRESS },
         admin,
       );
 
@@ -254,7 +250,7 @@ describe('EncountersService', () => {
       const result = await service.updateStatus(
         1,
         1,
-        { status: EncounterStatus.FINISHED } as any,
+        { status: EncounterStatus.FINISHED },
         admin,
       );
 
@@ -272,7 +268,7 @@ describe('EncountersService', () => {
       const result = await service.updateStatus(
         1,
         1,
-        { status: EncounterStatus.CANCELLED, reason: 'Pasien batal' } as any,
+        { status: EncounterStatus.CANCELLED, reason: 'Pasien batal' },
         admin,
       );
 
@@ -374,7 +370,7 @@ describe('EncountersService', () => {
       const result = await service.update(
         1,
         1,
-        { chiefComplaint: 'New complaint' } as any,
+        { chiefComplaint: 'New complaint' },
         admin,
       );
 

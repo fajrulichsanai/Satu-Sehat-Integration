@@ -36,12 +36,21 @@ describe('KfaService', () => {
       json: () => Promise.resolve(body),
     }) as Response;
 
+  let catalog: Record<string, jest.Mock>;
+
   beforeEach(() => {
+    catalog = {
+      count: jest.fn().mockResolvedValue(0),
+      findOne: jest.fn().mockResolvedValue(null),
+      upsert: jest.fn().mockResolvedValue(undefined),
+      createQueryBuilder: jest.fn(),
+    };
     fetchMock = jest.fn();
     global.fetch = fetchMock;
     service = new KfaService(
       { getAccessToken: jest.fn().mockResolvedValue('tok') } as any,
       { get: jest.fn().mockReturnValue('sandbox') } as any,
+      catalog as any,
     );
   });
 
@@ -113,5 +122,121 @@ describe('KfaService', () => {
     await expect(service.getProduct('93999999')).rejects.toThrow(
       NotFoundException,
     );
+  });
+
+  describe('local catalog', () => {
+    const qb = (raw: unknown, rows: unknown[] = [], total = 0) => {
+      const b: Record<string, jest.Mock> = {};
+      for (const m of [
+        'where',
+        'andWhere',
+        'orderBy',
+        'skip',
+        'take',
+        'select',
+        'addSelect',
+      ]) {
+        b[m] = jest.fn(() => b);
+      }
+      b.getRawOne = jest.fn().mockResolvedValue(raw);
+      b.getManyAndCount = jest.fn().mockResolvedValue([rows, total]);
+      return b;
+    };
+
+    it('full sync pages through KFA and upserts only 8-digit codes (positive)', async () => {
+      const page = (n: number) =>
+        Array.from({ length: n }, (_, i) => ({
+          ...DETAIL,
+          kfa_code: String(93000000 + i),
+          updated_at: '2026-09-01 10:00:00',
+        }));
+      fetchMock
+        .mockResolvedValueOnce(
+          json(200, { total: 150, items: { data: page(100) } }),
+        )
+        .mockResolvedValueOnce(
+          json(200, {
+            total: 150,
+            items: { data: [...page(49), { kfa_code: '/' }] },
+          }),
+        );
+      const result = await service.syncCatalog({ full: true });
+      expect(result).toEqual({ pages: 2, saved: 149 });
+      expect(fetchMock.mock.calls[0][0]).toContain(
+        'page=1&size=100&product_type=farmasi',
+      );
+      expect(fetchMock.mock.calls[0][0]).not.toContain('from_date');
+      const saved = catalog.upsert.mock.calls[0][0][0];
+      expect(saved).toMatchObject({
+        kfaCode: '93000000',
+        dosageFormCode: 'BS077',
+        group: 'farmasi',
+      });
+      expect(saved.kfaUpdatedAt.toISOString()).toBe('2026-09-01T10:00:00.000Z');
+    });
+
+    it('incremental sync starts one day before the last KFA update (edge)', async () => {
+      catalog.createQueryBuilder.mockReturnValue(
+        qb({
+          products: '10',
+          lastSyncedAt: null,
+          lastKfaUpdate: new Date('2026-09-10T05:00:00Z'),
+        }),
+      );
+      fetchMock.mockResolvedValue(json(200, { total: 0, items: { data: [] } }));
+      await service.syncCatalog();
+      expect(fetchMock.mock.calls[0][0]).toContain('from_date=2026-09-09');
+    });
+
+    it('concurrent sync calls share one run (edge)', async () => {
+      fetchMock.mockResolvedValue(json(200, { total: 0, items: { data: [] } }));
+      const [a, b] = await Promise.all([
+        service.syncCatalog({ full: true }),
+        service.syncCatalog({ full: true }),
+      ]);
+      expect(a).toBe(b);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('search uses the local table once it has products (positive)', async () => {
+      catalog.count.mockResolvedValue(5);
+      const builder = qb(
+        null,
+        [
+          {
+            kfaCode: '93015993',
+            name: 'Abacavir 300 mg',
+            active: true,
+            activeIngredients: null,
+          },
+        ],
+        1,
+      );
+      catalog.createQueryBuilder.mockReturnValue(builder);
+      const result = await service.search({ keyword: 'abacavir 300' });
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(result.total).toBe(1);
+      expect(result.items[0]).toMatchObject({
+        kfaCode: '93015993',
+        activeIngredients: [],
+      });
+    });
+
+    it('getProduct falls back to the local copy when KFA is down (negative)', async () => {
+      fetchMock.mockRejectedValue(new Error('ECONNRESET'));
+      catalog.findOne.mockResolvedValue({
+        kfaCode: '93015993',
+        name: 'Abacavir',
+        active: true,
+        dosageFormCode: 'BS077',
+        dosageFormName: 'Tablet',
+      });
+      const p = await service.getProduct('93015993');
+      expect(p.dosageForm).toEqual({ code: 'BS077', name: 'Tablet' });
+      catalog.findOne.mockResolvedValue(null);
+      await expect(service.getProduct('93015994')).rejects.toThrow(
+        'Koneksi ke KFA SATUSEHAT gagal',
+      );
+    });
   });
 });

@@ -44,6 +44,9 @@ export class EncounterSoapNotesService {
     const diagnoses = dto.diagnoses
       ? await this.normalizeDiagnoses(dto.diagnoses)
       : undefined;
+    const chiefComplaint = await this.normalizeChiefComplaint(
+      dto.chiefComplaintCode,
+    );
 
     let note = await this.soapNoteRepository.findOne({
       where: { encounterId },
@@ -59,6 +62,10 @@ export class EncounterSoapNotesService {
         treatment: dto.treatment,
         plan: dto.plan,
         controlPlan: dto.controlPlan,
+        ...(chiefComplaint ?? {}),
+        educationGiven: dto.educationGiven ?? null,
+        dischargeCondition: dto.dischargeCondition ?? null,
+        prognosis: dto.prognosis ?? null,
         signature: dto.signature,
         createdBy: userId,
       });
@@ -71,6 +78,10 @@ export class EncounterSoapNotesService {
         treatment: dto.treatment ?? note.treatment,
         plan: dto.plan ?? note.plan,
         controlPlan: dto.controlPlan ?? note.controlPlan,
+        ...(chiefComplaint ?? {}),
+        educationGiven: dto.educationGiven ?? note.educationGiven,
+        dischargeCondition: dto.dischargeCondition ?? note.dischargeCondition,
+        prognosis: dto.prognosis ?? note.prognosis,
         signature: dto.signature ?? note.signature,
         updatedBy: userId,
       });
@@ -106,6 +117,30 @@ export class EncounterSoapNotesService {
       primary: hasPrimary ? !!d.primary : i === 0,
       note: d.note?.trim() || null,
     }));
+  }
+
+  /**
+   * Keluhan utama SNOMED: kode divalidasi terhadap data terminologi dan
+   * namanya diambil dari sana. `undefined` = tidak diubah, '' = dihapus.
+   */
+  private async normalizeChiefComplaint(code?: string): Promise<
+    | {
+        chiefComplaintCode: string | null;
+        chiefComplaintDisplay: string | null;
+      }
+    | undefined
+  > {
+    if (code === undefined) return undefined;
+    const trimmed = code.trim();
+    if (!trimmed)
+      return { chiefComplaintCode: null, chiefComplaintDisplay: null };
+    const concepts = await this.terminologyService.resolve([
+      { system: 'snomed', code: trimmed },
+    ]);
+    return {
+      chiefComplaintCode: trimmed,
+      chiefComplaintDisplay: concepts.get(`snomed:${trimmed}`)!.display,
+    };
   }
 
   private async assertEncounterExists(

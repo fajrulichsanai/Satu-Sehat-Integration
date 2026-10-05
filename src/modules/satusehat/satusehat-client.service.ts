@@ -111,6 +111,38 @@ export class SatusehatClientService {
     return data;
   }
 
+  /**
+   * SATUSEHAT Rekam Medis Elektronik (SSRME) — POST /ssrme/v2/ntl/{chl|shl}.
+   * Body & respons tidak dicatat di log (berisi identitas pasien dan URL
+   * akses yang sensitif).
+   */
+  async postSsrme(
+    clinicId: number,
+    endpoint: 'chl' | 'shl',
+    body: object,
+  ): Promise<{ status: number; data: any }> {
+    const clinic = await this.loadConfiguredClinic(clinicId);
+    const token = await this.getAccessToken(clinicId);
+    try {
+      const response = await fetch(
+        `${SATUSEHAT_BASE[clinic.satusehatEnvironment]}/ssrme/v2/ntl/${endpoint}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        },
+      );
+      const data = await response.json().catch(() => ({}));
+      return { status: response.status, data };
+    } catch (err) {
+      this.logger.error(`SSRME ${endpoint} gagal: ${(err as Error).message}`);
+      throw new ServiceUnavailableException('Koneksi ke SATUSEHAT gagal');
+    }
+  }
+
   private async request(
     clinicId: number,
     method: 'GET' | 'POST' | 'PUT',

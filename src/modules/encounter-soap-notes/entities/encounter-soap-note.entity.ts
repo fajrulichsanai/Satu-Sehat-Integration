@@ -2,6 +2,12 @@ import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { BaseEntity } from '../../../common/base.entity';
 import { Encounter } from '../../encounters/entities/encounter.entity';
 
+/** Kondisi saat pulang — dipetakan ke SNOMED di FhirMapper. */
+export const DISCHARGE_CONDITIONS = ['stable', 'improved', 'worsened'] as const;
+export type DischargeCondition = (typeof DISCHARGE_CONDITIONS)[number];
+export const PROGNOSES = ['good', 'fair', 'guarded', 'bad'] as const;
+export type Prognosis = (typeof PROGNOSES)[number];
+
 /** A coded diagnosis in the assessment (ICD-10 or SNOMED CT). */
 export interface SoapDiagnosis {
   system: 'icd10' | 'snomed';
@@ -46,6 +52,43 @@ export class EncounterSoapNote extends BaseEntity {
   // dari `plan` karena ditampilkan sebagai baris sendiri di lembar CPPT.
   @Column({ name: 'control_plan', type: 'text', nullable: true })
   controlPlan: string;
+
+  // ── Data terkode untuk SATUSEHAT (Playbook RME Rawat Jalan / Use Case Gigi) ──
+
+  /** Keluhan utama terkode SNOMED CT (melengkapi teks `subjective`). */
+  @Column({
+    name: 'chief_complaint_code',
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
+  chiefComplaintCode: string | null;
+
+  /** Nama konsep SNOMED (diisi server dari data terminologi). */
+  @Column({
+    name: 'chief_complaint_display',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  chiefComplaintDisplay: string | null;
+
+  /** Edukasi diberikan ke pasien (true), tidak diberikan (false), belum diisi (null). */
+  @Column({ name: 'education_given', type: 'boolean', nullable: true })
+  educationGiven: boolean | null;
+
+  /** Kondisi pasien saat meninggalkan klinik. */
+  @Column({
+    name: 'discharge_condition',
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
+  dischargeCondition: DischargeCondition | null;
+
+  /** Prognosis: baik / dubia ad bonam / dubia ad malam / buruk. */
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  prognosis: Prognosis | null;
 
   @Column({ type: 'mediumtext', nullable: true })
   signature: string;

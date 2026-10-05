@@ -207,6 +207,9 @@ export class EncountersService {
       });
     }
 
+    // Encounter "arrived" dikirim sejak pasien datang (Playbook RME Rawat Jalan langkah 2)
+    void this.syncOrchestrator.syncEncounterInBackground(saved.id, clinicId);
+
     return saved;
   }
 
@@ -262,10 +265,9 @@ export class EncountersService {
       `[STATUS-UPDATE] Status encounter berhasil diperbarui | id=${id}, status=${dto.status}`,
     );
 
-    // Kirim ke SATUSEHAT di latar belakang (hanya bila klinik sudah dikonfigurasi)
-    if (dto.status === EncounterStatus.FINISHED) {
-      void this.syncOrchestrator.syncEncounterOnFinish(id, clinicId);
-    }
+    // Kirim ke SATUSEHAT di latar belakang (hanya bila klinik sudah dikonfigurasi):
+    // arrived → POST, in-progress & finished → PUT, sesuai playbook rawat jalan
+    void this.syncOrchestrator.syncEncounterInBackground(id, clinicId);
     return result;
   }
 

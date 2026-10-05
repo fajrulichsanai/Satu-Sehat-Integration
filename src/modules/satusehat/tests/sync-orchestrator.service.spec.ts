@@ -26,6 +26,9 @@ describe('SyncOrchestratorService', () => {
       ...others.slice(1),
       {} as any, // SatusehatClientService
       {} as any, // KfaService
+      repo(), // ToothCondition
+      repo(), // DentalBridge
+      repo(), // PatientRecall
     );
   });
 
@@ -61,9 +64,9 @@ describe('SyncOrchestratorService', () => {
     });
   });
 
-  it('auto-sync on finish does nothing for an unconfigured clinic (negative)', async () => {
+  it('background auto-sync does nothing for an unconfigured clinic (negative)', async () => {
     clinicRepo.findOne.mockResolvedValue({ id: 1 });
-    await service.syncEncounterOnFinish(5, 1);
+    await service.syncEncounterInBackground(5, 1);
     expect(encounterRepo.findOne).not.toHaveBeenCalled();
   });
 });

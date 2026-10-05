@@ -15,6 +15,9 @@ import {
 import { Billing, BillingStatus } from '../../billing/entities/billing.entity';
 import { BillingItem } from '../../billing-item/entities/billing-item.entity';
 import { PrescriptionItem } from '../../prescriptions/entities/prescription-item.entity';
+import { ToothCondition } from '../../odontogram/entities/tooth-condition.entity';
+import { DentalBridge } from '../../odontogram/entities/dental-bridge.entity';
+import { PatientRecall } from '../../recalls/entities/patient-recall.entity';
 import {
   SatusehatSyncLog,
   SyncLogStatus,
@@ -52,15 +55,20 @@ const diagnosisLinkType = (dx: SoapDiagnosis) =>
   `soap_dx:${dx.system}:${dx.code}`.slice(0, 50);
 
 /**
- * Pengiriman data kunjungan rawat jalan gigi ke SATUSEHAT, mengikuti Playbook
- * "RME Rawat Jalan" / Postman "Use Case - Gigi":
+ * Pengiriman data kunjungan rawat jalan (poli umum & gigi) ke SATUSEHAT,
+ * mengikuti Playbook "RME Rawat Jalan" / Postman "Use Case - Gigi":
  *
  *   01 Prasyarat  : Patient & Practitioner (cari by NIK), Location (buat bila belum)
  *   02 Encounter  : POST (arrived / in-progress)
- *   04 Pemeriksaan: Observation tanda vital (pemeriksaan fisik), OHIS
- *   07 Diagnosis  : Condition dari diagnosis SOAP (ICD-10 / SNOMED CT)
+ *   03 Anamnesis  : keluhan utama, riwayat penyakit, alergi, golongan darah
+ *   04 Pemeriksaan: tanda vital, kesadaran, nyeri, head-to-toe, psikologis,
+ *                   kehamilan; OHIS + odontogram untuk kunjungan gigi
+ *   07 Diagnosis  : Condition dari diagnosis SOAP (ICD-10 / SNOMED CT),
+ *                   ClinicalImpression (riwayat, rasional klinis, prognosis),
+ *                   CarePlan (rencana rawat, instruksi medik)
  *   08 Tindakan   : Procedure dari tagihan bertarif ICD-9-CM
  *   09 Obat       : Medication (KFA) + MedicationRequest dari resep
+ *   09–11         : edukasi, rencana tindak lanjut, kondisi saat pulang
  *   12 Pulang     : PUT Encounter finished + diagnosis + dischargeDisposition
  *
  * Log sync tidak menyimpan payload FHIR (data sensitif) dan pesan error
@@ -98,10 +106,20 @@ export class SyncOrchestratorService {
     private readonly linkRepo: Repository<SatusehatResourceLink>,
     private readonly satusehatClient: SatusehatClientService,
     private readonly kfaService: KfaService,
+    @InjectRepository(ToothCondition)
+    private readonly toothRepo: Repository<ToothCondition>,
+    @InjectRepository(DentalBridge)
+    private readonly bridgeRepo: Repository<DentalBridge>,
+    @InjectRepository(PatientRecall)
+    private readonly recallRepo: Repository<PatientRecall>,
   ) {}
 
-  /** Dipanggil saat kunjungan selesai (fire-and-forget dari EncountersService). */
-  async syncEncounterOnFinish(
+  /**
+   * Dipanggil di latar belakang setiap kunjungan dibuat atau statusnya
+   * berubah (arrived → in-progress → finished), sesuai alur real-time di
+   * playbook. Tidak melakukan apa-apa bila klinik belum dikonfigurasi.
+   */
+  async syncEncounterInBackground(
     encounterId: number,
     clinicId: number,
   ): Promise<void> {
@@ -115,13 +133,38 @@ export class SyncOrchestratorService {
       );
     } catch (err) {
       this.logger.error(
-        `Sync on finish failed for encounter ${encounterId}: ${(err as Error).message}`,
+        `Background sync failed for encounter ${encounterId}: ${(err as Error).message}`,
       );
     }
   }
 
-  /** Kirim seluruh data satu kunjungan sesuai urutan playbook. */
+  /** Antrean per kunjungan agar pengiriman tidak tumpang tindih. */
+  private readonly running = new Map<number, Promise<unknown>>();
+
+  /**
+   * Kirim seluruh data satu kunjungan sesuai urutan playbook. Pemanggilan
+   * untuk kunjungan yang sama dijalankan berurutan — dua POST Encounter
+   * bersamaan akan membuat kunjungan ganda di SATUSEHAT.
+   */
   async syncEncounterFull(
+    encounterId: number,
+    clinicId: number,
+  ): Promise<{ success: boolean; steps: SyncStep[] }> {
+    const previous = this.running.get(encounterId) ?? Promise.resolve();
+    const current = previous
+      .catch(() => undefined)
+      .then(() => this.runEncounterSync(encounterId, clinicId));
+    this.running.set(encounterId, current);
+    try {
+      return await current;
+    } finally {
+      if (this.running.get(encounterId) === current) {
+        this.running.delete(encounterId);
+      }
+    }
+  }
+
+  private async runEncounterSync(
     encounterId: number,
     clinicId: number,
   ): Promise<{ success: boolean; steps: SyncStep[] }> {
@@ -222,6 +265,42 @@ export class SyncOrchestratorService {
       return { success: false, steps };
     }
 
+    const soap = await this.soapRepo.findOne({ where: { encounterId } });
+    const examAt =
+      encounter.inProgressTime ?? encounter.arrivedTime ?? encounter.createdAt;
+
+    // 03. Anamnesis — keluhan utama (SNOMED dari SOAP)
+    if (soap?.chiefComplaintCode && soap.chiefComplaintDisplay) {
+      steps.push(
+        await this.sendLinked(clinicId, '03. Keluhan Utama', {
+          localType: 'soap_chief_complaint',
+          localId: soap.id,
+          resource: FhirMapper.toChiefComplaint(
+            {
+              code: soap.chiefComplaintCode,
+              display: soap.chiefComplaintDisplay,
+            },
+            encounter.chiefComplaint?.trim() || null,
+            examAt,
+            ctx,
+          ),
+        }),
+      );
+    }
+
+    // 03. Anamnesis — data pasien: golongan darah, rhesus, riwayat penyakit, alergi.
+    // Disimpan per pasien: dibuat sekali, kunjungan berikutnya memperbarui (PUT).
+    const patient = encounter.patient;
+    for (const r of [
+      ...FhirMapper.toBloodObservations(patient, ctx, examAt),
+      ...FhirMapper.toHistoryConditions(patient, ctx, examAt),
+    ]) {
+      steps.push(await this.sendLinked(clinicId, '03. Anamnesis', r));
+    }
+    for (const r of FhirMapper.toAllergies(patient, ctx, examAt)) {
+      steps.push(await this.sendLinked(clinicId, '03. Riwayat Alergi', r));
+    }
+
     // 04. Pemeriksaan fisik — tanda vital
     const physical = await this.physicalRepo.findOne({
       where: { encounterId },
@@ -229,6 +308,19 @@ export class SyncOrchestratorService {
     if (physical) {
       for (const r of FhirMapper.toVitalSignObservations(physical, ctx)) {
         steps.push(await this.sendLinked(clinicId, '04. Tanda Vital', r));
+      }
+      for (const r of FhirMapper.toConsciousnessAndPain(physical, ctx)) {
+        steps.push(await this.sendLinked(clinicId, '04. Pemeriksaan Fisik', r));
+      }
+      for (const r of FhirMapper.toHeadToToe(physical, ctx)) {
+        steps.push(
+          await this.sendLinked(clinicId, '04. Pemeriksaan Head-to-Toe', r),
+        );
+      }
+      for (const r of FhirMapper.toFunctionalStatus(physical, ctx)) {
+        steps.push(
+          await this.sendLinked(clinicId, '04. Pemeriksaan Fungsional', r),
+        );
       }
     }
 
@@ -240,8 +332,30 @@ export class SyncOrchestratorService {
       }
     }
 
+    // 05. Odontogram (potret grafik gigi pasien saat kunjungan) + DMF-T —
+    // hanya untuk kunjungan gigi (ada pemeriksaan gigi), bukan poli umum
+    if (dental) {
+      const [teeth, bridges] = await Promise.all([
+        this.toothRepo.find({ where: { patientId: encounter.patientId } }),
+        this.bridgeRepo.find({ where: { patientId: encounter.patientId } }),
+      ]);
+      for (const r of FhirMapper.toOdontogram(
+        teeth,
+        bridges,
+        encounter.id,
+        examAt,
+        ctx,
+      )) {
+        steps.push(await this.sendLinked(clinicId, '05. Odontogram', r));
+      }
+      for (const r of FhirMapper.toOralNotes(dental, ctx)) {
+        steps.push(
+          await this.sendLinked(clinicId, '05. Kondisi Gigi Lainnya', r),
+        );
+      }
+    }
+
     // 07. Diagnosis (SOAP) — utama dulu
-    const soap = await this.soapRepo.findOne({ where: { encounterId } });
     const diagnoses = [...(soap?.diagnoses ?? [])].sort(
       (a, b) => Number(b.primary) - Number(a.primary),
     );
@@ -266,6 +380,24 @@ export class SyncOrchestratorService {
     }
     const primaryDx = diagnoses.find((d) => d.primary) ?? diagnoses[0] ?? null;
 
+    // Riwayat perjalanan penyakit, rasional klinis, prognosis (ClinicalImpression)
+    // dan rencana rawat / instruksi medik (CarePlan) dari catatan SOAP
+    if (soap) {
+      const soapAt = soap.updatedAt ?? soap.createdAt;
+      const problems = conditionIds.map((c) => c.conditionId);
+      for (const r of FhirMapper.toClinicalImpressions(
+        soap,
+        soapAt,
+        ctx,
+        problems,
+      )) {
+        steps.push(await this.sendLinked(clinicId, '07. Kesimpulan Klinis', r));
+      }
+      for (const r of FhirMapper.toCarePlans(soap, soapAt, ctx)) {
+        steps.push(await this.sendLinked(clinicId, '07. Rencana Rawat', r));
+      }
+    }
+
     // 08. Tindakan — item tagihan bertarif ICD-9-CM
     for (const item of await this.procedureItems(encounterId)) {
       steps.push(
@@ -285,6 +417,57 @@ export class SyncOrchestratorService {
     for (const rx of prescriptions) {
       steps.push(
         ...(await this.syncPrescription(clinicId, rx, encounter, ctx)),
+      );
+    }
+
+    // 09. Edukasi (diberikan / tidak diberikan)
+    if (
+      soap &&
+      soap.educationGiven !== null &&
+      soap.educationGiven !== undefined
+    ) {
+      steps.push(
+        await this.sendLinked(clinicId, '09. Edukasi', {
+          localType: 'soap_education',
+          localId: soap.id,
+          resource: FhirMapper.toEducation(
+            soap.educationGiven,
+            encounter,
+            ctx,
+            diagnoses,
+          ),
+        }),
+      );
+    }
+
+    // 10. Rencana tindak lanjut (kontrol)
+    if (soap?.controlPlan?.trim()) {
+      steps.push(
+        await this.sendLinked(clinicId, '10. Rencana Tindak Lanjut', {
+          localType: 'soap_follow_up',
+          localId: soap.id,
+          resource: FhirMapper.toFollowUp(
+            soap.controlPlan.trim(),
+            encounter,
+            ctx,
+            diagnoses,
+            await this.recallDueDate(encounter),
+          ),
+        }),
+      );
+    }
+
+    // 11. Kondisi saat meninggalkan klinik
+    const discharge = soap?.dischargeCondition
+      ? FhirMapper.toDischargeCondition(soap.dischargeCondition, encounter, ctx)
+      : null;
+    if (soap && discharge) {
+      steps.push(
+        await this.sendLinked(clinicId, '11. Kondisi Saat Pulang', {
+          localType: 'soap_discharge',
+          localId: soap.id,
+          resource: discharge,
+        }),
       );
     }
 
@@ -559,12 +742,25 @@ export class SyncOrchestratorService {
       const message = (err as Error).message;
       await this.patientRepo.update(patient.id, {
         syncStatus: SyncStatus.FAILED,
-        syncError: redactSyncError(message) as string,
+        syncError: redactSyncError(message),
         lastSyncAt: new Date(),
       });
       await this.saveLog(clinicId, 'Patient', patient.id, { error: message });
       throw err;
     }
+  }
+
+  /** ID SATUSEHAT pasien (dicari by NIK bila belum tersimpan) — dipakai SSRME. */
+  patientIhsId(clinicId: number, patient: Patient): Promise<string> {
+    return this.resolvePatient(clinicId, patient);
+  }
+
+  /** ID SATUSEHAT tenaga kesehatan (dicari by NIK bila belum tersimpan). */
+  practitionerIhsId(
+    clinicId: number,
+    practitioner: Practitioner,
+  ): Promise<string> {
+    return this.resolvePractitioner(clinicId, practitioner);
   }
 
   /** IHS tenaga kesehatan berdasarkan NIK. */
@@ -715,10 +911,32 @@ export class SyncOrchestratorService {
     return out;
   }
 
+  /** Tanggal kontrol dari recall yang dibuat untuk tagihan kunjungan ini. */
+  private async recallDueDate(encounter: Encounter): Promise<string | null> {
+    const billingIds = await this.billingRepo.find({
+      where: { encounterId: encounter.id },
+      select: { id: true },
+    });
+    if (!billingIds.length) return null;
+    const allItems = await this.billingItemRepo.find({
+      where: { billingId: In(billingIds.map((b) => b.id)) },
+      select: { id: true },
+    });
+    if (!allItems.length) return null;
+    const recall = await this.recallRepo.findOne({
+      where: {
+        patientId: encounter.patientId,
+        billingItemId: In(allItems.map((i) => i.id)),
+      },
+      order: { dueDate: 'ASC' },
+    });
+    return recall?.dueDate ?? null;
+  }
+
   private async markEncounterFailed(encounterId: number, err: unknown) {
     await this.encounterRepo.update(encounterId, {
       syncStatus: SyncStatus.FAILED,
-      syncError: redactSyncError((err as Error).message) as string,
+      syncError: redactSyncError((err as Error).message),
       lastSyncAt: new Date(),
     });
   }

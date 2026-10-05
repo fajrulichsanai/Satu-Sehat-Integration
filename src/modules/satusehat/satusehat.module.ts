@@ -12,6 +12,9 @@ import { EncounterSoapNote } from '../encounter-soap-notes/entities/encounter-so
 import { Billing } from '../billing/entities/billing.entity';
 import { BillingItem } from '../billing-item/entities/billing-item.entity';
 import { PrescriptionItem } from '../prescriptions/entities/prescription-item.entity';
+import { ToothCondition } from '../odontogram/entities/tooth-condition.entity';
+import { DentalBridge } from '../odontogram/entities/dental-bridge.entity';
+import { PatientRecall } from '../recalls/entities/patient-recall.entity';
 import { SatusehatSyncLog } from './sync/entities/satusehat-sync-log.entity';
 import { SatusehatResourceLink } from './sync/entities/satusehat-resource-link.entity';
 import { SatusehatController } from './satusehat.controller';
@@ -23,10 +26,15 @@ import { SyncQueueService } from './sync/sync-queue.service';
 import { SatusehatMonitorService } from './monitor/satusehat-monitor.service';
 import { SatusehatConfigService } from './satusehat-config.service';
 import { KfaService } from './kfa/kfa.service';
+import { KfaProductEntity } from './kfa/entities/kfa-product.entity';
+import { SsrmeService } from './ssrme/ssrme.service';
+import { SsrmeController } from './ssrme/ssrme.controller';
+import { AuditLogModule } from '../audit-log/audit-log.module';
 
 @Module({
   imports: [
     ConfigModule,
+    AuditLogModule,
     TypeOrmModule.forFeature([
       Encounter,
       Patient,
@@ -39,11 +47,15 @@ import { KfaService } from './kfa/kfa.service';
       Billing,
       BillingItem,
       PrescriptionItem,
+      ToothCondition,
+      DentalBridge,
+      PatientRecall,
       SatusehatSyncLog,
       SatusehatResourceLink,
+      KfaProductEntity,
     ]),
   ],
-  controllers: [SatusehatController],
+  controllers: [SatusehatController, SsrmeController],
   providers: [
     SatusehatClientService,
     SatusehatGlobalOauthService,
@@ -53,6 +65,7 @@ import { KfaService } from './kfa/kfa.service';
     SatusehatMonitorService,
     SatusehatConfigService,
     KfaService,
+    SsrmeService,
   ],
   exports: [
     SatusehatClientService,

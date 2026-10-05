@@ -11,6 +11,14 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  DISCHARGE_CONDITIONS,
+  PROGNOSES,
+} from '../entities/encounter-soap-note.entity';
+import type {
+  DischargeCondition,
+  Prognosis,
+} from '../entities/encounter-soap-note.entity';
 
 export class SoapDiagnosisDto {
   @ApiProperty({ enum: ['icd10', 'snomed'] })
@@ -83,6 +91,31 @@ export class UpsertEncounterSoapNoteDto {
   @IsOptional()
   @IsString()
   controlPlan?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Keluhan utama terkode SNOMED CT (kode konsep); kirim string kosong untuk menghapus',
+    example: '80967001',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  chiefComplaintCode?: string;
+
+  @ApiPropertyOptional({ description: 'Edukasi diberikan ke pasien' })
+  @IsOptional()
+  @IsBoolean()
+  educationGiven?: boolean;
+
+  @ApiPropertyOptional({ enum: DISCHARGE_CONDITIONS })
+  @IsOptional()
+  @IsIn(DISCHARGE_CONDITIONS)
+  dischargeCondition?: DischargeCondition;
+
+  @ApiPropertyOptional({ enum: PROGNOSES })
+  @IsOptional()
+  @IsIn(PROGNOSES)
+  prognosis?: Prognosis;
 
   @ApiPropertyOptional({
     description: 'Tanda tangan dokter (base64 PNG data URL)',
