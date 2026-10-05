@@ -18,6 +18,8 @@ import { PatientRecall } from '../recalls/entities/patient-recall.entity';
 import { SatusehatSyncLog } from './sync/entities/satusehat-sync-log.entity';
 import { SatusehatResourceLink } from './sync/entities/satusehat-resource-link.entity';
 import { SatusehatController } from './satusehat.controller';
+import { SatusehatAdminController } from './admin/satusehat-admin.controller';
+import { SatusehatAdminService } from './admin/satusehat-admin.service';
 import { SatusehatClientService } from './satusehat-client.service';
 import { SatusehatGlobalOauthService } from './satusehat-global-oauth.service';
 import { SatusehatFhirService } from './satusehat-fhir.service';
@@ -68,8 +70,9 @@ import { RadiologyOrder } from '../diagnostics/entities/radiology-order.entity';
       SatusehatOrganization,
     ]),
   ],
-  controllers: [SatusehatController, SsrmeController],
+  controllers: [SatusehatController, SsrmeController, SatusehatAdminController],
   providers: [
+    SatusehatAdminService,
     SatusehatClientService,
     SatusehatGlobalOauthService,
     SatusehatFhirService,
