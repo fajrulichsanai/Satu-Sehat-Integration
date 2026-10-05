@@ -196,7 +196,7 @@ export class SyncOrchestratorService {
           'Organization',
           'clinic',
           clinicId,
-          'Konfigurasi SATUSEHAT klinik belum lengkap',
+          'Konfigurasi SATUSEHAT untuk klinik yang sedang aktif belum diisi — buka menu SATUSEHAT → Konfigurasi (Organization ID, Client ID, Client Secret)',
         ),
       );
       return { success: false, steps };
@@ -616,7 +616,7 @@ export class SyncOrchestratorService {
     if (!clinic || !this.isConfigured(clinic)) {
       return {
         success: false,
-        error: 'Konfigurasi SATUSEHAT klinik belum lengkap',
+        error: 'Konfigurasi SATUSEHAT untuk klinik yang sedang aktif belum diisi — buka menu SATUSEHAT → Konfigurasi (Organization ID, Client ID, Client Secret)',
       };
     }
 

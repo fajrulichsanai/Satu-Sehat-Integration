@@ -182,7 +182,7 @@ export class SatusehatClientService {
       !clinic.satusehatClientSecret
     ) {
       throw new ServiceUnavailableException(
-        'Konfigurasi SATUSEHAT klinik belum lengkap',
+        'Konfigurasi SATUSEHAT untuk klinik yang sedang aktif belum diisi — buka menu SATUSEHAT → Konfigurasi (Organization ID, Client ID, Client Secret)',
       );
     }
     return clinic;

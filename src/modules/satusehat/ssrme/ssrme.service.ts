@@ -156,7 +156,7 @@ export class SsrmeService {
     const clinic = await this.clinicRepo.findOne({ where: { id: clinicId } });
     if (!clinic?.satusehatOrgId) {
       throw new BadRequestException(
-        'Konfigurasi SATUSEHAT klinik belum lengkap',
+        'Konfigurasi SATUSEHAT untuk klinik yang sedang aktif belum diisi — buka menu SATUSEHAT → Konfigurasi (Organization ID, Client ID, Client Secret)',
       );
     }
     const [patientId, practitionerId] = await Promise.all([
