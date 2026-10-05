@@ -1,4 +1,4 @@
-import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
+import { ApiPropertyOptional, ApiProperty, PickType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -154,6 +154,24 @@ export class CreatePrescriptionItemDto {
   @IsIn(ROUTES)
   routeCode?: RouteCode;
 }
+
+/**
+ * Perbaiki pengodean obat yang sudah diresepkan: pilih produk KFA, atau
+ * jadikan racikan dengan bahan berkode KFA (supaya bisa dikirim ke SATUSEHAT).
+ */
+export class SetPrescriptionCodingDto extends PickType(
+  CreatePrescriptionItemDto,
+  [
+    'kfaCode',
+    'kfaName',
+    'compoundType',
+    'compoundFormCode',
+    'compoundFormName',
+    'compoundUnit',
+    'ingredients',
+    'routeCode',
+  ] as const,
+) {}
 
 export class DispensePrescriptionDto {
   @ApiPropertyOptional({ description: 'Nomor batch obat yang diserahkan' })

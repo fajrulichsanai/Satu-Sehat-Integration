@@ -10,6 +10,7 @@ import { Encounter } from '../encounters/entities/encounter.entity';
 import {
   AdministerPrescriptionDto,
   CreatePrescriptionItemDto,
+  SetPrescriptionCodingDto,
   DispensePrescriptionDto,
   SavePrescriptionReviewDto,
 } from './dto/prescription-item.dto';
@@ -61,6 +62,35 @@ export class PrescriptionsService {
       routeCode: dto.routeCode ?? null,
       sortOrder: count,
       createdBy: userId,
+    });
+    return this.itemRepository.save(item);
+  }
+
+  /** Pasang kode KFA, atau ubah jadi racikan (bahan berkode KFA). */
+  async setCoding(
+    encounterId: number,
+    clinicId: number,
+    itemId: number,
+    dto: SetPrescriptionCodingDto,
+    userId: number,
+  ): Promise<PrescriptionItem> {
+    const item = await this.findItem(encounterId, clinicId, itemId);
+    const compound = !!dto.compoundType;
+    if (!compound && !dto.kfaCode) {
+      throw new BadRequestException(
+        'Pilih produk KFA, atau isi data racikan beserta bahannya',
+      );
+    }
+    Object.assign(item, {
+      kfaCode: compound ? null : dto.kfaCode,
+      kfaName: compound ? null : (dto.kfaName ?? null),
+      compoundType: dto.compoundType ?? null,
+      compoundFormCode: compound ? dto.compoundFormCode : null,
+      compoundFormName: compound ? (dto.compoundFormName ?? null) : null,
+      compoundUnit: compound ? dto.compoundUnit : null,
+      ingredients: compound ? dto.ingredients : null,
+      routeCode: dto.routeCode ?? (compound ? item.routeCode : null),
+      updatedBy: userId,
     });
     return this.itemRepository.save(item);
   }

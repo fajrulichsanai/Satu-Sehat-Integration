@@ -21,6 +21,7 @@ import {
   CreatePrescriptionItemDto,
   DispensePrescriptionDto,
   SavePrescriptionReviewDto,
+  SetPrescriptionCodingDto,
 } from './dto/prescription-item.dto';
 import { PRESCRIPTION_REVIEW_GROUPS } from './prescription-review.questions';
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
@@ -88,6 +89,28 @@ export class PrescriptionsController {
     const data = await this.prescriptionsService.create(
       encounterId,
       clinicId,
+      dto,
+      user.userId,
+    );
+    return { success: true, data };
+  }
+
+  @Put(':itemId/coding')
+  @Audit('MedicalRecord', AuditActionType.UPDATE)
+  @ApiOperation({
+    summary: 'Pasang kode KFA atau ubah obat menjadi racikan (untuk SATUSEHAT)',
+  })
+  async setCoding(
+    @Param('encounterId', ParseIntPipe) encounterId: number,
+    @Param('itemId', ParseIntPipe) itemId: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: SetPrescriptionCodingDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.prescriptionsService.setCoding(
+      encounterId,
+      clinicId,
+      itemId,
       dto,
       user.userId,
     );

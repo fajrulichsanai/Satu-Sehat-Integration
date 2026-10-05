@@ -44,7 +44,10 @@ describe('PrescriptionPdfService', () => {
         PrescriptionPdfService,
         { provide: getRepositoryToken(PrescriptionItem), useValue: itemRepo },
         { provide: getRepositoryToken(Encounter), useValue: encounterRepo },
-        { provide: getRepositoryToken(PhysicalExamination), useValue: examRepo },
+        {
+          provide: getRepositoryToken(PhysicalExamination),
+          useValue: examRepo,
+        },
       ],
     }).compile();
 
@@ -56,7 +59,14 @@ describe('PrescriptionPdfService', () => {
   it('generates a PDF buffer when the encounter has prescription items (positive)', async () => {
     encounterRepo.findOne.mockResolvedValue({ ...baseEncounter });
     itemRepo.find.mockResolvedValue([
-      { drugName: 'Amoxicillin', dosage: '500mg', frequency: '3x1', quantity: 10, duration: '5 hari', instructions: 'Habiskan' },
+      {
+        drugName: 'Amoxicillin',
+        dosage: '500mg',
+        frequency: '3x1',
+        quantity: 10,
+        duration: '5 hari',
+        instructions: 'Habiskan',
+      },
     ]);
 
     const result = await service.generatePrescriptionPdf(1, 1);
@@ -110,16 +120,15 @@ describe('PrescriptionPdfService', () => {
 
   it('renders each prescription item as a separate Rx block (positive)', async () => {
     encounterRepo.findOne.mockResolvedValue({ ...baseEncounter });
-    itemRepo.find.mockResolvedValue([
-      { drugName: 'A' },
-      { drugName: 'B' },
-    ]);
+    itemRepo.find.mockResolvedValue([{ drugName: 'A' }, { drugName: 'B' }]);
 
     await service.generatePrescriptionPdf(1, 1);
 
     const doc = createPdfMock.mock.calls[0][0];
     const rxBlocks = doc.content.filter(
-      (c: any) => c.stack?.[0]?.text?.[1]?.text === 'A' || c.stack?.[0]?.text?.[1]?.text === 'B',
+      (c: any) =>
+        c.stack?.[0]?.text?.[1]?.text === 'A' ||
+        c.stack?.[0]?.text?.[1]?.text === 'B',
     );
     expect(rxBlocks).toHaveLength(2);
   });

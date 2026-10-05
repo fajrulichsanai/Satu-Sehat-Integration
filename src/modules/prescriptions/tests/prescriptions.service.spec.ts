@@ -14,6 +14,7 @@ describe('PrescriptionsService', () => {
     create: jest.Mock;
     save: jest.Mock;
     delete: jest.Mock;
+    findOne?: jest.Mock;
   };
   let encounterRepo: { findOne: jest.Mock };
 
@@ -118,6 +119,82 @@ describe('PrescriptionsService', () => {
       encounterRepo.findOne.mockResolvedValue(null);
       await expect(service.remove(1, 99, 5)).rejects.toThrow(NotFoundException);
       expect(itemRepo.delete).not.toHaveBeenCalled();
+    });
+  });
+  describe('setCoding', () => {
+    const freeText = {
+      id: 7,
+      encounterId: 1,
+      drugName: 'Asam Mefenamat 500 mg',
+      kfaCode: null,
+      compoundType: null,
+      routeCode: null,
+    };
+    beforeEach(() => {
+      encounterRepo.findOne.mockResolvedValue({ id: 1, clinicId: 1 });
+      itemRepo.findOne = jest.fn().mockResolvedValue({ ...freeText });
+    });
+
+    it('attaches a KFA product to a free-text drug (positive)', async () => {
+      const res = await service.setCoding(
+        1,
+        1,
+        7,
+        { kfaCode: '93001019', kfaName: 'Asam Mefenamat 500 mg Tablet' },
+        9,
+      );
+      expect(res).toMatchObject({
+        kfaCode: '93001019',
+        compoundType: null,
+        ingredients: null,
+        updatedBy: 9,
+      });
+    });
+
+    it('turns the item into a racikan and clears the product code (edge)', async () => {
+      itemRepo.findOne!.mockResolvedValue({ ...freeText, kfaCode: '93001019' });
+      const ingredients = [
+        {
+          kfaCode: '91000101',
+          name: 'Mefenamic acid',
+          amount: 250,
+          amountUnit: 'mg' as const,
+          perAmount: 1,
+          perUnit: 'CAP' as const,
+        },
+      ];
+      const res = await service.setCoding(
+        1,
+        1,
+        7,
+        {
+          compoundType: 'SD',
+          compoundFormCode: 'BS019',
+          compoundFormName: 'Kapsul',
+          compoundUnit: 'CAP',
+          routeCode: 'O',
+          ingredients,
+        },
+        9,
+      );
+      expect(res).toMatchObject({
+        kfaCode: null,
+        compoundType: 'SD',
+        compoundFormCode: 'BS019',
+        routeCode: 'O',
+        ingredients,
+      });
+    });
+
+    it('rejects an empty fix and items of another clinic (negative)', async () => {
+      await expect(service.setCoding(1, 1, 7, {}, 9)).rejects.toThrow(
+        'Pilih produk KFA',
+      );
+      encounterRepo.findOne.mockResolvedValue(null);
+      await expect(
+        service.setCoding(1, 99, 7, { kfaCode: '93001019' }, 9),
+      ).rejects.toThrow(NotFoundException);
+      expect(itemRepo.save).not.toHaveBeenCalled();
     });
   });
 });
