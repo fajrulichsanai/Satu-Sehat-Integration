@@ -158,7 +158,7 @@ describe('SsrmeService (Juknis SSRME v2.0)', () => {
       satusehatOrgId: null,
     });
     await expect(service.openRecord(1, 5, owner)).rejects.toThrow(
-      'Konfigurasi SATUSEHAT',
+      'Kredensial SATUSEHAT',
     );
   });
 });

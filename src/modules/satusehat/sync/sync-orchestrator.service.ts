@@ -1,3 +1,4 @@
+import { withEffectiveCredentials } from '../satusehat-credentials';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository } from 'typeorm';
@@ -23,6 +24,7 @@ import { LabOrder } from '../../diagnostics/entities/lab-order.entity';
 import { RadiologyOrder } from '../../diagnostics/entities/radiology-order.entity';
 import { ClinicalCatalogService } from '../../terminology/clinical-catalog.service';
 import { DiagnosticsMapper } from '../fhir/diagnostics-mapper';
+import { SatusehatOrganization } from '../onboarding/entities/satusehat-organization.entity';
 import {
   SatusehatSyncLog,
   SyncLogStatus,
@@ -131,6 +133,8 @@ export class SyncOrchestratorService {
     private readonly catalog: ClinicalCatalogService,
     @InjectRepository(PrescriptionReview)
     private readonly reviewRepo: Repository<PrescriptionReview>,
+    @InjectRepository(SatusehatOrganization)
+    private readonly ssOrgRepo: Repository<SatusehatOrganization>,
   ) {}
 
   /**
@@ -143,7 +147,9 @@ export class SyncOrchestratorService {
     clinicId: number,
   ): Promise<void> {
     try {
-      const clinic = await this.clinicRepo.findOne({ where: { id: clinicId } });
+      const clinic = withEffectiveCredentials(
+      await this.clinicRepo.findOne({ where: { id: clinicId } }),
+    );
       if (!this.isConfigured(clinic)) return;
       const { steps } = await this.syncEncounterFull(encounterId, clinicId);
       const failed = steps.filter((s) => s.status === 'failed').length;
@@ -188,7 +194,9 @@ export class SyncOrchestratorService {
     clinicId: number,
   ): Promise<{ success: boolean; steps: SyncStep[] }> {
     const steps: SyncStep[] = [];
-    const clinic = await this.clinicRepo.findOne({ where: { id: clinicId } });
+    const clinic = withEffectiveCredentials(
+      await this.clinicRepo.findOne({ where: { id: clinicId } }),
+    );
     if (!clinic || !this.isConfigured(clinic)) {
       steps.push(
         this.fail(
@@ -196,7 +204,7 @@ export class SyncOrchestratorService {
           'Organization',
           'clinic',
           clinicId,
-          'Konfigurasi SATUSEHAT untuk klinik yang sedang aktif belum diisi — buka menu SATUSEHAT → Konfigurasi (Organization ID, Client ID, Client Secret)',
+          'Kredensial SATUSEHAT belum diatur — isi SATUSEHAT_ORGANIZATION_ID, SATUSEHAT_CLIENT_ID, SATUSEHAT_CLIENT_SECRET di env server (atau Konfigurasi klinik)',
         ),
       );
       return { success: false, steps };
@@ -612,11 +620,13 @@ export class SyncOrchestratorService {
     localId: number,
     clinicId: number,
   ): Promise<SyncResult> {
-    const clinic = await this.clinicRepo.findOne({ where: { id: clinicId } });
+    const clinic = withEffectiveCredentials(
+      await this.clinicRepo.findOne({ where: { id: clinicId } }),
+    );
     if (!clinic || !this.isConfigured(clinic)) {
       return {
         success: false,
-        error: 'Konfigurasi SATUSEHAT untuk klinik yang sedang aktif belum diisi — buka menu SATUSEHAT → Konfigurasi (Organization ID, Client ID, Client Secret)',
+        error: 'Kredensial SATUSEHAT belum diatur — isi SATUSEHAT_ORGANIZATION_ID, SATUSEHAT_CLIENT_ID, SATUSEHAT_CLIENT_SECRET di env server (atau Konfigurasi klinik)',
       };
     }
 
@@ -906,6 +916,10 @@ export class SyncOrchestratorService {
     return this.ensureLocation(clinic, location, true);
   }
 
+  /**
+   * Daftarkan/perbarui Location ruangan memakai data registrasi (onboarding):
+   * organisasi pengelola & lokasi induk harus sudah terkirim lebih dulu.
+   */
   private async ensureLocation(
     clinic: Clinic,
     location: Location,
@@ -913,11 +927,33 @@ export class SyncOrchestratorService {
   ): Promise<string> {
     if (!force && location.satusehatLocationId)
       return location.satusehatLocationId;
-    const body = FhirMapper.toLocation(
-      location,
-      clinic.satusehatOrgId as string,
-      clinic.satusehatPoliOrgId,
-    );
+    let managingOrgId: string | null = null;
+    if (location.ssOrganizationId) {
+      const org = await this.ssOrgRepo.findOne({
+        where: { id: location.ssOrganizationId, clinicId: clinic.id },
+      });
+      if (!org?.satusehatId)
+        throw new StepError(
+          `Organisasi pengelola ruangan "${location.name}" belum dikirim ke SATUSEHAT (Onboarding → Organization)`,
+        );
+      managingOrgId = org.satusehatId;
+    }
+    let parentLocationId: string | null = null;
+    if (location.ssParentLocationId) {
+      const parent = await this.locationRepo.findOne({
+        where: { id: location.ssParentLocationId, clinicId: clinic.id },
+      });
+      if (!parent?.satusehatLocationId)
+        throw new StepError(
+          `Lokasi induk dari "${location.name}" belum dikirim ke SATUSEHAT (Onboarding → Location)`,
+        );
+      parentLocationId = parent.satusehatLocationId;
+    }
+    const body = FhirMapper.toLocation(location, clinic.satusehatOrgId as string, {
+      managingOrgId,
+      parentLocationId,
+      fallbackAddress: clinic.satusehatProfile,
+    });
     const id = await this.send(
       clinic.id,
       'Location',
@@ -925,7 +961,10 @@ export class SyncOrchestratorService {
       body,
       location.satusehatLocationId || undefined,
     );
-    await this.locationRepo.update(location.id, { satusehatLocationId: id });
+    await this.locationRepo.update(location.id, {
+      satusehatLocationId: id,
+      ssSyncError: null,
+    });
     location.satusehatLocationId = id;
     return id;
   }

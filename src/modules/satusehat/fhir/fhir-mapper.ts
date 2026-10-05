@@ -34,6 +34,14 @@ import { KfaProduct } from '../kfa/kfa.service';
 import { Patient } from '../../patients/entities/patient.entity';
 import { ToothCondition } from '../../odontogram/entities/tooth-condition.entity';
 import { DentalBridge } from '../../odontogram/entities/dental-bridge.entity';
+import { SatusehatOrganization } from '../onboarding/entities/satusehat-organization.entity';
+import {
+  CONTACT_PURPOSES,
+  ORGANIZATION_TYPES,
+  PHYSICAL_TYPES,
+  SatusehatFacilityProfile,
+  toFhirAddress,
+} from '../onboarding/address';
 import {
   ALLERGY,
   COMPOSITE_FILLING,
@@ -242,8 +250,15 @@ const ROUTE_DISPLAY: Record<string, string> = {
   TD: 'Transdermal',
 };
 
-const ORDERABLE_DRUG_FORM = 'http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm';
-const UCUM_UNITS: Record<string, string> = { mg: 'mg', g: 'g', mcg: 'ug', mL: 'mL', IU: '[IU]' };
+const ORDERABLE_DRUG_FORM =
+  'http://terminology.hl7.org/CodeSystem/v3-orderableDrugForm';
+const UCUM_UNITS: Record<string, string> = {
+  mg: 'mg',
+  g: 'g',
+  mcg: 'ug',
+  mL: 'mL',
+  IU: '[IU]',
+};
 
 /** Kekuatan bahan racikan: satuan UCUM atau bentuk sediaan (TAB, CAP, …) */
 export function strengthQuantity(value: number, unit: string) {
@@ -253,19 +268,33 @@ export function strengthQuantity(value: number, unit: string) {
 }
 
 function medicationTypeExtension(code: 'NC' | 'SD' | 'EP') {
-  const display = { NC: 'Non-compound', SD: 'Gives of such doses', EP: 'Divide into equal parts' }[code];
+  const display = {
+    NC: 'Non-compound',
+    SD: 'Gives of such doses',
+    EP: 'Divide into equal parts',
+  }[code];
   return {
     url: 'https://fhir.kemkes.go.id/r4/StructureDefinition/MedicationType',
-    valueCodeableConcept: { coding: [{ system: SYS.MEDICATION_TYPE, code, display }] },
+    valueCodeableConcept: {
+      coding: [{ system: SYS.MEDICATION_TYPE, code, display }],
+    },
   };
 }
 
-function medicationBatch(batch?: { lotNumber?: string | null; expirationDate?: string | null } | null) {
+function medicationBatch(
+  batch?: { lotNumber?: string | null; expirationDate?: string | null } | null,
+) {
   if (!batch?.lotNumber && !batch?.expirationDate) return {};
   return {
     batch: {
       ...(batch.lotNumber ? { lotNumber: batch.lotNumber } : {}),
-      ...(batch.expirationDate ? { expirationDate: fhirDateTime(`${batch.expirationDate}T00:00:00+07:00`) } : {}),
+      ...(batch.expirationDate
+        ? {
+            expirationDate: fhirDateTime(
+              `${batch.expirationDate}T00:00:00+07:00`,
+            ),
+          }
+        : {}),
     },
   };
 }
@@ -274,13 +303,26 @@ function medicationBatch(batch?: { lotNumber?: string | null; expirationDate?: s
 function routeOf(item: PrescriptionItem, kfa: KfaProduct | null) {
   const code = item.routeCode ?? kfa?.route?.code;
   if (!code) return {};
-  const display = item.routeCode ? ROUTE_DISPLAY[item.routeCode] : kfa?.route?.name;
-  return { route: { coding: [{ system: SYS.ATC_ROUTE, code, ...(display ? { display } : {}) }] } };
+  const display = item.routeCode
+    ? ROUTE_DISPLAY[item.routeCode]
+    : kfa?.route?.name;
+  return {
+    route: {
+      coding: [
+        { system: SYS.ATC_ROUTE, code, ...(display ? { display } : {}) },
+      ],
+    },
+  };
 }
 
 /** Jumlah obat: satuan racikan (CAP/POWD…) atau satuan produk KFA */
-function dispenseQuantity(item: PrescriptionItem, kfa: KfaProduct | null, value: number) {
-  if (item.compoundType && item.compoundUnit) return strengthQuantity(value, item.compoundUnit);
+function dispenseQuantity(
+  item: PrescriptionItem,
+  kfa: KfaProduct | null,
+  value: number,
+) {
+  if (item.compoundType && item.compoundUnit)
+    return strengthQuantity(value, item.compoundUnit);
   return { value, ...(kfa?.uom ? { unit: kfa.uom } : {}) };
 }
 
@@ -308,88 +350,138 @@ export type ResumeGroup = (typeof RESUME_GROUPS)[number];
 export function resumeGroupOf(localType: string): ResumeGroup | null {
   if (localType === 'soap_chief_complaint') return 'chiefComplaint';
   if (localType.startsWith('pt_allergy')) return 'allergy';
-  if (localType.startsWith('pt_hist') || localType === 'soap_history') return 'history';
-  if (/^pe_\d/.test(localType) || localType === 'pe_consciousness' || localType === 'pe_pain') return 'vitals';
-  if (localType.startsWith('pe_exam') || localType.startsWith('de_') || localType.startsWith('odo_') || localType.startsWith('dmf_') || localType.startsWith('ohis') || localType === 'dental_notes') return 'exam';
-  if (localType === 'pe_psychological' || localType === 'pe_pregnancy') return 'functional';
-  if (['soap_care_plan', 'soap_instruction', 'soap_goal'].includes(localType)) return 'carePlan';
+  if (localType.startsWith('pt_hist') || localType === 'soap_history')
+    return 'history';
+  if (
+    /^pe_\d/.test(localType) ||
+    localType === 'pe_consciousness' ||
+    localType === 'pe_pain'
+  )
+    return 'vitals';
+  if (
+    localType.startsWith('pe_exam') ||
+    localType.startsWith('de_') ||
+    localType.startsWith('odo_') ||
+    localType.startsWith('dmf_') ||
+    localType.startsWith('ohis') ||
+    localType === 'dental_notes'
+  )
+    return 'exam';
+  if (localType === 'pe_psychological' || localType === 'pe_pregnancy')
+    return 'functional';
+  if (['soap_care_plan', 'soap_instruction', 'soap_goal'].includes(localType))
+    return 'carePlan';
   if (localType.startsWith('lab_')) return 'lab';
   if (localType.startsWith('rad_')) return 'radiology';
-  if (localType.startsWith('soap_dx') || localType === 'soap_rationale' || localType === 'soap_risk') return 'diagnosis';
+  if (
+    localType.startsWith('soap_dx') ||
+    localType === 'soap_rationale' ||
+    localType === 'soap_risk'
+  )
+    return 'diagnosis';
   if (localType === 'billing_item') return 'procedure';
-  if (['rx_item', 'rx_dispense', 'rx_administration'].includes(localType)) return 'medication';
+  if (['rx_item', 'rx_dispense', 'rx_administration'].includes(localType))
+    return 'medication';
   if (localType === 'soap_diet') return 'diet';
   if (localType === 'soap_education') return 'education';
-  if (localType === 'soap_discharge' || localType === 'soap_prognosis') return 'discharge';
+  if (localType === 'soap_discharge' || localType === 'soap_prognosis')
+    return 'discharge';
   if (localType === 'soap_follow_up') return 'followUp';
   return null;
 }
 
 function escapeXml(text: string) {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-/** Sub-organisasi klinik (Organization type "team", partOf induk). */
-export function toTeamOrganization(
-  clinic: { name: string; phone?: string | null; email?: string | null; address?: string | null; city?: string | null; postalCode?: string | null },
-  orgId: string,
-  code: string,
-  name: string,
-  parentId: string,
-) {
-  const telecom = [
-    clinic.phone ? { system: 'phone', value: clinic.phone, use: 'work' } : null,
-    clinic.email ? { system: 'email', value: clinic.email, use: 'work' } : null,
-  ].filter(Boolean);
-  return {
-    resourceType: 'Organization',
-    active: true,
-    identifier: [{ use: 'official', system: ids('organization', orgId), value: code }],
-    type: [
-      {
-        coding: [
-          { system: 'http://terminology.hl7.org/CodeSystem/organization-type', code: 'team', display: 'Organizational team' },
-        ],
-      },
-    ],
-    name,
-    ...(telecom.length ? { telecom } : {}),
-    ...(clinic.address
-      ? {
-          address: [
-            {
-              use: 'work',
-              type: 'both',
-              line: [clinic.address],
-              ...(clinic.city ? { city: clinic.city } : {}),
-              ...(clinic.postalCode ? { postalCode: clinic.postalCode } : {}),
-              country: 'ID',
-            },
-          ],
-        }
-      : {}),
-    partOf: { reference: `Organization/${parentId}` },
-  };
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 export class FhirMapper {
   // ── Prasyarat ──────────────────────────────────────────────────────────
 
   /** Location ruang/poli — Postman "00. Location - Create Poli Gigi dan Mulut" */
-  static toLocation(location: Location, orgId: string, managingOrgId?: string | null) {
+  /**
+   * Location sesuai Template Registrasi Organization & Location: tipe fisik,
+   * alamat + kode wilayah, koordinat, induk lokasi, jam operasional.
+   */
+  static toLocation(
+    location: Location,
+    orgId: string,
+    opts: {
+      managingOrgId?: string | null;
+      parentLocationId?: string | null;
+      fallbackAddress?: SatusehatFacilityProfile | null;
+    } = {},
+  ) {
+    const physical =
+      location.ssPhysicalType && PHYSICAL_TYPES[location.ssPhysicalType]
+        ? location.ssPhysicalType
+        : 'ro';
+    const address = toFhirAddress(
+      location.ssAddress ?? opts.fallbackAddress ?? null,
+    );
+    const lat = location.ssLatitude ?? opts.fallbackAddress?.latitude ?? null;
+    const lng = location.ssLongitude ?? opts.fallbackAddress?.longitude ?? null;
+    const phone = location.ssPhone ?? opts.fallbackAddress?.phone ?? null;
+    const hours = location.ssHours;
     return {
       resourceType: 'Location',
       identifier: [
-        { system: ids('location', orgId), value: `LOC-${location.id}` },
+        {
+          use: 'official',
+          system: ids('location', orgId),
+          value: location.ssCode || `LOC-${location.id}`,
+        },
       ],
       status: location.isActive === false ? 'inactive' : 'active',
       name: location.name,
-      description: location.name,
+      description: location.ssDescription || location.name,
       mode: 'instance',
+      ...(phone
+        ? { telecom: [{ system: 'phone', value: phone, use: 'work' }] }
+        : {}),
+      ...(address ? { address } : {}),
       physicalType: {
-        coding: [{ system: SYS.LOCATION_TYPE, code: 'ro', display: 'Room' }],
+        coding: [
+          {
+            system: SYS.LOCATION_TYPE,
+            code: physical,
+            display: PHYSICAL_TYPES[physical],
+          },
+        ],
       },
-      managingOrganization: { reference: `Organization/${managingOrgId || orgId}` },
+      ...(lat !== null && lng !== null && lat !== undefined && lng !== undefined
+        ? {
+            position: {
+              longitude: Number(lng),
+              latitude: Number(lat),
+              altitude: 0,
+            },
+          }
+        : {}),
+      managingOrganization: {
+        reference: `Organization/${opts.managingOrgId || orgId}`,
+      },
+      ...(opts.parentLocationId
+        ? { partOf: { reference: `Location/${opts.parentLocationId}` } }
+        : {}),
+      ...(hours?.days?.length
+        ? {
+            hoursOfOperation: [
+              {
+                daysOfWeek: hours.days,
+                allDay: !!hours.allDay,
+                ...(!hours.allDay && hours.opening
+                  ? { openingTime: `${hours.opening.slice(0, 5)}:00` }
+                  : {}),
+                ...(!hours.allDay && hours.closing
+                  ? { closingTime: `${hours.closing.slice(0, 5)}:00` }
+                  : {}),
+              },
+            ],
+          }
+        : {}),
       extension: [
         {
           url: 'https://fhir.kemkes.go.id/r4/StructureDefinition/LocationServiceClass',
@@ -404,6 +496,81 @@ export class FhirMapper {
           },
         },
       ],
+    };
+  }
+
+  /** Sub-organisasi sesuai Template Registrasi Organization & Location. */
+  static toRegisteredOrganization(
+    org: SatusehatOrganization,
+    orgId: string,
+    parentId: string,
+  ) {
+    const telecom = [
+      org.phone ? { system: 'phone', value: org.phone, use: 'work' } : null,
+      org.email ? { system: 'email', value: org.email, use: 'work' } : null,
+      org.website ? { system: 'url', value: org.website, use: 'work' } : null,
+    ].filter(Boolean);
+    const address = toFhirAddress(org.address);
+    const type = ORGANIZATION_TYPES[org.type] ? org.type : 'dept';
+    return {
+      resourceType: 'Organization',
+      active: org.active,
+      identifier: [
+        {
+          use: 'official',
+          system: ids('organization', orgId),
+          value: org.code,
+        },
+      ],
+      type: [
+        {
+          coding: [
+            {
+              system: 'http://terminology.hl7.org/CodeSystem/organization-type',
+              code: type,
+              display: ORGANIZATION_TYPES[type],
+            },
+          ],
+        },
+      ],
+      name: org.name,
+      ...(telecom.length ? { telecom } : {}),
+      ...(address ? { address: [address] } : {}),
+      partOf: { reference: `Organization/${parentId}` },
+      ...(org.contactName
+        ? {
+            contact: [
+              {
+                ...(org.contactPurpose && CONTACT_PURPOSES[org.contactPurpose]
+                  ? {
+                      purpose: {
+                        coding: [
+                          {
+                            system:
+                              'http://terminology.hl7.org/CodeSystem/contactentity-type',
+                            code: org.contactPurpose,
+                            display: CONTACT_PURPOSES[org.contactPurpose],
+                          },
+                        ],
+                      },
+                    }
+                  : {}),
+                name: { use: 'official', text: org.contactName },
+                ...(org.contactPhone
+                  ? {
+                      telecom: [
+                        {
+                          system: 'phone',
+                          value: org.contactPhone,
+                          use: 'work',
+                        },
+                      ],
+                    }
+                  : {}),
+              },
+            ],
+          }
+        : {}),
     };
   }
 
@@ -770,7 +937,10 @@ export class FhirMapper {
     kfa: KfaProduct,
     ctx: FhirContext,
     identifierValue: string,
-    batch?: { lotNumber?: string | null; expirationDate?: string | null } | null,
+    batch?: {
+      lotNumber?: string | null;
+      expirationDate?: string | null;
+    } | null,
   ) {
     return {
       resourceType: 'Medication',
@@ -828,12 +998,25 @@ export class FhirMapper {
     item: PrescriptionItem,
     ctx: FhirContext,
     identifierValue: string,
-    batch?: { lotNumber?: string | null; expirationDate?: string | null } | null,
+    batch?: {
+      lotNumber?: string | null;
+      expirationDate?: string | null;
+    } | null,
   ) {
     return {
       resourceType: 'Medication',
-      meta: { profile: ['https://fhir.kemkes.go.id/r4/StructureDefinition/Medication'] },
-      identifier: [{ system: ids('medication', ctx.orgId), use: 'official', value: identifierValue }],
+      meta: {
+        profile: [
+          'https://fhir.kemkes.go.id/r4/StructureDefinition/Medication',
+        ],
+      },
+      identifier: [
+        {
+          system: ids('medication', ctx.orgId),
+          use: 'official',
+          value: identifierValue,
+        },
+      ],
       status: 'active',
       ...(item.compoundFormCode
         ? {
@@ -842,14 +1025,18 @@ export class FhirMapper {
                 {
                   system: SYS.MEDICATION_FORM,
                   code: item.compoundFormCode,
-                  ...(item.compoundFormName ? { display: item.compoundFormName } : {}),
+                  ...(item.compoundFormName
+                    ? { display: item.compoundFormName }
+                    : {}),
                 },
               ],
             },
           }
         : {}),
       ingredient: (item.ingredients ?? []).map((i) => ({
-        itemCodeableConcept: { coding: [{ system: SYS.KFA, code: i.kfaCode, display: i.name }] },
+        itemCodeableConcept: {
+          coding: [{ system: SYS.KFA, code: i.kfaCode, display: i.name }],
+        },
         isActive: true,
         strength: {
           numerator: strengthQuantity(i.amount, i.amountUnit),
@@ -924,7 +1111,9 @@ export class FhirMapper {
         },
       ],
       dispenseRequest: {
-        ...(quantity ? { quantity: dispenseQuantity(item, kfa, quantity) } : {}),
+        ...(quantity
+          ? { quantity: dispenseQuantity(item, kfa, quantity) }
+          : {}),
         ...(days
           ? {
               expectedSupplyDuration: {
@@ -1858,40 +2047,72 @@ export class FhirMapper {
     const at = fhirDateTime(item.dispensedAt);
     const quantity = leadingNumber(item.quantity);
     const days = durationDays(item.duration);
-    const text = [item.dosage, item.frequency, item.duration ? `selama ${item.duration}` : null]
+    const text = [
+      item.dosage,
+      item.frequency,
+      item.duration ? `selama ${item.duration}` : null,
+    ]
       .filter(Boolean)
       .join(', ');
     return {
       resourceType: 'MedicationDispense',
       identifier: [
-        { system: ids('prescription', ctx.orgId), use: 'official', value: String(encounter.id) },
-        { system: ids('prescription-item', ctx.orgId), use: 'official', value: `${encounter.id}-${item.id}` },
+        {
+          system: ids('prescription', ctx.orgId),
+          use: 'official',
+          value: String(encounter.id),
+        },
+        {
+          system: ids('prescription-item', ctx.orgId),
+          use: 'official',
+          value: `${encounter.id}-${item.id}`,
+        },
       ],
       status: 'completed',
       category: {
         coding: [
           {
-            system: 'http://terminology.hl7.org/fhir/CodeSystem/medicationdispense-category',
+            system:
+              'http://terminology.hl7.org/fhir/CodeSystem/medicationdispense-category',
             code: 'outpatient',
             display: 'Outpatient',
           },
         ],
       },
-      medicationReference: { reference: `Medication/${refs.medicationId}`, display: kfa?.name ?? item.drugName },
+      medicationReference: {
+        reference: `Medication/${refs.medicationId}`,
+        display: kfa?.name ?? item.drugName,
+      },
       subject: patientRef(ctx),
       context: encounterRef(ctx),
       performer: [{ actor: practitionerRef(ctx) }],
-      location: { reference: `Location/${ctx.location.id}`, display: ctx.location.name },
-      authorizingPrescription: [{ reference: `MedicationRequest/${refs.requestId}` }],
+      location: {
+        reference: `Location/${ctx.location.id}`,
+        display: ctx.location.name,
+      },
+      authorizingPrescription: [
+        { reference: `MedicationRequest/${refs.requestId}` },
+      ],
       ...(quantity ? { quantity: dispenseQuantity(item, kfa, quantity) } : {}),
-      ...(days ? { daysSupply: { value: days, unit: 'days', system: SYS.UCUM, code: 'd' } } : {}),
+      ...(days
+        ? {
+            daysSupply: {
+              value: days,
+              unit: 'days',
+              system: SYS.UCUM,
+              code: 'd',
+            },
+          }
+        : {}),
       whenPrepared: at,
       whenHandedOver: at,
       dosageInstruction: [
         {
           sequence: 1,
           text: text || item.drugName,
-          ...(item.instructions ? { patientInstruction: item.instructions } : {}),
+          ...(item.instructions
+            ? { patientInstruction: item.instructions }
+            : {}),
           ...routeOf(item, kfa),
         },
       ],
@@ -1910,18 +2131,27 @@ export class FhirMapper {
     const doseUnit = item.administeredDose?.replace(/^[\d.,\s]+/, '').trim();
     return {
       resourceType: 'MedicationAdministration',
-      identifier: [{ system: ids('medicationadministration', ctx.orgId), value: `ADM-${item.id}` }],
+      identifier: [
+        {
+          system: ids('medicationadministration', ctx.orgId),
+          value: `ADM-${item.id}`,
+        },
+      ],
       status: 'completed',
       category: {
         coding: [
           {
-            system: 'http://terminology.hl7.org/CodeSystem/medication-admin-category',
+            system:
+              'http://terminology.hl7.org/CodeSystem/medication-admin-category',
             code: 'outpatient',
             display: 'Outpatient',
           },
         ],
       },
-      medicationReference: { reference: `Medication/${refs.medicationId}`, display: kfa?.name ?? item.drugName },
+      medicationReference: {
+        reference: `Medication/${refs.medicationId}`,
+        display: kfa?.name ?? item.drugName,
+      },
       subject: patientRef(ctx),
       context: encounterRef(ctx),
       effectivePeriod: { start: at, end: at },
@@ -1930,7 +2160,9 @@ export class FhirMapper {
       dosage: {
         text: item.administeredDose || item.dosage || item.drugName,
         ...routeOf(item, kfa),
-        ...(dose ? { dose: { value: dose, ...(doseUnit ? { unit: doseUnit } : {}) } } : {}),
+        ...(dose
+          ? { dose: { value: dose, ...(doseUnit ? { unit: doseUnit } : {}) } }
+          : {}),
       },
     };
   }
@@ -1943,8 +2175,20 @@ export class FhirMapper {
   ) {
     const coded = (v: unknown) =>
       v === 'tidak_sesuai'
-        ? { valueCoding: { system: SYS.CLINICAL_TERM, code: 'OV000053', display: 'Tidak Sesuai' } }
-        : { valueCoding: { system: SYS.CLINICAL_TERM, code: 'OV000052', display: 'Sesuai' } };
+        ? {
+            valueCoding: {
+              system: SYS.CLINICAL_TERM,
+              code: 'OV000053',
+              display: 'Tidak Sesuai',
+            },
+          }
+        : {
+            valueCoding: {
+              system: SYS.CLINICAL_TERM,
+              code: 'OV000052',
+              display: 'Sesuai',
+            },
+          };
     return {
       resourceType: 'QuestionnaireResponse',
       questionnaire: PRESCRIPTION_REVIEW_QUESTIONNAIRE,
@@ -1971,7 +2215,9 @@ export class FhirMapper {
         {
           linkId: '4',
           text: 'Resep yang dilakukan pengkajian resep',
-          answer: requestIds.map((id) => ({ valueReference: { reference: `MedicationRequest/${id}` } })),
+          answer: requestIds.map((id) => ({
+            valueReference: { reference: `MedicationRequest/${id}` },
+          })),
         },
       ],
     };
@@ -1979,7 +2225,13 @@ export class FhirMapper {
 
   // ── 7. Tujuan perawatan, 14. Penilaian risiko, 20. Diet ──────────────
 
-  static toGoal(goal: SoapGoal, soapId: number, when: Date, ctx: FhirContext, conditionIds: string[]) {
+  static toGoal(
+    goal: SoapGoal,
+    soapId: number,
+    when: Date,
+    ctx: FhirContext,
+    conditionIds: string[],
+  ) {
     return {
       resourceType: 'Goal',
       identifier: [{ system: ids('goal', ctx.orgId), value: `GOAL-${soapId}` }],
@@ -1987,13 +2239,25 @@ export class FhirMapper {
       category: [
         {
           coding: [
-            { system: 'http://terminology.hl7.org/CodeSystem/goal-category', code: 'nursing', display: 'Nursing' },
+            {
+              system: 'http://terminology.hl7.org/CodeSystem/goal-category',
+              code: 'nursing',
+              display: 'Nursing',
+            },
           ],
         },
       ],
       description: {
         ...(goal.code
-          ? { coding: [{ system: SYS.SNOMED, code: goal.code, ...(goal.display ? { display: goal.display } : {}) }] }
+          ? {
+              coding: [
+                {
+                  system: SYS.SNOMED,
+                  code: goal.code,
+                  ...(goal.display ? { display: goal.display } : {}),
+                },
+              ],
+            }
           : {}),
         text: goal.text,
       },
@@ -2002,11 +2266,23 @@ export class FhirMapper {
       ...(goal.dueDate ? { target: [{ dueDate: goal.dueDate }] } : {}),
       statusDate: fhirDateTime(when)?.slice(0, 10),
       expressedBy: practitionerRef(ctx),
-      ...(conditionIds.length ? { addresses: conditionIds.map((id) => ({ reference: `Condition/${id}` })) } : {}),
+      ...(conditionIds.length
+        ? {
+            addresses: conditionIds.map((id) => ({
+              reference: `Condition/${id}`,
+            })),
+          }
+        : {}),
     };
   }
 
-  static toRiskAssessment(risk: SoapRisk, soapId: number, when: Date, ctx: FhirContext, conditionIds: string[]) {
+  static toRiskAssessment(
+    risk: SoapRisk,
+    soapId: number,
+    when: Date,
+    ctx: FhirContext,
+    conditionIds: string[],
+  ) {
     const level = {
       negligible: 'Negligible likelihood',
       low: 'Low likelihood',
@@ -2016,28 +2292,55 @@ export class FhirMapper {
     }[risk.level];
     return {
       resourceType: 'RiskAssessment',
-      identifier: [{ system: ids('riskassessment', ctx.orgId), value: `RISK-${soapId}` }],
+      identifier: [
+        { system: ids('riskassessment', ctx.orgId), value: `RISK-${soapId}` },
+      ],
       status: 'final',
-      code: { coding: [{ system: SYS.SNOMED, code: risk.code, display: risk.display }] },
+      code: {
+        coding: [
+          { system: SYS.SNOMED, code: risk.code, display: risk.display },
+        ],
+      },
       subject: patientRef(ctx),
       encounter: encounterRef(ctx),
       occurrenceDateTime: fhirDateTime(when),
-      ...(conditionIds[0] ? { condition: { reference: `Condition/${conditionIds[0]}` } } : {}),
+      ...(conditionIds[0]
+        ? { condition: { reference: `Condition/${conditionIds[0]}` } }
+        : {}),
       performer: practitionerRef(ctx),
-      ...(conditionIds.length ? { reasonReference: conditionIds.map((id) => ({ reference: `Condition/${id}` })) } : {}),
+      ...(conditionIds.length
+        ? {
+            reasonReference: conditionIds.map((id) => ({
+              reference: `Condition/${id}`,
+            })),
+          }
+        : {}),
       prediction: [
         {
           ...(risk.outcomeCode
             ? {
                 outcome: {
                   coding: [
-                    { system: SYS.SNOMED, code: risk.outcomeCode, ...(risk.outcomeDisplay ? { display: risk.outcomeDisplay } : {}) },
+                    {
+                      system: SYS.SNOMED,
+                      code: risk.outcomeCode,
+                      ...(risk.outcomeDisplay
+                        ? { display: risk.outcomeDisplay }
+                        : {}),
+                    },
                   ],
                 },
               }
             : {}),
           qualitativeRisk: {
-            coding: [{ system: 'http://terminology.hl7.org/CodeSystem/risk-probability', code: risk.level, display: level }],
+            coding: [
+              {
+                system:
+                  'http://terminology.hl7.org/CodeSystem/risk-probability',
+                code: risk.level,
+                display: level,
+              },
+            ],
           },
         },
       ],
@@ -2046,10 +2349,17 @@ export class FhirMapper {
     };
   }
 
-  static toNutritionOrder(diet: SoapDiet, soapId: number, when: Date, ctx: FhirContext) {
+  static toNutritionOrder(
+    diet: SoapDiet,
+    soapId: number,
+    when: Date,
+    ctx: FhirContext,
+  ) {
     return {
       resourceType: 'NutritionOrder',
-      identifier: [{ system: ids('nutritionorder', ctx.orgId), value: `DIET-${soapId}` }],
+      identifier: [
+        { system: ids('nutritionorder', ctx.orgId), value: `DIET-${soapId}` },
+      ],
       status: 'active',
       intent: diet.intent,
       patient: patientRef(ctx),
@@ -2057,7 +2367,9 @@ export class FhirMapper {
       dateTime: fhirDateTime(when),
       orderer: practitionerRef(ctx),
       oralDiet: {
-        type: diet.types.map((t) => ({ coding: [{ system: t.system, code: t.code, display: t.display }] })),
+        type: diet.types.map((t) => ({
+          coding: [{ system: t.system, code: t.code, display: t.display }],
+        })),
         ...(diet.note ? { instruction: diet.note } : {}),
       },
       ...(diet.note ? { note: [{ text: diet.note }] } : {}),
@@ -2078,9 +2390,23 @@ export class FhirMapper {
     hospitalCourse: string,
   ) {
     const KEMKES = 'http://terminology.kemkes.go.id';
-    const entries = (g: ResumeGroup) => refs[g].map((reference) => ({ reference }));
-    const sub = (title: string, code: string, display: string, g: ResumeGroup) =>
-      refs[g].length ? [{ title, code: { coding: [{ system: SYS.LOINC, code, display }] }, entry: entries(g) }] : [];
+    const entries = (g: ResumeGroup) =>
+      refs[g].map((reference) => ({ reference }));
+    const sub = (
+      title: string,
+      code: string,
+      display: string,
+      g: ResumeGroup,
+    ) =>
+      refs[g].length
+        ? [
+            {
+              title,
+              code: { coding: [{ system: SYS.LOINC, code, display }] },
+              entry: entries(g),
+            },
+          ]
+        : [];
     const section = (
       title: string,
       system: string,
@@ -2088,63 +2414,170 @@ export class FhirMapper {
       display: string,
       body: { entry?: { reference: string }[]; section?: unknown[] },
     ) =>
-      (body.entry?.length || body.section?.length)
+      body.entry?.length || body.section?.length
         ? [{ title, code: { coding: [{ system, code, display }] }, ...body }]
         : [];
     const sections = [
       ...section('Anamnesis', KEMKES, 'TK000003', 'Anamnesis', {
         section: [
-          ...sub('Keluhan Utama', '10154-3', 'Chief complaint Narrative - Reported', 'chiefComplaint'),
+          ...sub(
+            'Keluhan Utama',
+            '10154-3',
+            'Chief complaint Narrative - Reported',
+            'chiefComplaint',
+          ),
           ...sub('Riwayat Alergi', '48765-2', 'Allergies', 'allergy'),
-          ...sub('Riwayat Penyakit Pribadi Sekarang', '10164-2', 'History of Present illness Narrative', 'history'),
+          ...sub(
+            'Riwayat Penyakit Pribadi Sekarang',
+            '10164-2',
+            'History of Present illness Narrative',
+            'history',
+          ),
         ],
       }),
       ...section('Pemeriksaan Fisik', KEMKES, 'TK000007', 'Pemeriksaan Fisik', {
         section: [
           ...sub('Tanda Vital', '8716-3', 'Vital signs', 'vitals'),
-          ...sub('Pemeriksaan Fisik Head to Toe', '10187-3', 'Review of systems Narrative - Reported', 'exam'),
+          ...sub(
+            'Pemeriksaan Fisik Head to Toe',
+            '10187-3',
+            'Review of systems Narrative - Reported',
+            'exam',
+          ),
         ],
       }),
-      ...section('Pemeriksaan Fungsional', SYS.LOINC, '47420-5', 'Functional status assessment note', {
-        entry: entries('functional'),
-      }),
-      ...section('Perencanaan Perawatan', SYS.LOINC, '18776-5', 'Plan of care note', { entry: entries('carePlan') }),
-      ...section('Pemeriksaan Penunjang', KEMKES, 'TK000009', 'Hasil Pemeriksaan Penunjang', {
-        section: [
-          ...sub('Hasil Pemeriksaan Laboratorium', '11502-2', 'Laboratory report', 'lab'),
-          ...sub('Hasil Pemeriksaan Radiologi', '18782-3', 'Radiology Study observation (narrative)', 'radiology'),
-        ],
-      }),
+      ...section(
+        'Pemeriksaan Fungsional',
+        SYS.LOINC,
+        '47420-5',
+        'Functional status assessment note',
+        {
+          entry: entries('functional'),
+        },
+      ),
+      ...section(
+        'Perencanaan Perawatan',
+        SYS.LOINC,
+        '18776-5',
+        'Plan of care note',
+        { entry: entries('carePlan') },
+      ),
+      ...section(
+        'Pemeriksaan Penunjang',
+        KEMKES,
+        'TK000009',
+        'Hasil Pemeriksaan Penunjang',
+        {
+          section: [
+            ...sub(
+              'Hasil Pemeriksaan Laboratorium',
+              '11502-2',
+              'Laboratory report',
+              'lab',
+            ),
+            ...sub(
+              'Hasil Pemeriksaan Radiologi',
+              '18782-3',
+              'Radiology Study observation (narrative)',
+              'radiology',
+            ),
+          ],
+        },
+      ),
       ...section('Diagnosis', KEMKES, 'TK000004', 'Diagnosis', {
-        section: [...sub('Diagnosis Akhir', '78375-3', 'Discharge diagnosis Narrative', 'diagnosis')],
+        section: [
+          ...sub(
+            'Diagnosis Akhir',
+            '78375-3',
+            'Discharge diagnosis Narrative',
+            'diagnosis',
+          ),
+        ],
       }),
-      ...section('Tindakan/Prosedur Medis', KEMKES, 'TK000005', 'Tindakan/Prosedur Medis', {
-        entry: entries('procedure'),
-      }),
+      ...section(
+        'Tindakan/Prosedur Medis',
+        KEMKES,
+        'TK000005',
+        'Tindakan/Prosedur Medis',
+        {
+          entry: entries('procedure'),
+        },
+      ),
       ...section('Farmasi', KEMKES, 'TK000013', 'Obat', {
-        section: [...sub('Obat Saat Kunjungan', '42346-7', 'Medications on admission (narrative)', 'medication')],
+        section: [
+          ...sub(
+            'Obat Saat Kunjungan',
+            '42346-7',
+            'Medications on admission (narrative)',
+            'medication',
+          ),
+        ],
       }),
-      ...section('Diet', SYS.LOINC, '42344-2', 'Discharge diet (narrative)', { entry: entries('diet') }),
-      ...section('Edukasi', SYS.LOINC, '34895-3', 'Education note', { entry: entries('education') }),
-      ...section('Kondisi Saat Meninggalkan Rumah Sakit', SYS.LOINC, '10184-0', 'Hospital discharge physical findings Narrative', {
-        entry: entries('discharge'),
+      ...section('Diet', SYS.LOINC, '42344-2', 'Discharge diet (narrative)', {
+        entry: entries('diet'),
       }),
-      ...section('Rencana Tindak Lanjut', SYS.LOINC, '8653-8', 'Hospital Discharge instructions', {
-        entry: entries('followUp'),
+      ...section('Edukasi', SYS.LOINC, '34895-3', 'Education note', {
+        entry: entries('education'),
       }),
+      ...section(
+        'Kondisi Saat Meninggalkan Rumah Sakit',
+        SYS.LOINC,
+        '10184-0',
+        'Hospital discharge physical findings Narrative',
+        {
+          entry: entries('discharge'),
+        },
+      ),
+      ...section(
+        'Rencana Tindak Lanjut',
+        SYS.LOINC,
+        '8653-8',
+        'Hospital Discharge instructions',
+        {
+          entry: entries('followUp'),
+        },
+      ),
       {
         title: 'Perjalanan Kunjungan Pasien',
-        code: { coding: [{ system: SYS.LOINC, code: '8648-8', display: 'Hospital course Narrative' }] },
-        text: { status: 'generated', div: `<div xmlns="http://www.w3.org/1999/xhtml">${escapeXml(hospitalCourse)}</div>` },
+        code: {
+          coding: [
+            {
+              system: SYS.LOINC,
+              code: '8648-8',
+              display: 'Hospital course Narrative',
+            },
+          ],
+        },
+        text: {
+          status: 'generated',
+          div: `<div xmlns="http://www.w3.org/1999/xhtml">${escapeXml(hospitalCourse)}</div>`,
+        },
       },
     ];
     const date = fhirDateTime(encounter.finishedTime ?? encounter.updatedAt);
     return {
       resourceType: 'Composition',
-      identifier: { system: ids('composition', ctx.orgId), value: `RESUME-${encounter.id}` },
+      identifier: {
+        system: ids('composition', ctx.orgId),
+        value: `RESUME-${encounter.id}`,
+      },
       status: 'final',
-      type: { coding: [{ system: SYS.LOINC, code: '88645-7', display: 'Outpatient hospital Discharge summary' }] },
-      category: [{ coding: [{ system: SYS.LOINC, code: 'LP173421-1', display: 'Report' }] }],
+      type: {
+        coding: [
+          {
+            system: SYS.LOINC,
+            code: '88645-7',
+            display: 'Outpatient hospital Discharge summary',
+          },
+        ],
+      },
+      category: [
+        {
+          coding: [
+            { system: SYS.LOINC, code: 'LP173421-1', display: 'Report' },
+          ],
+        },
+      ],
       subject: patientRef(ctx),
       encounter: encounterRef(ctx),
       date,

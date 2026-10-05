@@ -1,4 +1,9 @@
 import {
+  ENV_SECRET_MARKER,
+  envCredentials,
+  withEffectiveCredentials,
+} from './satusehat-credentials';
+import {
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -173,16 +178,18 @@ export class SatusehatClientService {
   }
 
   private async loadConfiguredClinic(clinicId: number): Promise<Clinic> {
-    const clinic = await this.clinicRepository.findOne({
+    const clinic = withEffectiveCredentials(
+      await this.clinicRepository.findOne({
       where: { id: clinicId },
-    });
+    }),
+    );
     if (
       !clinic?.satusehatOrgId ||
       !clinic.satusehatClientId ||
       !clinic.satusehatClientSecret
     ) {
       throw new ServiceUnavailableException(
-        'Konfigurasi SATUSEHAT untuk klinik yang sedang aktif belum diisi — buka menu SATUSEHAT → Konfigurasi (Organization ID, Client ID, Client Secret)',
+        'Kredensial SATUSEHAT belum diatur — isi SATUSEHAT_ORGANIZATION_ID, SATUSEHAT_CLIENT_ID, SATUSEHAT_CLIENT_SECRET di env server (atau Konfigurasi klinik)',
       );
     }
     return clinic;
@@ -191,10 +198,10 @@ export class SatusehatClientService {
   private async refreshToken(clinic: Clinic): Promise<string> {
     let clientSecret: string;
     try {
-      clientSecret = decrypt(
-        clinic.satusehatClientSecret as string,
-        secretKey(),
-      );
+      clientSecret =
+        clinic.satusehatClientSecret === ENV_SECRET_MARKER
+          ? (envCredentials()?.clientSecret as string)
+          : decrypt(clinic.satusehatClientSecret as string, secretKey());
     } catch (err) {
       if (err instanceof ServiceUnavailableException) throw err;
       throw new ServiceUnavailableException(

@@ -39,12 +39,13 @@ export class SatusehatGlobalOauthService {
   private async refreshToken(
     environment: SatusehatEnvironment,
   ): Promise<string> {
-    const clientId = this.configService.get<string>(
-      'SATUSEHAT_GLOBAL_CLIENT_ID',
-    );
-    const clientSecret = this.configService.get<string>(
-      'SATUSEHAT_GLOBAL_CLIENT_SECRET',
-    );
+    // Master data & KFA: kredensial global, atau kredensial SATUSEHAT utama
+    const clientId =
+      this.configService.get<string>('SATUSEHAT_GLOBAL_CLIENT_ID') ||
+      this.configService.get<string>('SATUSEHAT_CLIENT_ID');
+    const clientSecret =
+      this.configService.get<string>('SATUSEHAT_GLOBAL_CLIENT_SECRET') ||
+      this.configService.get<string>('SATUSEHAT_CLIENT_SECRET');
 
     if (!clientId || !clientSecret) {
       throw new ServiceUnavailableException(

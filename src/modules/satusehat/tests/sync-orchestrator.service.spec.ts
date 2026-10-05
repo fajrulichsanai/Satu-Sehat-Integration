@@ -33,6 +33,7 @@ describe('SyncOrchestratorService', () => {
       repo(), // RadiologyOrder
       {} as any, // ClinicalCatalogService
       repo(), // PrescriptionReview
+      repo(), // SatusehatOrganization
     );
   });
 
@@ -40,7 +41,7 @@ describe('SyncOrchestratorService', () => {
     clinicRepo.findOne.mockResolvedValue({ id: 1, satusehatOrgId: null });
     const result = await service.syncEncounterFull(5, 1);
     expect(result.success).toBe(false);
-    expect(result.steps[0].message).toContain('Konfigurasi SATUSEHAT');
+    expect(result.steps[0].message).toContain('Kredensial SATUSEHAT');
     expect(encounterRepo.findOne).not.toHaveBeenCalled();
   });
 

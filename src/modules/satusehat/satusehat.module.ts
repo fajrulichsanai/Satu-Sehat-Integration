@@ -27,6 +27,7 @@ import { SatusehatMonitorService } from './monitor/satusehat-monitor.service';
 import { SatusehatConfigService } from './satusehat-config.service';
 import { KfaService } from './kfa/kfa.service';
 import { SatusehatOnboardingService } from './onboarding/satusehat-onboarding.service';
+import { SatusehatOrganization } from './onboarding/entities/satusehat-organization.entity';
 import { KfaProductEntity } from './kfa/entities/kfa-product.entity';
 import { SsrmeService } from './ssrme/ssrme.service';
 import { SsrmeController } from './ssrme/ssrme.controller';
@@ -64,6 +65,7 @@ import { RadiologyOrder } from '../diagnostics/entities/radiology-order.entity';
       LabResult,
       RadiologyOrder,
       PrescriptionReview,
+      SatusehatOrganization,
     ]),
   ],
   controllers: [SatusehatController, SsrmeController],

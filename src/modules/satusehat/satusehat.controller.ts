@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -18,6 +19,11 @@ import { SatusehatMonitorService } from './monitor/satusehat-monitor.service';
 import { SatusehatConfigService } from './satusehat-config.service';
 import { SatusehatOnboardingService } from './onboarding/satusehat-onboarding.service';
 import { SaveSatusehatConfigDto } from './dto/satusehat-config.dto';
+import {
+  FacilityProfileDto,
+  SaveLocationDto,
+  SaveOrganizationDto,
+} from './onboarding/dto/onboarding.dto';
 import {
   ListResourcesQueryDto,
   ListSyncLogsQueryDto,
@@ -74,53 +80,160 @@ export class SatusehatController {
     );
   }
 
-  // ── Persiapan: Autentikasi → Organization → Location → Practitioner → Patient ──
+  // ── Onboarding: Autentikasi → Profil → Organization → Location → Practitioner → Patient ──
 
   @Get('onboarding')
   @Roles(...VIEWERS)
-  @ApiOperation({ summary: 'Status persiapan (prasyarat) SATUSEHAT' })
+  @ApiOperation({ summary: 'Status onboarding SATUSEHAT' })
   async onboardingStatus(@ClinicId() clinicId: number) {
     return ApiResponse.success(await this.onboarding.status(clinicId));
   }
 
   @Post('onboarding/auth')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Langkah 1: uji autentikasi (token)' })
+  @ApiOperation({ summary: 'Uji autentikasi (token) dengan Kode Akses API' })
   async onboardingAuth(@ClinicId() clinicId: number) {
     return ApiResponse.success(await this.onboarding.testAuth(clinicId));
   }
 
-  @Post('onboarding/organization/verify')
-  @HttpCode(200)
-  @ApiOperation({ summary: 'Langkah 2a: verifikasi Organization induk' })
-  async onboardingVerifyOrg(@ClinicId() clinicId: number) {
-    return ApiResponse.success(await this.onboarding.verifyOrganization(clinicId));
+  @Put('onboarding/profile')
+  @ApiOperation({
+    summary: 'Simpan profil fasyankes (jenis, alamat, wilayah, kontak)',
+  })
+  async onboardingProfile(
+    @Body() dto: FacilityProfileDto,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: { userId: number },
+  ) {
+    return ApiResponse.success(
+      await this.onboarding.saveProfile(clinicId, dto, user.userId),
+      'Profil fasyankes disimpan',
+    );
   }
 
-  @Post('onboarding/organization/structure')
+  @Post('onboarding/organization/verify')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Langkah 2b: buat sub-organisasi, Poli, Apotek' })
-  async onboardingOrgStructure(@ClinicId() clinicId: number) {
-    return ApiResponse.success(await this.onboarding.buildOrganizationStructure(clinicId));
+  @ApiOperation({ summary: 'Verifikasi Organization induk (Organization ID)' })
+  async onboardingVerifyOrg(@ClinicId() clinicId: number) {
+    return ApiResponse.success(
+      await this.onboarding.verifyOrganization(clinicId),
+    );
+  }
+
+  @Post('onboarding/organizations/template')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Isi draf struktur organisasi sesuai jenis fasyankes',
+  })
+  async onboardingOrgTemplate(
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: { userId: number },
+  ) {
+    return ApiResponse.success(
+      await this.onboarding.applyTemplate(clinicId, user.userId),
+    );
+  }
+
+  @Post('onboarding/organizations')
+  @ApiOperation({ summary: 'Tambah sub-organisasi (draf lokal)' })
+  async onboardingCreateOrg(
+    @Body() dto: SaveOrganizationDto,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: { userId: number },
+  ) {
+    return ApiResponse.success(
+      await this.onboarding.saveOrganization(clinicId, null, dto, user.userId),
+      'Organisasi disimpan',
+    );
+  }
+
+  @Put('onboarding/organizations/:id')
+  @ApiOperation({ summary: 'Ubah sub-organisasi' })
+  async onboardingUpdateOrg(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: SaveOrganizationDto,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: { userId: number },
+  ) {
+    return ApiResponse.success(
+      await this.onboarding.saveOrganization(clinicId, id, dto, user.userId),
+      'Organisasi disimpan',
+    );
+  }
+
+  @Delete('onboarding/organizations/:id')
+  @ApiOperation({ summary: 'Hapus draf sub-organisasi (belum terkirim)' })
+  async onboardingDeleteOrg(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+  ) {
+    await this.onboarding.deleteOrganization(clinicId, id);
+    return ApiResponse.success(null, 'Organisasi dihapus');
+  }
+
+  @Post('onboarding/organizations/:id/send')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Kirim (POST/PUT) Organization ke SATUSEHAT' })
+  async onboardingSendOrg(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+  ) {
+    return ApiResponse.success(
+      await this.onboarding.sendOrganization(clinicId, id),
+    );
   }
 
   @Post('onboarding/locations')
+  @ApiOperation({ summary: 'Tambah Location (ruangan/gedung)' })
+  async onboardingCreateLocation(
+    @Body() dto: SaveLocationDto,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: { userId: number },
+  ) {
+    return ApiResponse.success(
+      await this.onboarding.saveLocation(clinicId, null, dto, user.userId),
+      'Lokasi disimpan',
+    );
+  }
+
+  @Put('onboarding/locations/:id')
+  @ApiOperation({ summary: 'Ubah data Location' })
+  async onboardingUpdateLocation(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: SaveLocationDto,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: { userId: number },
+  ) {
+    return ApiResponse.success(
+      await this.onboarding.saveLocation(clinicId, id, dto, user.userId),
+      'Lokasi disimpan',
+    );
+  }
+
+  @Post('onboarding/locations/:id/send')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Langkah 3: daftarkan ruangan sebagai Location' })
-  async onboardingLocations(@ClinicId() clinicId: number) {
-    return ApiResponse.success(await this.onboarding.registerLocations(clinicId));
+  @ApiOperation({ summary: 'Kirim (POST/PUT) Location ke SATUSEHAT' })
+  async onboardingSendLocation(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+  ) {
+    return ApiResponse.success(
+      await this.onboarding.sendLocation(clinicId, id),
+    );
   }
 
   @Post('onboarding/practitioners')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Langkah 4: cocokkan tenaga kesehatan (NIK → IHS)' })
+  @ApiOperation({ summary: 'Cocokkan tenaga kesehatan (NIK → IHS)' })
   async onboardingPractitioners(@ClinicId() clinicId: number) {
-    return ApiResponse.success(await this.onboarding.matchPractitioners(clinicId));
+    return ApiResponse.success(
+      await this.onboarding.matchPractitioners(clinicId),
+    );
   }
 
   @Post('onboarding/patients')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Langkah 5: cocokkan pasien (NIK → IHS), 50 per permintaan' })
+  @ApiOperation({ summary: 'Cocokkan pasien (NIK → IHS), 50 per permintaan' })
   async onboardingPatients(@ClinicId() clinicId: number) {
     return ApiResponse.success(await this.onboarding.matchPatients(clinicId));
   }

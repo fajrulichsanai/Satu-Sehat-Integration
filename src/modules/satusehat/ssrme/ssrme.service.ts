@@ -1,3 +1,4 @@
+import { withEffectiveCredentials } from '../satusehat-credentials';
 import {
   BadGatewayException,
   BadRequestException,
@@ -153,10 +154,12 @@ export class SsrmeService {
     ) {
       throw new ForbiddenException('Akses ditolak: bukan pasien Anda');
     }
-    const clinic = await this.clinicRepo.findOne({ where: { id: clinicId } });
+    const clinic = withEffectiveCredentials(
+      await this.clinicRepo.findOne({ where: { id: clinicId } }),
+    );
     if (!clinic?.satusehatOrgId) {
       throw new BadRequestException(
-        'Konfigurasi SATUSEHAT untuk klinik yang sedang aktif belum diisi — buka menu SATUSEHAT → Konfigurasi (Organization ID, Client ID, Client Secret)',
+        'Kredensial SATUSEHAT belum diatur — isi SATUSEHAT_ORGANIZATION_ID, SATUSEHAT_CLIENT_ID, SATUSEHAT_CLIENT_SECRET di env server (atau Konfigurasi klinik)',
       );
     }
     const [patientId, practitionerId] = await Promise.all([

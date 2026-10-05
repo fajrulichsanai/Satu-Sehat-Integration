@@ -1,3 +1,4 @@
+import { withEffectiveCredentials } from '../satusehat-credentials';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
@@ -180,7 +181,9 @@ export class SatusehatMonitorService {
   ) {}
 
   async getSummary(clinicId: number) {
-    const clinic = await this.clinicRepo.findOne({ where: { id: clinicId } });
+    const clinic = withEffectiveCredentials(
+      await this.clinicRepo.findOne({ where: { id: clinicId } }),
+    );
     if (!clinic) throw new NotFoundException('Klinik tidak ditemukan');
 
     const resources = await Promise.all(

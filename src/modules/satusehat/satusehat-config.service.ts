@@ -1,3 +1,4 @@
+import { credentialSource, envCredentials } from './satusehat-credentials';
 import {
   BadRequestException,
   Injectable,
@@ -23,12 +24,15 @@ export class SatusehatConfigService {
 
   async get(clinicId: number) {
     const clinic = await this.load(clinicId);
+    const source = credentialSource(clinic);
+    const env = envCredentials();
     return {
-      configured: !!(
-        clinic.satusehatOrgId &&
-        clinic.satusehatClientId &&
-        clinic.satusehatClientSecret
-      ),
+      configured: source !== null,
+      /** 'clinic' = kredensial klinik sendiri, 'env' = Kode Akses API dari env server */
+      source,
+      envAvailable: !!env,
+      envOrganizationId: env?.orgId ?? null,
+      envEnvironment: env?.environment ?? null,
       organizationId: clinic.satusehatOrgId,
       clientId: clinic.satusehatClientId,
       hasClientSecret: !!clinic.satusehatClientSecret,
