@@ -21,6 +21,7 @@ import { SatusehatOnboardingService } from './onboarding/satusehat-onboarding.se
 import { SaveSatusehatConfigDto } from './dto/satusehat-config.dto';
 import {
   FacilityProfileDto,
+  FixNikDto,
   SaveLocationDto,
   SaveOrganizationDto,
 } from './onboarding/dto/onboarding.dto';
@@ -228,6 +229,36 @@ export class SatusehatController {
   async onboardingPractitioners(@ClinicId() clinicId: number) {
     return ApiResponse.success(
       await this.onboarding.matchPractitioners(clinicId),
+    );
+  }
+
+  @Post('onboarding/practitioners/:id/nik')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Isi/ganti NIK tenaga kesehatan lalu cocokkan ke SATUSEHAT',
+  })
+  async onboardingFixPractitioner(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: FixNikDto,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: { userId: number },
+  ) {
+    return ApiResponse.success(
+      await this.onboarding.fixPractitioner(clinicId, id, dto, user.userId),
+    );
+  }
+
+  @Post('onboarding/patients/:id/nik')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Isi/ganti NIK pasien lalu cocokkan ke SATUSEHAT' })
+  async onboardingFixPatient(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: FixNikDto,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: { userId: number },
+  ) {
+    return ApiResponse.success(
+      await this.onboarding.fixPatient(clinicId, id, dto, user.userId),
     );
   }
 

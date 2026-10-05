@@ -238,3 +238,13 @@ export class SaveLocationDto {
 
   @ApiPropertyOptional() @IsOptional() @IsBoolean() active?: boolean;
 }
+
+export class FixNikDto {
+  @ApiPropertyOptional({
+    description:
+      'NIK 16 digit; kosongkan untuk mencocokkan ulang NIK tersimpan',
+  })
+  @IsOptional()
+  @Matches(/^\d{16}$/, { message: 'NIK harus 16 digit angka' })
+  nik?: string;
+}

@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { SatusehatOnboardingService } from '../onboarding/satusehat-onboarding.service';
+import { hashNik } from '../../../common/utils/nik-crypto.util';
 
 const ENV_KEYS = [
   'SATUSEHAT_ORGANIZATION_ID',
@@ -265,5 +266,87 @@ describe('SatusehatOnboardingService (onboarding SATUSEHAT)', () => {
       satusehatProfile: { facilityType: 'tpmdg' },
     });
     await expect(service.sendLocation(1, 5)).rejects.toThrow('Lengkapi alamat');
+  });
+  describe('perbaiki NIK langsung dari Onboarding', () => {
+    let patients: Record<string, any>[];
+    let patientRepo: Record<string, jest.Mock>;
+    let svc: SatusehatOnboardingService;
+
+    beforeEach(() => {
+      process.env.PATIENT_DATA_ENCRYPTION_KEY =
+        'test-key-0123456789abcdef0123456789';
+      patients = [
+        {
+          id: 1,
+          clinicId: 1,
+          name: 'Ani',
+          nik: null,
+          nikHash: null,
+          satusehatPatientId: null,
+        },
+        {
+          id: 2,
+          clinicId: 1,
+          name: 'Budi',
+          nik: '3171010101010002',
+          nikHash: 'h2',
+          satusehatPatientId: null,
+        },
+      ];
+      const matches = (o: any, where: any) =>
+        Object.entries(where).every(([k, v]) => o[k] === v);
+      patientRepo = {
+        findOne: jest.fn(({ where }) =>
+          Promise.resolve(patients.find((p) => matches(p, where)) ?? null),
+        ),
+        save: jest.fn((p) => Promise.resolve(p)),
+      };
+      svc = new SatusehatOnboardingService(
+        clinicRepo as any,
+        locationRepo as any,
+        { findOne: jest.fn() } as any,
+        patientRepo as any,
+        orgRepo as any,
+        client as any,
+        orchestrator as any,
+      );
+    });
+
+    it('saves the NIK (hashed) and matches immediately (positive)', async () => {
+      orchestrator.patientIhsId.mockResolvedValue('P0001');
+      const res = await svc.fixPatient(1, 1, { nik: '3171010101010001' }, 9);
+      expect(res).toEqual({
+        id: 1,
+        name: 'Ani',
+        satusehatId: 'P0001',
+        nikMasked: '***0001',
+      });
+      expect(patients[0].nikHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(orchestrator.patientIhsId).toHaveBeenCalledWith(
+        1,
+        patients[0],
+        true,
+      );
+    });
+
+    it('keeps the NIK when SATUSEHAT has no match, and reports why (edge)', async () => {
+      orchestrator.patientIhsId.mockRejectedValue(
+        new Error('NIK pasien Ani tidak ditemukan di SATUSEHAT'),
+      );
+      await expect(
+        svc.fixPatient(1, 1, { nik: '3171010101010001' }, 9),
+      ).rejects.toThrow('tidak ditemukan');
+      expect(patientRepo.save).toHaveBeenCalled();
+      expect(patients[0].nik).toBe('3171010101010001');
+    });
+
+    it('refuses a NIK already used by another patient, or retry without NIK (negative)', async () => {
+      patients[1].nikHash = hashNik('3171010101010002');
+      await expect(
+        svc.fixPatient(1, 1, { nik: '3171010101010002' }, 9),
+      ).rejects.toThrow('sudah dipakai pasien Budi');
+      await expect(svc.fixPatient(1, 1, {}, 9)).rejects.toThrow('Isi NIK Ani');
+      expect(orchestrator.patientIhsId).not.toHaveBeenCalled();
+    });
   });
 });

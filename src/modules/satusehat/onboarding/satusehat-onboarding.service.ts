@@ -17,11 +17,13 @@ import { SatusehatClientService } from '../satusehat-client.service';
 import { SyncOrchestratorService } from '../sync/sync-orchestrator.service';
 import { FhirMapper } from '../fhir/fhir-mapper';
 import { readableFhirError } from '../fhir/fhir-error';
+import { hashNik, maskNik } from '../../../common/utils/nik-crypto.util';
 import { redactSyncError } from '../sync/entities/satusehat-sync-log.entity';
 import { SatusehatOrganization } from './entities/satusehat-organization.entity';
 import { SatusehatAddress, missingAddressFields } from './address';
 import {
   FacilityProfileDto,
+  FixNikDto,
   SaveLocationDto,
   SaveOrganizationDto,
 } from './dto/onboarding.dto';
@@ -36,6 +38,8 @@ import {
  */
 
 const PATIENT_BATCH = 50;
+/** Jumlah pasien belum terhubung yang ditampilkan di Onboarding */
+const PENDING_LIST = 100;
 
 /** Struktur awal yang disarankan per jenis fasyankes (draf, bisa diubah). */
 const TEMPLATES: Record<
@@ -106,6 +110,7 @@ export class SatusehatOnboardingService {
       practitioners,
       patientsTotal,
       patientsLinked,
+      patientsPending,
     ] = await Promise.all([
       this.orgRepo.find({ where: { clinicId }, order: { id: 'ASC' } }),
       this.locationRepo.find({ where: { clinicId }, order: { id: 'ASC' } }),
@@ -113,6 +118,11 @@ export class SatusehatOnboardingService {
       this.patientRepo.count({ where: { clinicId } }),
       this.patientRepo.count({
         where: { clinicId, satusehatPatientId: Not(IsNull()) },
+      }),
+      this.patientRepo.find({
+        where: { clinicId, satusehatPatientId: IsNull() },
+        order: { id: 'DESC' },
+        take: PENDING_LIST,
       }),
     ]);
     return {
@@ -160,8 +170,20 @@ export class SatusehatOnboardingService {
         name: p.name,
         satusehatId: p.satusehatPractitionerId ?? null,
         note: p.nik ? null : 'NIK belum diisi',
+        nikMasked: p.nik ? maskNik(p.nik) : null,
       })),
-      patients: { total: patientsTotal, linked: patientsLinked },
+      patients: {
+        total: patientsTotal,
+        linked: patientsLinked,
+        /** Pasien yang belum punya ID SATUSEHAT — bisa diperbaiki NIK-nya di sini */
+        pending: patientsPending.map((p) => ({
+          id: p.id,
+          name: p.name,
+          birthDate: p.birthDate ?? null,
+          nikMasked: p.nik ? maskNik(p.nik) : null,
+          error: p.nik ? (p.syncError ?? null) : 'NIK belum diisi',
+        })),
+      },
     };
   }
 
@@ -439,6 +461,105 @@ export class SatusehatOnboardingService {
       (p) => p.name,
     );
     return { ...result, skippedWithoutNik: list.filter((p) => !p.nik).length };
+  }
+
+  /**
+   * Simpan/ganti NIK satu tenaga kesehatan lalu langsung cari ID SATUSEHAT-nya.
+   * NIK tetap tersimpan walau pencarian gagal, supaya bisa dicoba ulang.
+   */
+  async fixPractitioner(
+    clinicId: number,
+    id: number,
+    dto: FixNikDto,
+    userId: number,
+  ) {
+    await this.configuredClinic(clinicId);
+    const practitioner = await this.practitionerRepo.findOne({
+      where: { id, clinicId },
+    });
+    if (!practitioner)
+      throw new NotFoundException('Tenaga kesehatan tidak ditemukan');
+    if (dto.nik && dto.nik !== practitioner.nik) {
+      const nikHash = hashNik(dto.nik);
+      const dup = await this.practitionerRepo.findOne({
+        where: { clinicId, nikHash },
+      });
+      if (dup && dup.id !== id)
+        throw new BadRequestException(`NIK ini sudah dipakai ${dup.name}`);
+      Object.assign(practitioner, {
+        nik: dto.nik,
+        nikHash,
+        satusehatPractitionerId: null,
+        updatedBy: userId,
+      });
+      await this.practitionerRepo.save(practitioner);
+    }
+    if (!practitioner.nik)
+      throw new BadRequestException(
+        `Isi NIK ${practitioner.name} terlebih dahulu`,
+      );
+    try {
+      const satusehatId = await this.orchestrator.practitionerIhsId(
+        clinicId,
+        practitioner,
+        true,
+      );
+      return {
+        id,
+        name: practitioner.name,
+        satusehatId,
+        nikMasked: maskNik(practitioner.nik),
+      };
+    } catch (err) {
+      throw new BadRequestException((err as Error).message);
+    }
+  }
+
+  /** Sama seperti fixPractitioner, untuk pasien (Master Patient Index). */
+  async fixPatient(
+    clinicId: number,
+    id: number,
+    dto: FixNikDto,
+    userId: number,
+  ) {
+    await this.configuredClinic(clinicId);
+    const patient = await this.patientRepo.findOne({ where: { id, clinicId } });
+    if (!patient) throw new NotFoundException('Pasien tidak ditemukan');
+    if (dto.nik && dto.nik !== patient.nik) {
+      const nikHash = hashNik(dto.nik);
+      const dup = await this.patientRepo.findOne({
+        where: { clinicId, nikHash },
+      });
+      if (dup && dup.id !== id)
+        throw new BadRequestException(
+          `NIK ini sudah dipakai pasien ${dup.name}`,
+        );
+      Object.assign(patient, {
+        nik: dto.nik,
+        nikHash,
+        satusehatPatientId: null,
+        syncError: null,
+        updatedBy: userId,
+      });
+      await this.patientRepo.save(patient);
+    }
+    if (!patient.nik)
+      throw new BadRequestException(`Isi NIK ${patient.name} terlebih dahulu`);
+    try {
+      const satusehatId = await this.orchestrator.patientIhsId(
+        clinicId,
+        patient,
+        true,
+      );
+      return {
+        id,
+        name: patient.name,
+        satusehatId,
+        nikMasked: maskNik(patient.nik),
+      };
+    } catch (err) {
+      throw new BadRequestException((err as Error).message);
+    }
   }
 
   // ── Bantuan ───────────────────────────────────────────────────────────

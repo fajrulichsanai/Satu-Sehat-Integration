@@ -148,8 +148,8 @@ export class SyncOrchestratorService {
   ): Promise<void> {
     try {
       const clinic = withEffectiveCredentials(
-      await this.clinicRepo.findOne({ where: { id: clinicId } }),
-    );
+        await this.clinicRepo.findOne({ where: { id: clinicId } }),
+      );
       if (!this.isConfigured(clinic)) return;
       const { steps } = await this.syncEncounterFull(encounterId, clinicId);
       const failed = steps.filter((s) => s.status === 'failed').length;
@@ -429,7 +429,13 @@ export class SyncOrchestratorService {
           await this.sendLinked(clinicId, '07. Tujuan Perawatan', {
             localType: 'soap_goal',
             localId: soap.id,
-            resource: FhirMapper.toGoal(soap.goal, soap.id, soapAt, ctx, problems2),
+            resource: FhirMapper.toGoal(
+              soap.goal,
+              soap.id,
+              soapAt,
+              ctx,
+              problems2,
+            ),
           }),
         );
       }
@@ -438,7 +444,13 @@ export class SyncOrchestratorService {
           await this.sendLinked(clinicId, '07. Penilaian Risiko', {
             localType: 'soap_risk',
             localId: soap.id,
-            resource: FhirMapper.toRiskAssessment(soap.riskAssessment, soap.id, soapAt, ctx, problems2),
+            resource: FhirMapper.toRiskAssessment(
+              soap.riskAssessment,
+              soap.id,
+              soapAt,
+              ctx,
+              problems2,
+            ),
           }),
         );
       }
@@ -447,7 +459,12 @@ export class SyncOrchestratorService {
           await this.sendLinked(clinicId, '10. Diet', {
             localType: 'soap_diet',
             localId: soap.id,
-            resource: FhirMapper.toNutritionOrder(soap.diet, soap.id, soapAt, ctx),
+            resource: FhirMapper.toNutritionOrder(
+              soap.diet,
+              soap.id,
+              soapAt,
+              ctx,
+            ),
           }),
         );
       }
@@ -466,8 +483,17 @@ export class SyncOrchestratorService {
 
     // 08. Pemeriksaan penunjang — laboratorium & radiologi
     const primaryConditionId = conditionIds[0]?.conditionId ?? null;
-    steps.push(...(await this.syncLab(clinicId, encounterId, ctx, primaryConditionId)));
-    steps.push(...(await this.syncRadiology(clinicId, encounterId, ctx, primaryConditionId)));
+    steps.push(
+      ...(await this.syncLab(clinicId, encounterId, ctx, primaryConditionId)),
+    );
+    steps.push(
+      ...(await this.syncRadiology(
+        clinicId,
+        encounterId,
+        ctx,
+        primaryConditionId,
+      )),
+    );
 
     // 09. Peresepan obat (KFA)
     const prescriptions = await this.prescriptionRepo.find({
@@ -585,9 +611,14 @@ export class SyncOrchestratorService {
 
     // 28. Resume medis — setelah kunjungan selesai, merangkum semua resource
     if (encounter.status === 'finished') {
-      const refs = Object.fromEntries(RESUME_GROUPS.map((g) => [g, [] as string[]])) as Record<ResumeGroup, string[]>;
+      const refs = Object.fromEntries(
+        RESUME_GROUPS.map((g) => [g, [] as string[]]),
+      ) as Record<ResumeGroup, string[]>;
       for (const st of steps) {
-        const group = st.status === 'success' && st.satusehatId ? resumeGroupOf(st.localType) : null;
+        const group =
+          st.status === 'success' && st.satusehatId
+            ? resumeGroupOf(st.localType)
+            : null;
         if (group) refs[group].push(`${st.resourceType}/${st.satusehatId}`);
       }
       const course = [
@@ -602,7 +633,12 @@ export class SyncOrchestratorService {
         await this.sendLinked(clinicId, '13. Resume Medis', {
           localType: 'encounter_resume',
           localId: encounter.id,
-          resource: FhirMapper.toResume(encounter, refs, ctx, course || 'Kunjungan rawat jalan selesai.'),
+          resource: FhirMapper.toResume(
+            encounter,
+            refs,
+            ctx,
+            course || 'Kunjungan rawat jalan selesai.',
+          ),
         }),
       );
     }
@@ -626,7 +662,8 @@ export class SyncOrchestratorService {
     if (!clinic || !this.isConfigured(clinic)) {
       return {
         success: false,
-        error: 'Kredensial SATUSEHAT belum diatur — isi SATUSEHAT_ORGANIZATION_ID, SATUSEHAT_CLIENT_ID, SATUSEHAT_CLIENT_SECRET di env server (atau Konfigurasi klinik)',
+        error:
+          'Kredensial SATUSEHAT belum diatur — isi SATUSEHAT_ORGANIZATION_ID, SATUSEHAT_CLIENT_ID, SATUSEHAT_CLIENT_SECRET di env server (atau Konfigurasi klinik)',
       };
     }
 
@@ -850,16 +887,21 @@ export class SyncOrchestratorService {
   }
 
   /** ID SATUSEHAT pasien (dicari by NIK bila belum tersimpan) — dipakai SSRME. */
-  patientIhsId(clinicId: number, patient: Patient): Promise<string> {
-    return this.resolvePatient(clinicId, patient);
+  patientIhsId(
+    clinicId: number,
+    patient: Patient,
+    force = false,
+  ): Promise<string> {
+    return this.resolvePatient(clinicId, patient, force);
   }
 
   /** ID SATUSEHAT tenaga kesehatan (dicari by NIK bila belum tersimpan). */
   practitionerIhsId(
     clinicId: number,
     practitioner: Practitioner,
+    force = false,
   ): Promise<string> {
-    return this.resolvePractitioner(clinicId, practitioner);
+    return this.resolvePractitioner(clinicId, practitioner, force);
   }
 
   /** IHS tenaga kesehatan berdasarkan NIK. */
@@ -908,7 +950,13 @@ export class SyncOrchestratorService {
     body: Record<string, any>,
     existingId?: string | null,
   ): Promise<string> {
-    return this.send(clinicId, resourceType, localId, body, existingId ?? undefined);
+    return this.send(
+      clinicId,
+      resourceType,
+      localId,
+      body,
+      existingId ?? undefined,
+    );
   }
 
   /** Daftarkan/perbarui Location ruangan (dipakai menu Persiapan). */
@@ -949,11 +997,15 @@ export class SyncOrchestratorService {
         );
       parentLocationId = parent.satusehatLocationId;
     }
-    const body = FhirMapper.toLocation(location, clinic.satusehatOrgId as string, {
-      managingOrgId,
-      parentLocationId,
-      fallbackAddress: clinic.satusehatProfile,
-    });
+    const body = FhirMapper.toLocation(
+      location,
+      clinic.satusehatOrgId as string,
+      {
+        managingOrgId,
+        parentLocationId,
+        fallbackAddress: clinic.satusehatProfile,
+      },
+    );
     const id = await this.send(
       clinic.id,
       'Location',
@@ -1007,16 +1059,31 @@ export class SyncOrchestratorService {
     const compound = !!rx.compoundType;
     if (!compound && !rx.kfaCode) {
       const message = `Obat "${rx.drugName}" belum dipilih dari KFA — pilih ulang obat di resep agar bisa dikirim`;
-      await this.saveLog(clinicId, 'MedicationRequest', rx.id, { error: message });
-      return { steps: [this.fail(step, 'MedicationRequest', 'rx_item', rx.id, message)], requestId: null };
+      await this.saveLog(clinicId, 'MedicationRequest', rx.id, {
+        error: message,
+      });
+      return {
+        steps: [
+          this.fail(step, 'MedicationRequest', 'rx_item', rx.id, message),
+        ],
+        requestId: null,
+      };
     }
     if (compound && !rx.ingredients?.length) {
       const message = `Racikan "${rx.drugName}" belum memiliki bahan berkode KFA`;
-      return { steps: [this.fail(step, 'MedicationRequest', 'rx_item', rx.id, message)], requestId: null };
+      return {
+        steps: [
+          this.fail(step, 'MedicationRequest', 'rx_item', rx.id, message),
+        ],
+        requestId: null,
+      };
     }
 
     const kfa = compound ? null : await this.kfaDetail(rx);
-    const medicationFor = (identifier: string, batch?: { lotNumber?: string | null; expirationDate?: string | null }) =>
+    const medicationFor = (
+      identifier: string,
+      batch?: { lotNumber?: string | null; expirationDate?: string | null },
+    ) =>
       compound
         ? FhirMapper.toCompoundMedication(rx, ctx, identifier, batch)
         : FhirMapper.toMedication(kfa!, ctx, identifier, batch);
@@ -1035,12 +1102,19 @@ export class SyncOrchestratorService {
       {
         localType: 'rx_item',
         localId: rx.id,
-        resource: FhirMapper.toMedicationRequest(rx, kfa, med.satusehatId!, encounter, ctx),
+        resource: FhirMapper.toMedicationRequest(
+          rx,
+          kfa,
+          med.satusehatId!,
+          encounter,
+          ctx,
+        ),
       },
       'MedicationRequest',
     );
     out.push(request);
-    const requestId = request.status === 'success' ? request.satusehatId! : null;
+    const requestId =
+      request.status === 'success' ? request.satusehatId! : null;
     if (!requestId) return { steps: out, requestId };
 
     // 18. Pengeluaran obat — kode produk aktual (93…) wajib untuk non-racikan
@@ -1048,13 +1122,22 @@ export class SyncOrchestratorService {
       const dstep = '09. Pengeluaran Obat';
       if (!compound && !rx.kfaCode!.startsWith('93')) {
         out.push(
-          this.skip(dstep, 'MedicationDispense', 'rx_dispense', rx.id, 'Pengeluaran obat wajib memakai kode produk aktual KFA (93…)'),
+          this.skip(
+            dstep,
+            'MedicationDispense',
+            'rx_dispense',
+            rx.id,
+            'Pengeluaran obat wajib memakai kode produk aktual KFA (93…)',
+          ),
         );
       } else {
         const dmed = await this.sendLinked(clinicId, dstep, {
           localType: 'rx_medication_dispense',
           localId: rx.id,
-          resource: medicationFor(`RXD-${rx.id}`, { lotNumber: rx.batchNumber, expirationDate: rx.batchExpiry }),
+          resource: medicationFor(`RXD-${rx.id}`, {
+            lotNumber: rx.batchNumber,
+            expirationDate: rx.batchExpiry,
+          }),
         });
         out.push(dmed);
         if (dmed.status === 'success') {
@@ -1081,7 +1164,12 @@ export class SyncOrchestratorService {
         await this.sendLinked(clinicId, '09. Pemberian Obat', {
           localType: 'rx_administration',
           localId: rx.id,
-          resource: FhirMapper.toMedicationAdministration(rx, kfa, { medicationId: med.satusehatId!, requestId }, ctx),
+          resource: FhirMapper.toMedicationAdministration(
+            rx,
+            kfa,
+            { medicationId: med.satusehatId!, requestId },
+            ctx,
+          ),
         }),
       );
     }
@@ -1128,7 +1216,11 @@ export class SyncOrchestratorService {
       let fastingId: string | null = null;
       const fasting = DiagnosticsMapper.toFastingProcedure(order, ctx);
       if (fasting) {
-        const r = await this.sendLinked(clinicId, step, { localType: 'lab_fasting', localId: order.id, resource: fasting });
+        const r = await this.sendLinked(clinicId, step, {
+          localType: 'lab_fasting',
+          localId: order.id,
+          resource: fasting,
+        });
         out.push(r);
         fastingId = r.satusehatId ?? null;
       }
@@ -1144,14 +1236,28 @@ export class SyncOrchestratorService {
       if (sr.status !== 'success') continue;
 
       let specimenId: string | null = null;
-      const specimen = DiagnosticsMapper.toSpecimen(order, sr.satusehatId!, ctx);
+      const specimen = DiagnosticsMapper.toSpecimen(
+        order,
+        sr.satusehatId!,
+        ctx,
+      );
       if (specimen) {
-        const r = await this.sendLinked(clinicId, step, { localType: 'lab_specimen', localId: order.id, resource: specimen });
+        const r = await this.sendLinked(clinicId, step, {
+          localType: 'lab_specimen',
+          localId: order.id,
+          resource: specimen,
+        });
         out.push(r);
         specimenId = r.satusehatId ?? null;
       } else if (order.specimenCollectedAt) {
         out.push(
-          this.skip(step, 'Specimen', 'lab_specimen', order.id, `Jenis spesimen "${order.specimenType ?? '-'}" belum dipetakan ke SNOMED`),
+          this.skip(
+            step,
+            'Specimen',
+            'lab_specimen',
+            order.id,
+            `Jenis spesimen "${order.specimenType ?? '-'}" belum dipetakan ke SNOMED`,
+          ),
         );
       }
 
@@ -1160,7 +1266,12 @@ export class SyncOrchestratorService {
         const r = await this.sendLinked(clinicId, step, {
           localType: 'lab_result',
           localId: result.id,
-          resource: DiagnosticsMapper.toLabObservation(order, result, { serviceRequestId: sr.satusehatId!, specimenId }, ctx),
+          resource: DiagnosticsMapper.toLabObservation(
+            order,
+            result,
+            { serviceRequestId: sr.satusehatId!, specimenId },
+            ctx,
+          ),
         });
         out.push(r);
         if (r.satusehatId) observationIds.push(r.satusehatId);
@@ -1170,7 +1281,11 @@ export class SyncOrchestratorService {
           await this.sendLinked(clinicId, step, {
             localType: 'lab_report',
             localId: order.id,
-            resource: DiagnosticsMapper.toLabReport(order, { serviceRequestId: sr.satusehatId!, specimenId, observationIds }, ctx),
+            resource: DiagnosticsMapper.toLabReport(
+              order,
+              { serviceRequestId: sr.satusehatId!, specimenId, observationIds },
+              ctx,
+            ),
           }),
         );
       }
@@ -1201,16 +1316,31 @@ export class SyncOrchestratorService {
       const sr = await this.sendLinked(clinicId, step, {
         localType: 'rad_request',
         localId: order.id,
-        resource: DiagnosticsMapper.toRadiologyServiceRequest(order, ctx, { reasonConditionId, bodySite }),
+        resource: DiagnosticsMapper.toRadiologyServiceRequest(order, ctx, {
+          reasonConditionId,
+          bodySite,
+        }),
       });
       out.push(sr);
       if (sr.status !== 'success') continue;
 
-      const imagingStudyId = await this.findImagingStudy(clinicId, ctx, order.accessionNumber);
+      const imagingStudyId = await this.findImagingStudy(
+        clinicId,
+        ctx,
+        order.accessionNumber,
+      );
       let observationId: string | null = null;
-      const obs = DiagnosticsMapper.toRadiologyObservation(order, { serviceRequestId: sr.satusehatId!, imagingStudyId }, ctx);
+      const obs = DiagnosticsMapper.toRadiologyObservation(
+        order,
+        { serviceRequestId: sr.satusehatId!, imagingStudyId },
+        ctx,
+      );
       if (obs) {
-        const r = await this.sendLinked(clinicId, step, { localType: 'rad_result', localId: order.id, resource: obs });
+        const r = await this.sendLinked(clinicId, step, {
+          localType: 'rad_result',
+          localId: order.id,
+          resource: obs,
+        });
         out.push(r);
         observationId = r.satusehatId ?? null;
       }
@@ -1220,21 +1350,33 @@ export class SyncOrchestratorService {
         ctx,
       );
       if (report) {
-        out.push(await this.sendLinked(clinicId, step, { localType: 'rad_report', localId: order.id, resource: report }));
+        out.push(
+          await this.sendLinked(clinicId, step, {
+            localType: 'rad_report',
+            localId: order.id,
+            resource: report,
+          }),
+        );
       }
     }
     return out;
   }
 
   /** ImagingStudy dibuat DICOM router; dicari lewat accession number. */
-  private async findImagingStudy(clinicId: number, ctx: FhirContext, accession: string): Promise<string | null> {
+  private async findImagingStudy(
+    clinicId: number,
+    ctx: FhirContext,
+    accession: string,
+  ): Promise<string | null> {
     try {
       const identifier = `${DiagnosticsMapper.acsnSystem(ctx)}|${accession}`;
       const { status, data } = await this.satusehatClient.getFhir(
         clinicId,
         `ImagingStudy?identifier=${encodeURIComponent(identifier)}`,
       );
-      return status < 300 ? ((data?.entry?.[0]?.resource?.id as string) ?? null) : null;
+      return status < 300
+        ? ((data?.entry?.[0]?.resource?.id as string) ?? null)
+        : null;
     } catch {
       return null;
     }
