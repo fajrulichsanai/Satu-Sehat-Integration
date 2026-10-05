@@ -2,6 +2,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsDateString,
   IsIn,
   IsNotEmpty,
   IsOptional,
@@ -12,13 +13,82 @@ import {
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  DIET_INTENTS,
   DISCHARGE_CONDITIONS,
   PROGNOSES,
+  RISK_LEVELS,
 } from '../entities/encounter-soap-note.entity';
 import type {
+  DietIntent,
   DischargeCondition,
   Prognosis,
+  RiskLevel,
 } from '../entities/encounter-soap-note.entity';
+
+export class SoapDietDto {
+  @ApiProperty({ enum: DIET_INTENTS, description: 'proposal = rekomendasi, order = arahan untuk dietisien' })
+  @IsIn(DIET_INTENTS)
+  intent: DietIntent;
+
+  @ApiProperty({ type: [String], description: 'Kode jenis diet dari /terminology/diet-types' })
+  @IsArray()
+  @ArrayMaxSize(5)
+  @IsString({ each: true })
+  types: string[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  note?: string;
+}
+
+export class SoapGoalDto {
+  @ApiPropertyOptional({ description: 'Kode SNOMED (clinical finding)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  code?: string;
+
+  @ApiProperty()
+  @IsString()
+  @MaxLength(500)
+  text: string;
+
+  @ApiPropertyOptional({ description: 'Target tanggal (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string;
+}
+
+export class SoapRiskDto {
+  @ApiProperty({ description: 'Kode SNOMED jenis penilaian risiko' })
+  @IsString()
+  @MaxLength(20)
+  code: string;
+
+  @ApiPropertyOptional({ description: 'Kode SNOMED penyakit yang diprediksi' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  outcomeCode?: string;
+
+  @ApiProperty({ enum: RISK_LEVELS })
+  @IsIn(RISK_LEVELS)
+  level: RiskLevel;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  mitigation?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  note?: string;
+}
 
 export class SoapDiagnosisDto {
   @ApiProperty({ enum: ['icd10', 'snomed'] })
@@ -111,6 +181,24 @@ export class UpsertEncounterSoapNoteDto {
   @IsOptional()
   @IsIn(DISCHARGE_CONDITIONS)
   dischargeCondition?: DischargeCondition;
+
+  @ApiPropertyOptional({ type: SoapDietDto, nullable: true, description: 'null menghapus' })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SoapDietDto)
+  diet?: SoapDietDto | null;
+
+  @ApiPropertyOptional({ type: SoapGoalDto, nullable: true })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SoapGoalDto)
+  goal?: SoapGoalDto | null;
+
+  @ApiPropertyOptional({ type: SoapRiskDto, nullable: true })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SoapRiskDto)
+  riskAssessment?: SoapRiskDto | null;
 
   @ApiPropertyOptional({ enum: PROGNOSES })
   @IsOptional()

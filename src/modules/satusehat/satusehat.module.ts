@@ -30,11 +30,17 @@ import { KfaProductEntity } from './kfa/entities/kfa-product.entity';
 import { SsrmeService } from './ssrme/ssrme.service';
 import { SsrmeController } from './ssrme/ssrme.controller';
 import { AuditLogModule } from '../audit-log/audit-log.module';
+import { TerminologyModule } from '../terminology/terminology.module';
+import { LabOrder } from '../diagnostics/entities/lab-order.entity';
+import { PrescriptionReview } from '../prescriptions/entities/prescription-review.entity';
+import { LabResult } from '../diagnostics/entities/lab-result.entity';
+import { RadiologyOrder } from '../diagnostics/entities/radiology-order.entity';
 
 @Module({
   imports: [
     ConfigModule,
     AuditLogModule,
+    TerminologyModule,
     TypeOrmModule.forFeature([
       Encounter,
       Patient,
@@ -53,6 +59,10 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
       SatusehatSyncLog,
       SatusehatResourceLink,
       KfaProductEntity,
+      LabOrder,
+      LabResult,
+      RadiologyOrder,
+      PrescriptionReview,
     ]),
   ],
   controllers: [SatusehatController, SsrmeController],

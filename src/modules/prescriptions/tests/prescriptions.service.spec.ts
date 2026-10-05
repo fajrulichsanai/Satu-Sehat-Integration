@@ -1,3 +1,4 @@
+import { PrescriptionReview } from '../entities/prescription-review.entity';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
@@ -31,6 +32,14 @@ describe('PrescriptionsService', () => {
         PrescriptionsService,
         { provide: getRepositoryToken(PrescriptionItem), useValue: itemRepo },
         { provide: getRepositoryToken(Encounter), useValue: encounterRepo },
+        {
+          provide: getRepositoryToken(PrescriptionReview),
+          useValue: {
+            findOne: jest.fn(),
+            create: jest.fn((d) => d),
+            save: jest.fn((d) => d),
+          },
+        },
       ],
     }).compile();
 
@@ -84,9 +93,9 @@ describe('PrescriptionsService', () => {
 
     it('throws NotFoundException for an encounter outside the clinic (negative)', async () => {
       encounterRepo.findOne.mockResolvedValue(null);
-      await expect(
-        service.create(999, 1, {} as any, 9),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.create(999, 1, {} as any, 9)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -107,9 +116,7 @@ describe('PrescriptionsService', () => {
 
     it('throws NotFoundException for an encounter outside the clinic (negative)', async () => {
       encounterRepo.findOne.mockResolvedValue(null);
-      await expect(service.remove(1, 99, 5)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.remove(1, 99, 5)).rejects.toThrow(NotFoundException);
       expect(itemRepo.delete).not.toHaveBeenCalled();
     });
   });

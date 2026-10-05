@@ -15,9 +15,14 @@ import {
 import { Billing, BillingStatus } from '../../billing/entities/billing.entity';
 import { BillingItem } from '../../billing-item/entities/billing-item.entity';
 import { PrescriptionItem } from '../../prescriptions/entities/prescription-item.entity';
+import { PrescriptionReview } from '../../prescriptions/entities/prescription-review.entity';
 import { ToothCondition } from '../../odontogram/entities/tooth-condition.entity';
 import { DentalBridge } from '../../odontogram/entities/dental-bridge.entity';
 import { PatientRecall } from '../../recalls/entities/patient-recall.entity';
+import { LabOrder } from '../../diagnostics/entities/lab-order.entity';
+import { RadiologyOrder } from '../../diagnostics/entities/radiology-order.entity';
+import { ClinicalCatalogService } from '../../terminology/clinical-catalog.service';
+import { DiagnosticsMapper } from '../fhir/diagnostics-mapper';
 import {
   SatusehatSyncLog,
   SyncLogStatus,
@@ -28,7 +33,14 @@ import { SatusehatResourceLink } from './entities/satusehat-resource-link.entity
 import { SyncStatus } from '../../../enums/sync-status.enum';
 import { SatusehatClientService } from '../satusehat-client.service';
 import { KfaProduct, KfaService } from '../kfa/kfa.service';
-import { FhirContext, FhirMapper, LinkedResource } from '../fhir/fhir-mapper';
+import {
+  FhirContext,
+  FhirMapper,
+  LinkedResource,
+  RESUME_GROUPS,
+  ResumeGroup,
+  resumeGroupOf,
+} from '../fhir/fhir-mapper';
 import { readableFhirError } from '../fhir/fhir-error';
 
 export interface SyncStep {
@@ -112,6 +124,13 @@ export class SyncOrchestratorService {
     private readonly bridgeRepo: Repository<DentalBridge>,
     @InjectRepository(PatientRecall)
     private readonly recallRepo: Repository<PatientRecall>,
+    @InjectRepository(LabOrder)
+    private readonly labRepo: Repository<LabOrder>,
+    @InjectRepository(RadiologyOrder)
+    private readonly radiologyRepo: Repository<RadiologyOrder>,
+    private readonly catalog: ClinicalCatalogService,
+    @InjectRepository(PrescriptionReview)
+    private readonly reviewRepo: Repository<PrescriptionReview>,
   ) {}
 
   /**
@@ -396,6 +415,34 @@ export class SyncOrchestratorService {
       for (const r of FhirMapper.toCarePlans(soap, soapAt, ctx)) {
         steps.push(await this.sendLinked(clinicId, '07. Rencana Rawat', r));
       }
+      const problems2 = conditionIds.map((c) => c.conditionId);
+      if (soap.goal) {
+        steps.push(
+          await this.sendLinked(clinicId, '07. Tujuan Perawatan', {
+            localType: 'soap_goal',
+            localId: soap.id,
+            resource: FhirMapper.toGoal(soap.goal, soap.id, soapAt, ctx, problems2),
+          }),
+        );
+      }
+      if (soap.riskAssessment) {
+        steps.push(
+          await this.sendLinked(clinicId, '07. Penilaian Risiko', {
+            localType: 'soap_risk',
+            localId: soap.id,
+            resource: FhirMapper.toRiskAssessment(soap.riskAssessment, soap.id, soapAt, ctx, problems2),
+          }),
+        );
+      }
+      if (soap.diet?.types.length) {
+        steps.push(
+          await this.sendLinked(clinicId, '10. Diet', {
+            localType: 'soap_diet',
+            localId: soap.id,
+            resource: FhirMapper.toNutritionOrder(soap.diet, soap.id, soapAt, ctx),
+          }),
+        );
+      }
     }
 
     // 08. Tindakan — item tagihan bertarif ICD-9-CM
@@ -409,14 +456,32 @@ export class SyncOrchestratorService {
       );
     }
 
+    // 08. Pemeriksaan penunjang — laboratorium & radiologi
+    const primaryConditionId = conditionIds[0]?.conditionId ?? null;
+    steps.push(...(await this.syncLab(clinicId, encounterId, ctx, primaryConditionId)));
+    steps.push(...(await this.syncRadiology(clinicId, encounterId, ctx, primaryConditionId)));
+
     // 09. Peresepan obat (KFA)
     const prescriptions = await this.prescriptionRepo.find({
       where: { encounterId },
       order: { sortOrder: 'ASC', id: 'ASC' },
     });
+    const requestIds: string[] = [];
     for (const rx of prescriptions) {
+      const r = await this.syncPrescription(clinicId, rx, encounter, ctx);
+      steps.push(...r.steps);
+      if (r.requestId) requestIds.push(r.requestId);
+    }
+
+    // 17. Pengkajian resep (QuestionnaireResponse Q0007)
+    const review = await this.reviewRepo.findOne({ where: { encounterId } });
+    if (review && requestIds.length) {
       steps.push(
-        ...(await this.syncPrescription(clinicId, rx, encounter, ctx)),
+        await this.sendLinked(clinicId, '09. Pengkajian Resep', {
+          localType: 'rx_review',
+          localId: review.id,
+          resource: FhirMapper.toPrescriptionReview(review, requestIds, ctx),
+        }),
       );
     }
 
@@ -508,6 +573,30 @@ export class SyncOrchestratorService {
           ),
         );
       }
+    }
+
+    // 28. Resume medis — setelah kunjungan selesai, merangkum semua resource
+    if (encounter.status === 'finished') {
+      const refs = Object.fromEntries(RESUME_GROUPS.map((g) => [g, [] as string[]])) as Record<ResumeGroup, string[]>;
+      for (const st of steps) {
+        const group = st.status === 'success' && st.satusehatId ? resumeGroupOf(st.localType) : null;
+        if (group) refs[group].push(`${st.resourceType}/${st.satusehatId}`);
+      }
+      const course = [
+        soap?.subjective && `Keluhan: ${soap.subjective}`,
+        soap?.assessment && `Asesmen: ${soap.assessment}`,
+        soap?.treatment && `Tindakan: ${soap.treatment}`,
+        soap?.plan && `Rencana: ${soap.plan}`,
+      ]
+        .filter(Boolean)
+        .join('. ');
+      steps.push(
+        await this.sendLinked(clinicId, '13. Resume Medis', {
+          localType: 'encounter_resume',
+          localId: encounter.id,
+          resource: FhirMapper.toResume(encounter, refs, ctx, course || 'Kunjungan rawat jalan selesai.'),
+        }),
+      );
     }
 
     return { success: steps.every((s) => s.status !== 'failed'), steps };
@@ -846,28 +935,110 @@ export class SyncOrchestratorService {
     );
   }
 
+  /**
+   * Resep satu obat: Medication + MedicationRequest, lalu bila sudah
+   * diserahkan Medication (dengan batch) + MedicationDispense, dan bila
+   * diberikan di klinik MedicationAdministration. Racikan dikirim tanpa
+   * Medication.code dengan bahan-bahan berkode KFA (SD/EP).
+   */
   private async syncPrescription(
     clinicId: number,
     rx: PrescriptionItem,
     encounter: Encounter,
     ctx: FhirContext,
-  ): Promise<SyncStep[]> {
+  ): Promise<{ steps: SyncStep[]; requestId: string | null }> {
     const step = '09. Peresepan Obat';
-    if (!rx.kfaCode) {
+    const compound = !!rx.compoundType;
+    if (!compound && !rx.kfaCode) {
       const message = `Obat "${rx.drugName}" belum dipilih dari KFA — pilih ulang obat di resep agar bisa dikirim`;
-      await this.saveLog(clinicId, 'MedicationRequest', rx.id, {
-        error: message,
-      });
-      return [this.fail(step, 'MedicationRequest', 'rx_item', rx.id, message)];
+      await this.saveLog(clinicId, 'MedicationRequest', rx.id, { error: message });
+      return { steps: [this.fail(step, 'MedicationRequest', 'rx_item', rx.id, message)], requestId: null };
+    }
+    if (compound && !rx.ingredients?.length) {
+      const message = `Racikan "${rx.drugName}" belum memiliki bahan berkode KFA`;
+      return { steps: [this.fail(step, 'MedicationRequest', 'rx_item', rx.id, message)], requestId: null };
     }
 
-    let kfa: KfaProduct;
+    const kfa = compound ? null : await this.kfaDetail(rx);
+    const medicationFor = (identifier: string, batch?: { lotNumber?: string | null; expirationDate?: string | null }) =>
+      compound
+        ? FhirMapper.toCompoundMedication(rx, ctx, identifier, batch)
+        : FhirMapper.toMedication(kfa!, ctx, identifier, batch);
+
+    const out: SyncStep[] = [];
+    const med = await this.sendLinked(clinicId, step, {
+      localType: 'rx_medication',
+      localId: rx.id,
+      resource: medicationFor(`RX-${rx.id}`),
+    });
+    out.push(med);
+    if (med.status !== 'success') return { steps: out, requestId: null };
+    const request = await this.sendLinked(
+      clinicId,
+      step,
+      {
+        localType: 'rx_item',
+        localId: rx.id,
+        resource: FhirMapper.toMedicationRequest(rx, kfa, med.satusehatId!, encounter, ctx),
+      },
+      'MedicationRequest',
+    );
+    out.push(request);
+    const requestId = request.status === 'success' ? request.satusehatId! : null;
+    if (!requestId) return { steps: out, requestId };
+
+    // 18. Pengeluaran obat — kode produk aktual (93…) wajib untuk non-racikan
+    if (rx.dispensedAt) {
+      const dstep = '09. Pengeluaran Obat';
+      if (!compound && !rx.kfaCode!.startsWith('93')) {
+        out.push(
+          this.skip(dstep, 'MedicationDispense', 'rx_dispense', rx.id, 'Pengeluaran obat wajib memakai kode produk aktual KFA (93…)'),
+        );
+      } else {
+        const dmed = await this.sendLinked(clinicId, dstep, {
+          localType: 'rx_medication_dispense',
+          localId: rx.id,
+          resource: medicationFor(`RXD-${rx.id}`, { lotNumber: rx.batchNumber, expirationDate: rx.batchExpiry }),
+        });
+        out.push(dmed);
+        if (dmed.status === 'success') {
+          out.push(
+            await this.sendLinked(clinicId, dstep, {
+              localType: 'rx_dispense',
+              localId: rx.id,
+              resource: FhirMapper.toMedicationDispense(
+                rx,
+                kfa,
+                { medicationId: dmed.satusehatId!, requestId },
+                encounter,
+                ctx,
+              ),
+            }),
+          );
+        }
+      }
+    }
+
+    // 19. Pemberian obat di klinik
+    if (rx.administeredAt) {
+      out.push(
+        await this.sendLinked(clinicId, '09. Pemberian Obat', {
+          localType: 'rx_administration',
+          localId: rx.id,
+          resource: FhirMapper.toMedicationAdministration(rx, kfa, { medicationId: med.satusehatId!, requestId }, ctx),
+        }),
+      );
+    }
+    return { steps: out, requestId };
+  }
+
+  /** Detail KFA (bentuk sediaan/zat aktif) — opsional, kode & nama tetap cukup. */
+  private async kfaDetail(rx: PrescriptionItem): Promise<KfaProduct> {
     try {
-      kfa = await this.kfaService.getProduct(rx.kfaCode);
+      return await this.kfaService.getProduct(rx.kfaCode!);
     } catch {
-      // Detail KFA opsional (bentuk sediaan/zat aktif); kode & nama tetap cukup
-      kfa = {
-        kfaCode: rx.kfaCode,
+      return {
+        kfaCode: rx.kfaCode!,
         name: rx.kfaName || rx.drugName,
         active: true,
         group: 'farmasi',
@@ -881,34 +1052,136 @@ export class SyncOrchestratorService {
         activeIngredients: [],
       };
     }
+  }
 
+  /** Lab: puasa → permintaan → spesimen → hasil → laporan, per permintaan. */
+  private async syncLab(
+    clinicId: number,
+    encounterId: number,
+    ctx: FhirContext,
+    reasonConditionId: string | null,
+  ): Promise<SyncStep[]> {
+    const step = '08. Laboratorium';
     const out: SyncStep[] = [];
-    const med = await this.sendLinked(clinicId, step, {
-      localType: 'rx_medication',
-      localId: rx.id,
-      resource: FhirMapper.toMedication(kfa, ctx, `RX-${rx.id}`),
+    const orders = await this.labRepo.find({
+      where: { encounterId, status: Not('cancelled') },
+      relations: { results: true },
+      order: { id: 'ASC', results: { id: 'ASC' } },
     });
-    out.push(med);
-    if (med.status !== 'success') return out;
-    out.push(
-      await this.sendLinked(
-        clinicId,
-        step,
-        {
-          localType: 'rx_item',
-          localId: rx.id,
-          resource: FhirMapper.toMedicationRequest(
-            rx,
-            kfa,
-            med.satusehatId!,
-            encounter,
-            ctx,
-          ),
-        },
-        'MedicationRequest',
-      ),
-    );
+    for (const order of orders) {
+      let fastingId: string | null = null;
+      const fasting = DiagnosticsMapper.toFastingProcedure(order, ctx);
+      if (fasting) {
+        const r = await this.sendLinked(clinicId, step, { localType: 'lab_fasting', localId: order.id, resource: fasting });
+        out.push(r);
+        fastingId = r.satusehatId ?? null;
+      }
+      const sr = await this.sendLinked(clinicId, step, {
+        localType: 'lab_request',
+        localId: order.id,
+        resource: DiagnosticsMapper.toLabServiceRequest(order, ctx, {
+          reasonConditionId,
+          fastingProcedureId: fastingId,
+        }),
+      });
+      out.push(sr);
+      if (sr.status !== 'success') continue;
+
+      let specimenId: string | null = null;
+      const specimen = DiagnosticsMapper.toSpecimen(order, sr.satusehatId!, ctx);
+      if (specimen) {
+        const r = await this.sendLinked(clinicId, step, { localType: 'lab_specimen', localId: order.id, resource: specimen });
+        out.push(r);
+        specimenId = r.satusehatId ?? null;
+      } else if (order.specimenCollectedAt) {
+        out.push(
+          this.skip(step, 'Specimen', 'lab_specimen', order.id, `Jenis spesimen "${order.specimenType ?? '-'}" belum dipetakan ke SNOMED`),
+        );
+      }
+
+      const observationIds: string[] = [];
+      for (const result of order.results ?? []) {
+        const r = await this.sendLinked(clinicId, step, {
+          localType: 'lab_result',
+          localId: result.id,
+          resource: DiagnosticsMapper.toLabObservation(order, result, { serviceRequestId: sr.satusehatId!, specimenId }, ctx),
+        });
+        out.push(r);
+        if (r.satusehatId) observationIds.push(r.satusehatId);
+      }
+      if (order.status === 'completed' && observationIds.length) {
+        out.push(
+          await this.sendLinked(clinicId, step, {
+            localType: 'lab_report',
+            localId: order.id,
+            resource: DiagnosticsMapper.toLabReport(order, { serviceRequestId: sr.satusehatId!, specimenId, observationIds }, ctx),
+          }),
+        );
+      }
+    }
     return out;
+  }
+
+  /** Radiologi: permintaan (ACSN) → citra dari DICOM router → bacaan → laporan. */
+  private async syncRadiology(
+    clinicId: number,
+    encounterId: number,
+    ctx: FhirContext,
+    reasonConditionId: string | null,
+  ): Promise<SyncStep[]> {
+    const step = '08. Radiologi';
+    const out: SyncStep[] = [];
+    const orders = await this.radiologyRepo.find({
+      where: { encounterId, status: Not('cancelled') },
+      order: { id: 'ASC' },
+    });
+    for (const order of orders) {
+      let bodySite: { code: string; display: string } | null = null;
+      try {
+        bodySite = this.catalog.getRadiology(order.code).bodySite;
+      } catch {
+        bodySite = null;
+      }
+      const sr = await this.sendLinked(clinicId, step, {
+        localType: 'rad_request',
+        localId: order.id,
+        resource: DiagnosticsMapper.toRadiologyServiceRequest(order, ctx, { reasonConditionId, bodySite }),
+      });
+      out.push(sr);
+      if (sr.status !== 'success') continue;
+
+      const imagingStudyId = await this.findImagingStudy(clinicId, ctx, order.accessionNumber);
+      let observationId: string | null = null;
+      const obs = DiagnosticsMapper.toRadiologyObservation(order, { serviceRequestId: sr.satusehatId!, imagingStudyId }, ctx);
+      if (obs) {
+        const r = await this.sendLinked(clinicId, step, { localType: 'rad_result', localId: order.id, resource: obs });
+        out.push(r);
+        observationId = r.satusehatId ?? null;
+      }
+      const report = DiagnosticsMapper.toRadiologyReport(
+        order,
+        { serviceRequestId: sr.satusehatId!, observationId, imagingStudyId },
+        ctx,
+      );
+      if (report) {
+        out.push(await this.sendLinked(clinicId, step, { localType: 'rad_report', localId: order.id, resource: report }));
+      }
+    }
+    return out;
+  }
+
+  /** ImagingStudy dibuat DICOM router; dicari lewat accession number. */
+  private async findImagingStudy(clinicId: number, ctx: FhirContext, accession: string): Promise<string | null> {
+    try {
+      const identifier = `${DiagnosticsMapper.acsnSystem(ctx)}|${accession}`;
+      const { status, data } = await this.satusehatClient.getFhir(
+        clinicId,
+        `ImagingStudy?identifier=${encodeURIComponent(identifier)}`,
+      );
+      return status < 300 ? ((data?.entry?.[0]?.resource?.id as string) ?? null) : null;
+    } catch {
+      return null;
+    }
   }
 
   /** Tanggal kontrol dari recall yang dibuat untuk tagihan kunjungan ini. */

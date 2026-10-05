@@ -5,6 +5,41 @@ import { Encounter } from '../../encounters/entities/encounter.entity';
 /** Kondisi saat pulang — dipetakan ke SNOMED di FhirMapper. */
 export const DISCHARGE_CONDITIONS = ['stable', 'improved', 'worsened'] as const;
 export type DischargeCondition = (typeof DISCHARGE_CONDITIONS)[number];
+export const DIET_INTENTS = ['proposal', 'order'] as const;
+export type DietIntent = (typeof DIET_INTENTS)[number];
+
+/** Rekomendasi diet (NutritionOrder) — jenis dari lampiran resmi */
+export interface SoapDiet {
+  intent: DietIntent;
+  types: { system: string; code: string; display: string }[];
+  note?: string | null;
+}
+
+/** Tujuan perawatan (Goal) */
+export interface SoapGoal {
+  /** SNOMED clinical finding (opsional) */
+  code?: string | null;
+  display?: string | null;
+  text: string;
+  dueDate?: string | null;
+}
+
+export const RISK_LEVELS = ['negligible', 'low', 'moderate', 'high', 'certain'] as const;
+export type RiskLevel = (typeof RISK_LEVELS)[number];
+
+/** Penilaian risiko (RiskAssessment) */
+export interface SoapRisk {
+  /** SNOMED < 225338004 Risk assessment */
+  code: string;
+  display: string;
+  /** SNOMED penyakit yang diprediksi (opsional) */
+  outcomeCode?: string | null;
+  outcomeDisplay?: string | null;
+  level: RiskLevel;
+  mitigation?: string | null;
+  note?: string | null;
+}
+
 export const PROGNOSES = ['good', 'fair', 'guarded', 'bad'] as const;
 export type Prognosis = (typeof PROGNOSES)[number];
 
@@ -85,6 +120,15 @@ export class EncounterSoapNote extends BaseEntity {
     nullable: true,
   })
   dischargeCondition: DischargeCondition | null;
+
+  @Column({ type: 'json', nullable: true })
+  diet: SoapDiet | null;
+
+  @Column({ type: 'json', nullable: true })
+  goal: SoapGoal | null;
+
+  @Column({ name: 'risk_assessment', type: 'json', nullable: true })
+  riskAssessment: SoapRisk | null;
 
   /** Prognosis: baik / dubia ad bonam / dubia ad malam / buruk. */
   @Column({ type: 'varchar', length: 20, nullable: true })

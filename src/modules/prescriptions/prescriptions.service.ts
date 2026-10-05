@@ -1,9 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PrescriptionItem } from './entities/prescription-item.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
-import { CreatePrescriptionItemDto } from './dto/prescription-item.dto';
+import {
+  AdministerPrescriptionDto,
+  CreatePrescriptionItemDto,
+  DispensePrescriptionDto,
+  SavePrescriptionReviewDto,
+} from './dto/prescription-item.dto';
+import { PrescriptionReview } from './entities/prescription-review.entity';
+import { PRESCRIPTION_REVIEW_QUESTIONS } from './prescription-review.questions';
 
 @Injectable()
 export class PrescriptionsService {
@@ -12,6 +23,8 @@ export class PrescriptionsService {
     private readonly itemRepository: Repository<PrescriptionItem>,
     @InjectRepository(Encounter)
     private readonly encounterRepository: Repository<Encounter>,
+    @InjectRepository(PrescriptionReview)
+    private readonly reviewRepository: Repository<PrescriptionReview>,
   ) {}
 
   async listByEncounter(
@@ -33,9 +46,19 @@ export class PrescriptionsService {
   ): Promise<PrescriptionItem> {
     await this.assertEncounterExists(encounterId, clinicId);
     const count = await this.itemRepository.count({ where: { encounterId } });
+    const compound = !!dto.compoundType;
     const item = this.itemRepository.create({
       encounterId,
       ...dto,
+      // Racikan tidak punya satu kode produk; bahan-bahannya yang berkode KFA
+      kfaCode: compound ? null : (dto.kfaCode ?? null),
+      kfaName: compound ? null : (dto.kfaName ?? null),
+      compoundType: dto.compoundType ?? null,
+      compoundFormCode: compound ? dto.compoundFormCode : null,
+      compoundFormName: compound ? (dto.compoundFormName ?? null) : null,
+      compoundUnit: compound ? dto.compoundUnit : null,
+      ingredients: compound ? dto.ingredients : null,
+      routeCode: dto.routeCode ?? null,
       sortOrder: count,
       createdBy: userId,
     });
@@ -55,6 +78,131 @@ export class PrescriptionsService {
     if (!result.affected) {
       throw new NotFoundException(`Resep dengan ID ${itemId} tidak ditemukan`);
     }
+  }
+
+  /** Obat diserahkan ke pasien (MedicationDispense). */
+  async dispense(
+    encounterId: number,
+    clinicId: number,
+    itemId: number,
+    dto: DispensePrescriptionDto,
+    userId: number,
+  ): Promise<PrescriptionItem> {
+    const item = await this.findItem(encounterId, clinicId, itemId);
+    item.dispensedAt = dto.dispensedAt ? new Date(dto.dispensedAt) : new Date();
+    item.dispensedBy = userId;
+    item.batchNumber = dto.batchNumber?.trim() || null;
+    item.batchExpiry = dto.batchExpiry ? dto.batchExpiry.slice(0, 10) : null;
+    item.updatedBy = userId;
+    return this.itemRepository.save(item);
+  }
+
+  async undoDispense(
+    encounterId: number,
+    clinicId: number,
+    itemId: number,
+    userId: number,
+  ) {
+    const item = await this.findItem(encounterId, clinicId, itemId);
+    Object.assign(item, {
+      dispensedAt: null,
+      dispensedBy: null,
+      batchNumber: null,
+      batchExpiry: null,
+      updatedBy: userId,
+    });
+    return this.itemRepository.save(item);
+  }
+
+  /** Obat diberikan langsung di klinik (MedicationAdministration). */
+  async administer(
+    encounterId: number,
+    clinicId: number,
+    itemId: number,
+    dto: AdministerPrescriptionDto,
+    userId: number,
+  ): Promise<PrescriptionItem> {
+    const item = await this.findItem(encounterId, clinicId, itemId);
+    item.administeredAt = dto.administeredAt
+      ? new Date(dto.administeredAt)
+      : new Date();
+    item.administeredBy = userId;
+    item.administeredDose = dto.dose?.trim() || item.dosage || null;
+    item.updatedBy = userId;
+    return this.itemRepository.save(item);
+  }
+
+  async undoAdminister(
+    encounterId: number,
+    clinicId: number,
+    itemId: number,
+    userId: number,
+  ) {
+    const item = await this.findItem(encounterId, clinicId, itemId);
+    Object.assign(item, {
+      administeredAt: null,
+      administeredBy: null,
+      administeredDose: null,
+      updatedBy: userId,
+    });
+    return this.itemRepository.save(item);
+  }
+
+  async getReview(encounterId: number, clinicId: number) {
+    await this.assertEncounterExists(encounterId, clinicId);
+    return this.reviewRepository.findOne({ where: { encounterId } });
+  }
+
+  /** Simpan pengkajian resep — semua pertanyaan Q0007 wajib dijawab. */
+  async saveReview(
+    encounterId: number,
+    clinicId: number,
+    dto: SavePrescriptionReviewDto,
+    userId: number,
+  ): Promise<PrescriptionReview> {
+    await this.assertEncounterExists(encounterId, clinicId);
+    const answers: PrescriptionReview['answers'] = {};
+    for (const q of PRESCRIPTION_REVIEW_QUESTIONS) {
+      const a = dto.answers?.[q.linkId];
+      const ok =
+        q.kind === 'boolean'
+          ? typeof a === 'boolean'
+          : a === 'sesuai' || a === 'tidak_sesuai';
+      if (!ok) {
+        throw new BadRequestException(
+          `Pertanyaan ${q.linkId} belum dijawab: ${q.text}`,
+        );
+      }
+      answers[q.linkId] = a;
+    }
+    const existing = await this.reviewRepository.findOne({
+      where: { encounterId },
+    });
+    const review =
+      existing ??
+      this.reviewRepository.create({ encounterId, createdBy: userId });
+    Object.assign(review, {
+      answers,
+      note: dto.note?.trim() || null,
+      reviewedAt: new Date(),
+      reviewedBy: userId,
+      updatedBy: userId,
+    });
+    return this.reviewRepository.save(review);
+  }
+
+  private async findItem(
+    encounterId: number,
+    clinicId: number,
+    itemId: number,
+  ) {
+    await this.assertEncounterExists(encounterId, clinicId);
+    const item = await this.itemRepository.findOne({
+      where: { id: itemId, encounterId },
+    });
+    if (!item)
+      throw new NotFoundException(`Resep dengan ID ${itemId} tidak ditemukan`);
+    return item;
   }
 
   private async assertEncounterExists(

@@ -29,6 +29,10 @@ describe('SyncOrchestratorService', () => {
       repo(), // ToothCondition
       repo(), // DentalBridge
       repo(), // PatientRecall
+      repo(), // LabOrder
+      repo(), // RadiologyOrder
+      {} as any, // ClinicalCatalogService
+      repo(), // PrescriptionReview
     );
   });
 

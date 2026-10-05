@@ -8,6 +8,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '../auth/decorators/public.decorator';
 import { TerminologyService } from './terminology.service';
+import { ClinicalCatalogService } from './clinical-catalog.service';
 import type { TerminologySystem } from './entities/terminology-concept.entity';
 
 import { parseLimit } from '../../common/utils/query.util';
@@ -22,7 +23,75 @@ import { parseLimit } from '../../common/utils/query.util';
 @Throttle({ default: { limit: 60, ttl: 60000 } })
 @Controller('terminology')
 export class TerminologyController {
-  constructor(private readonly terminologyService: TerminologyService) {}
+  constructor(
+    private readonly terminologyService: TerminologyService,
+    private readonly catalog: ClinicalCatalogService,
+  ) {}
+
+  // ── Katalog pemeriksaan resmi SATUSEHAT (sebelum ':system/:code') ──
+
+  @Get('lab-tests')
+  @ApiOperation({ summary: 'Cari pemeriksaan laboratorium (LOINC SATUSEHAT)' })
+  @ApiQuery({ name: 'q' })
+  @ApiQuery({ name: 'use', enum: ['request', 'result'], required: false })
+  searchLab(
+    @Query('q') q: string,
+    @Query('use') use?: 'request' | 'result',
+    @Query('limit') limit?: string,
+  ) {
+    return {
+      success: true,
+      data: this.catalog.searchLab(
+        q ?? '',
+        use === 'request' || use === 'result' ? use : undefined,
+        parseLimit(limit, 50) ?? 20,
+      ),
+    };
+  }
+
+  @Get('lab-tests/:code')
+  @ApiOperation({
+    summary: 'Detail pemeriksaan lab + pilihan jawaban + parameter hasilnya',
+  })
+  labDetail(@Param('code') code: string) {
+    return {
+      success: true,
+      data: {
+        ...this.catalog.getLab(code),
+        results: this.catalog.labResultsFor(code),
+      },
+    };
+  }
+
+  @Get('radiology-tests')
+  @ApiOperation({ summary: 'Cari pemeriksaan radiologi (LOINC SATUSEHAT)' })
+  searchRadiology(
+    @Query('q') q: string,
+    @Query('dental') dental?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return {
+      success: true,
+      data: this.catalog.searchRadiology(
+        q ?? '',
+        {
+          dental:
+            dental === 'true' ? true : dental === 'false' ? false : undefined,
+          use: 'request',
+        },
+        parseLimit(limit, 50) ?? 20,
+      ),
+    };
+  }
+
+  @Get('diet-types')
+  @ApiOperation({ summary: 'Cari jenis diet (lampiran NutritionOrder)' })
+  searchDiet(@Query('q') q: string, @Query('limit') limit?: string) {
+    return {
+      success: true,
+      data: this.catalog.searchDiet(q ?? '', parseLimit(limit, 50) ?? 20),
+    };
+  }
 
   @Get('search')
   @ApiOperation({

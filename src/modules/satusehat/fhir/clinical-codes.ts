@@ -456,3 +456,81 @@ export const OUTPATIENT_CARE_PLAN: Coding = {
   code: '736271009',
   display: 'Outpatient care plan',
 };
+
+// ── Pemeriksaan penunjang (Playbook bab 10–11) ──────────────────────────
+
+export const LAB_PROCEDURE: Coding = { code: '108252007', display: 'Laboratory procedure' };
+export const IMAGING: Coding = { code: '363679005', display: 'Imaging' };
+export const DIAGNOSTIC_PROCEDURE: Coding = { code: '103693007', display: 'Diagnostic procedure' };
+export const FASTING: Coding = { code: '792805006', display: 'Fasting' };
+export const BLOOD_COLLECTION: Coding = { code: '82078001', display: 'Collection of blood specimen for laboratory' };
+
+/**
+ * Jenis spesimen di katalog lab (Bahasa Indonesia) → SNOMED CT specimen
+ * (< 123038009). Daftar Rujukan Spesimen SATUSEHAT + padanan umum.
+ */
+export const SPECIMEN_SNOMED: Record<string, Coding> = {
+  darah: { code: '119297000', display: 'Blood specimen' },
+  'darah arteri': { code: '122552005', display: 'Arterial blood specimen' },
+  serum: { code: '119364003', display: 'Serum specimen' },
+  'serum/plasma': { code: '119364003', display: 'Serum specimen' },
+  plasma: { code: '119361006', display: 'Plasma specimen' },
+  urine: { code: '122575003', display: 'Urine specimen' },
+  urin: { code: '122575003', display: 'Urine specimen' },
+  'urine 24 jam': { code: '276833005', display: '24 hour urine sample' },
+  feses: { code: '119339001', display: 'Stool specimen' },
+  sputum: { code: '119334006', display: 'Sputum specimen' },
+  sperma: { code: '119347001', display: 'Seminal fluid specimen' },
+  semen: { code: '119347001', display: 'Seminal fluid specimen' },
+  'sumsum tulang': { code: '119359002', display: 'Bone marrow specimen' },
+  'cairan otak': { code: '258450006', display: 'Cerebrospinal fluid sample' },
+  'cairan pleura': { code: '418564007', display: 'Pleural fluid specimen' },
+  'cairan peritoneal': { code: '168139001', display: 'Peritoneal fluid sample' },
+  'cairan asites': { code: '168139001', display: 'Peritoneal fluid sample' },
+  'cairan sendi': { code: '119332005', display: 'Synovial fluid specimen' },
+  'cairan tubuh': { code: '309051001', display: 'Body fluid sample' },
+  swab: { code: '257261003', display: 'Swab' },
+  'swab/ sekret': { code: '257261003', display: 'Swab' },
+  'swab naso & orofaring': { code: '258500001', display: 'Nasopharyngeal swab' },
+  'swab tenggorok': { code: '258529004', display: 'Throat swab' },
+  vagina: { code: '258520000', display: 'Vaginal swab' },
+  'cairan vagina': { code: '258520000', display: 'Vaginal swab' },
+  uretra: { code: '258530009', display: 'Urethral swab' },
+  pus: { code: '119323008', display: 'Pus specimen' },
+  jaringan: { code: '119376003', display: 'Tissue specimen' },
+  isolat: { code: '119303007', display: 'Microbial isolate specimen' },
+  'batu ginjal': { code: '119350003', display: 'Calculus specimen' },
+  'batu empedu': { code: '119350003', display: 'Calculus specimen' },
+  rambut: { code: '119326000', display: 'Hair specimen' },
+  saliva: { code: '119342007', display: 'Saliva specimen' },
+};
+
+/** Kategori katalog lab → DiagnosticReport.category (HL7 v2-0074) */
+export const LAB_REPORT_CATEGORY: Record<string, Coding> = {
+  hematologi: { code: 'HM', display: 'Hematology' },
+  'kimia klinik': { code: 'CH', display: 'Chemistry' },
+  mikrobiologi: { code: 'MB', display: 'Microbiology' },
+  imunoserologi: { code: 'SR', display: 'Serology' },
+  molekuler: { code: 'GE', display: 'Genetics' },
+  sitologi: { code: 'CP', display: 'Cytopathology' },
+  'bank darah': { code: 'BLB', display: 'Blood Bank' },
+  patologi: { code: 'SP', display: 'Surgical Pathology' },
+};
+
+export const INTERPRETATION_DISPLAY: Record<string, string> = {
+  N: 'Normal',
+  L: 'Low',
+  H: 'High',
+  LL: 'Critical low',
+  HH: 'Critical high',
+  A: 'Abnormal',
+  POS: 'Positive',
+  NEG: 'Negative',
+};
+
+/** v2-0916 status puasa pada Specimen.collection */
+export const FASTING_STATUS_V2: Record<string, Coding> = {
+  fasting: { code: 'F', display: 'Patient was fasting prior to the procedure.' },
+  not_fasting: { code: 'NF', display: 'The patient indicated they did not fast prior to the procedure.' },
+  not_required: { code: 'NG', display: 'Not Given - Patient was not asked at the time of the procedure.' },
+};

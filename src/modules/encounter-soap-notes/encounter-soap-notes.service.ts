@@ -8,6 +8,9 @@ import { Repository } from 'typeorm';
 import {
   EncounterSoapNote,
   SoapDiagnosis,
+  SoapDiet,
+  SoapGoal,
+  SoapRisk,
 } from './entities/encounter-soap-note.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import {
@@ -15,6 +18,7 @@ import {
   UpsertEncounterSoapNoteDto,
 } from './dto/encounter-soap-note.dto';
 import { TerminologyService } from '../terminology/terminology.service';
+import { ClinicalCatalogService } from '../terminology/clinical-catalog.service';
 
 @Injectable()
 export class EncounterSoapNotesService {
@@ -24,6 +28,7 @@ export class EncounterSoapNotesService {
     @InjectRepository(Encounter)
     private readonly encounterRepository: Repository<Encounter>,
     private readonly terminologyService: TerminologyService,
+    private readonly catalog: ClinicalCatalogService,
   ) {}
 
   async findByEncounter(
@@ -47,6 +52,7 @@ export class EncounterSoapNotesService {
     const chiefComplaint = await this.normalizeChiefComplaint(
       dto.chiefComplaintCode,
     );
+    const plan = await this.normalizeCarePlan(dto);
 
     let note = await this.soapNoteRepository.findOne({
       where: { encounterId },
@@ -63,6 +69,7 @@ export class EncounterSoapNotesService {
         plan: dto.plan,
         controlPlan: dto.controlPlan,
         ...(chiefComplaint ?? {}),
+        ...plan,
         educationGiven: dto.educationGiven ?? null,
         dischargeCondition: dto.dischargeCondition ?? null,
         prognosis: dto.prognosis ?? null,
@@ -79,6 +86,7 @@ export class EncounterSoapNotesService {
         plan: dto.plan ?? note.plan,
         controlPlan: dto.controlPlan ?? note.controlPlan,
         ...(chiefComplaint ?? {}),
+        ...plan,
         educationGiven: dto.educationGiven ?? note.educationGiven,
         dischargeCondition: dto.dischargeCondition ?? note.dischargeCondition,
         prognosis: dto.prognosis ?? note.prognosis,
@@ -141,6 +149,58 @@ export class EncounterSoapNotesService {
       chiefComplaintCode: trimmed,
       chiefComplaintDisplay: concepts.get(`snomed:${trimmed}`)!.display,
     };
+  }
+
+  /**
+   * Diet, tujuan perawatan & penilaian risiko: kode dicek ke katalog resmi /
+   * terminologi dan nama disimpan dari sana. undefined = tidak diubah,
+   * null = dihapus.
+   */
+  private async normalizeCarePlan(dto: UpsertEncounterSoapNoteDto) {
+    const out: { diet?: SoapDiet | null; goal?: SoapGoal | null; riskAssessment?: SoapRisk | null } = {};
+    if (dto.diet !== undefined) {
+      out.diet =
+        dto.diet && dto.diet.types.length
+          ? {
+              intent: dto.diet.intent,
+              types: [...new Set(dto.diet.types)].map((code) => this.catalog.getDiet(code)),
+              note: dto.diet.note?.trim() || null,
+            }
+          : null;
+    }
+    const snomed = async (codes: (string | null | undefined)[]) => {
+      const list = codes.filter((c): c is string => !!c?.trim()).map((c) => ({ system: 'snomed' as const, code: c.trim() }));
+      return list.length ? this.terminologyService.resolve(list) : new Map();
+    };
+    if (dto.goal !== undefined) {
+      if (dto.goal && dto.goal.text?.trim()) {
+        const code = dto.goal.code?.trim() || null;
+        const found = await snomed([code]);
+        out.goal = {
+          code,
+          display: code ? found.get(`snomed:${code}`)?.display ?? null : null,
+          text: dto.goal.text.trim(),
+          dueDate: dto.goal.dueDate?.slice(0, 10) ?? null,
+        };
+      } else out.goal = null;
+    }
+    if (dto.riskAssessment !== undefined) {
+      if (dto.riskAssessment) {
+        const r = dto.riskAssessment;
+        const outcome = r.outcomeCode?.trim() || null;
+        const found = await snomed([r.code, outcome]);
+        out.riskAssessment = {
+          code: r.code.trim(),
+          display: found.get(`snomed:${r.code.trim()}`)?.display ?? r.code,
+          outcomeCode: outcome,
+          outcomeDisplay: outcome ? found.get(`snomed:${outcome}`)?.display ?? null : null,
+          level: r.level,
+          mitigation: r.mitigation?.trim() || null,
+          note: r.note?.trim() || null,
+        };
+      } else out.riskAssessment = null;
+    }
+    return out;
   }
 
   private async assertEncounterExists(
