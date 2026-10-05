@@ -66,6 +66,20 @@ export class Clinic extends BaseEntity {
   @Column({ name: 'satusehat_token_expires_at', type: 'datetime', nullable: true })
   satusehatTokenExpiresAt: Date | null;
 
+  /** Nama Organization induk di SATUSEHAT (hasil verifikasi) */
+  @Column({ name: 'satusehat_org_name', type: 'varchar', length: 255, nullable: true })
+  satusehatOrgName: string | null;
+
+  /** Struktur organisasi (Postman "00. Membuat Struktur Organisasi dan Lokasi") */
+  @Column({ name: 'satusehat_suborg_id', type: 'varchar', length: 100, nullable: true })
+  satusehatSuborgId: string | null;
+
+  @Column({ name: 'satusehat_poli_org_id', type: 'varchar', length: 100, nullable: true })
+  satusehatPoliOrgId: string | null;
+
+  @Column({ name: 'satusehat_pharmacy_org_id', type: 'varchar', length: 100, nullable: true })
+  satusehatPharmacyOrgId: string | null;
+
   /** Location "Poli Gigi" default bila kunjungan tidak punya ruangan */
   @Column({ name: 'satusehat_poli_location_id', type: 'varchar', length: 100, nullable: true })
   satusehatPoliLocationId: string | null;

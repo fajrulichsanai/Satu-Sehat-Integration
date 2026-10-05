@@ -6,6 +6,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *  - prescription_items: racikan, pengeluaran & pemberian obat
  *  - prescription_reviews: pengkajian resep (Q0007)
  *  - encounter_soap_notes: diet, tujuan perawatan, penilaian risiko
+ *  - clinics: struktur Organization SATUSEHAT (sub-org, poli, apotek)
  * Idempotent — aman di setiap deploy (scripts/apply-security-schema.js).
  */
 export class SatusehatPenunjangFarmasi1790010000000 implements MigrationInterface {
@@ -119,6 +120,10 @@ export class SatusehatPenunjangFarmasi1790010000000 implements MigrationInterfac
       ['encounter_soap_notes', 'diet', 'JSON NULL'],
       ['encounter_soap_notes', 'goal', 'JSON NULL'],
       ['encounter_soap_notes', 'risk_assessment', 'JSON NULL'],
+      ['clinics', 'satusehat_org_name', 'VARCHAR(255) NULL'],
+      ['clinics', 'satusehat_suborg_id', 'VARCHAR(100) NULL'],
+      ['clinics', 'satusehat_poli_org_id', 'VARCHAR(100) NULL'],
+      ['clinics', 'satusehat_pharmacy_org_id', 'VARCHAR(100) NULL'],
     ];
     for (const [table, column, definition] of columns) {
       if (!(await queryRunner.hasColumn(table, column))) {

@@ -329,11 +329,54 @@ function escapeXml(text: string) {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+/** Sub-organisasi klinik (Organization type "team", partOf induk). */
+export function toTeamOrganization(
+  clinic: { name: string; phone?: string | null; email?: string | null; address?: string | null; city?: string | null; postalCode?: string | null },
+  orgId: string,
+  code: string,
+  name: string,
+  parentId: string,
+) {
+  const telecom = [
+    clinic.phone ? { system: 'phone', value: clinic.phone, use: 'work' } : null,
+    clinic.email ? { system: 'email', value: clinic.email, use: 'work' } : null,
+  ].filter(Boolean);
+  return {
+    resourceType: 'Organization',
+    active: true,
+    identifier: [{ use: 'official', system: ids('organization', orgId), value: code }],
+    type: [
+      {
+        coding: [
+          { system: 'http://terminology.hl7.org/CodeSystem/organization-type', code: 'team', display: 'Organizational team' },
+        ],
+      },
+    ],
+    name,
+    ...(telecom.length ? { telecom } : {}),
+    ...(clinic.address
+      ? {
+          address: [
+            {
+              use: 'work',
+              type: 'both',
+              line: [clinic.address],
+              ...(clinic.city ? { city: clinic.city } : {}),
+              ...(clinic.postalCode ? { postalCode: clinic.postalCode } : {}),
+              country: 'ID',
+            },
+          ],
+        }
+      : {}),
+    partOf: { reference: `Organization/${parentId}` },
+  };
+}
+
 export class FhirMapper {
   // ── Prasyarat ──────────────────────────────────────────────────────────
 
   /** Location ruang/poli — Postman "00. Location - Create Poli Gigi dan Mulut" */
-  static toLocation(location: Location, orgId: string) {
+  static toLocation(location: Location, orgId: string, managingOrgId?: string | null) {
     return {
       resourceType: 'Location',
       identifier: [
@@ -346,7 +389,7 @@ export class FhirMapper {
       physicalType: {
         coding: [{ system: SYS.LOCATION_TYPE, code: 'ro', display: 'Room' }],
       },
-      managingOrganization: { reference: `Organization/${orgId}` },
+      managingOrganization: { reference: `Organization/${managingOrgId || orgId}` },
       extension: [
         {
           url: 'https://fhir.kemkes.go.id/r4/StructureDefinition/LocationServiceClass',

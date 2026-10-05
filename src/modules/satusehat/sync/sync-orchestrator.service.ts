@@ -890,6 +890,22 @@ export class SyncOrchestratorService {
   }
 
   /** Buat Location (ruangan) di SATUSEHAT bila belum ada. */
+  /** POST/PUT satu resource prasyarat (Organization) dengan log sync. */
+  sendPrerequisite(
+    clinicId: number,
+    resourceType: string,
+    localId: number,
+    body: Record<string, any>,
+    existingId?: string | null,
+  ): Promise<string> {
+    return this.send(clinicId, resourceType, localId, body, existingId ?? undefined);
+  }
+
+  /** Daftarkan/perbarui Location ruangan (dipakai menu Persiapan). */
+  registerLocation(clinic: Clinic, location: Location): Promise<string> {
+    return this.ensureLocation(clinic, location, true);
+  }
+
   private async ensureLocation(
     clinic: Clinic,
     location: Location,
@@ -900,6 +916,7 @@ export class SyncOrchestratorService {
     const body = FhirMapper.toLocation(
       location,
       clinic.satusehatOrgId as string,
+      clinic.satusehatPoliOrgId,
     );
     const id = await this.send(
       clinic.id,

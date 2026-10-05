@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Param,
   ParseIntPipe,
   Post,
@@ -15,6 +16,7 @@ import { SyncOrchestratorService } from './sync/sync-orchestrator.service';
 import { SyncQueueService } from './sync/sync-queue.service';
 import { SatusehatMonitorService } from './monitor/satusehat-monitor.service';
 import { SatusehatConfigService } from './satusehat-config.service';
+import { SatusehatOnboardingService } from './onboarding/satusehat-onboarding.service';
 import { SaveSatusehatConfigDto } from './dto/satusehat-config.dto';
 import {
   ListResourcesQueryDto,
@@ -45,6 +47,7 @@ export class SatusehatController {
     private readonly syncQueue: SyncQueueService,
     private readonly monitor: SatusehatMonitorService,
     private readonly config: SatusehatConfigService,
+    private readonly onboarding: SatusehatOnboardingService,
   ) {}
 
   // ── Konfigurasi klinik ────────────────────────────────────────────────
@@ -69,6 +72,57 @@ export class SatusehatController {
       await this.config.save(clinicId, dto, user.userId),
       'Konfigurasi SATUSEHAT disimpan',
     );
+  }
+
+  // ── Persiapan: Autentikasi → Organization → Location → Practitioner → Patient ──
+
+  @Get('onboarding')
+  @Roles(...VIEWERS)
+  @ApiOperation({ summary: 'Status persiapan (prasyarat) SATUSEHAT' })
+  async onboardingStatus(@ClinicId() clinicId: number) {
+    return ApiResponse.success(await this.onboarding.status(clinicId));
+  }
+
+  @Post('onboarding/auth')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Langkah 1: uji autentikasi (token)' })
+  async onboardingAuth(@ClinicId() clinicId: number) {
+    return ApiResponse.success(await this.onboarding.testAuth(clinicId));
+  }
+
+  @Post('onboarding/organization/verify')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Langkah 2a: verifikasi Organization induk' })
+  async onboardingVerifyOrg(@ClinicId() clinicId: number) {
+    return ApiResponse.success(await this.onboarding.verifyOrganization(clinicId));
+  }
+
+  @Post('onboarding/organization/structure')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Langkah 2b: buat sub-organisasi, Poli, Apotek' })
+  async onboardingOrgStructure(@ClinicId() clinicId: number) {
+    return ApiResponse.success(await this.onboarding.buildOrganizationStructure(clinicId));
+  }
+
+  @Post('onboarding/locations')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Langkah 3: daftarkan ruangan sebagai Location' })
+  async onboardingLocations(@ClinicId() clinicId: number) {
+    return ApiResponse.success(await this.onboarding.registerLocations(clinicId));
+  }
+
+  @Post('onboarding/practitioners')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Langkah 4: cocokkan tenaga kesehatan (NIK → IHS)' })
+  async onboardingPractitioners(@ClinicId() clinicId: number) {
+    return ApiResponse.success(await this.onboarding.matchPractitioners(clinicId));
+  }
+
+  @Post('onboarding/patients')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Langkah 5: cocokkan pasien (NIK → IHS), 50 per permintaan' })
+  async onboardingPatients(@ClinicId() clinicId: number) {
+    return ApiResponse.success(await this.onboarding.matchPatients(clinicId));
   }
 
   @Post('config/test')
