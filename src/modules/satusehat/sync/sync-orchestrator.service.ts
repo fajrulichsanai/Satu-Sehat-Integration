@@ -1,7 +1,7 @@
 import { withEffectiveCredentials } from '../satusehat-credentials';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Not, Repository } from 'typeorm';
+import { In, IsNull, Not, Repository } from 'typeorm';
 import { Encounter } from '../../encounters/entities/encounter.entity';
 import { Patient } from '../../patients/entities/patient.entity';
 import { Clinic } from '../../clinics/entities/clinic.entity';
@@ -243,7 +243,9 @@ export class SyncOrchestratorService {
     let ctx: FhirContext;
     try {
       ctx = await this.buildContext(clinic, encounter, steps);
-    } catch {
+    } catch (err) {
+      // Prasyarat gagal: catat di kunjungan supaya alasannya terlihat
+      await this.markEncounterFailed(encounter.id, err);
       return { success: false, steps };
     }
 
@@ -809,9 +811,23 @@ export class SyncOrchestratorService {
           name: 'Poli Gigi dan Mulut',
         };
       } else {
-        throw new StepError(
-          'Kunjungan tidak memiliki ruangan dan Location ID Poli klinik belum diisi di Konfigurasi SATUSEHAT',
-        );
+        // Kunjungan tanpa ruangan: pakai Location yang sudah didaftarkan di Onboarding
+        const registered = await this.locationRepo.findOne({
+          where: {
+            clinicId,
+            isActive: true,
+            satusehatLocationId: Not(IsNull()),
+          },
+          order: { id: 'ASC' },
+        });
+        if (!registered)
+          throw new StepError(
+            'Kunjungan tidak memiliki ruangan dan belum ada Location terdaftar — kirim minimal satu lokasi di SATUSEHAT → Onboarding → Location',
+          );
+        location = {
+          id: registered.satusehatLocationId as string,
+          name: registered.name,
+        };
       }
       steps.push(
         this.ok(
