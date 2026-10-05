@@ -231,5 +231,70 @@ describe('FhirMapper (Playbook RME Rawat Jalan / Use Case Gigi)', () => {
     expect(rq.dispenseRequest.quantity).toEqual({ value: 15, unit: 'Kapsul' });
     expect(rq.dispenseRequest.expectedSupplyDuration.value).toBe(5);
     expect(rq.requester.reference).toBe('Practitioner/10009880728');
+
+    // Resep sederhana: aturan pakai terstruktur + numero
+    const simple = Object.assign(new PrescriptionItem(), {
+      id: 6,
+      drugName: 'Clindamycin 300mg',
+      numero: 15,
+      quantity: '15',
+      signa: {
+        timesPerDay: 3,
+        amount: 1,
+        unit: 'CAP',
+        when: 'PC',
+        route: 'O',
+        latin: 'S 3 dd caps I p.c.',
+        text: '3 x sehari 1 kapsul sesudah makan',
+      },
+      routeCode: 'O',
+      createdAt: new Date('2026-10-01T02:40:00Z'),
+    });
+    const rq2 = FhirMapper.toMedicationRequest(
+      simple,
+      KFA,
+      'MED-2',
+      enc,
+      ctx,
+    ) as any;
+    const di = rq2.dosageInstruction[0];
+    expect(di.text).toBe('3 x sehari 1 kapsul sesudah makan');
+    expect(di.additionalInstruction[0].text).toBe('S 3 dd caps I p.c.');
+    expect(di.timing.repeat).toEqual({
+      frequency: 3,
+      period: 1,
+      periodUnit: 'd',
+      when: ['PC'],
+    });
+    expect(di.doseAndRate[0].doseQuantity).toMatchObject({
+      value: 1,
+      code: 'CAP',
+    });
+    expect(rq2.dispenseRequest.quantity).toMatchObject({
+      value: 15,
+      code: 'CAP',
+    });
+    expect(rq2.dispenseRequest.expectedSupplyDuration.value).toBe(5);
+
+    // Bila perlu: tanpa lama pemakaian, asNeeded
+    const prn = Object.assign(new PrescriptionItem(), {
+      ...simple,
+      signa: {
+        ...simple.signa,
+        prn: true,
+        when: null,
+        latin: 'S p.r.n. 3 dd caps I',
+        text: 'bila perlu',
+      },
+    });
+    const rq3 = FhirMapper.toMedicationRequest(
+      prn,
+      KFA,
+      'MED-3',
+      enc,
+      ctx,
+    ) as any;
+    expect(rq3.dosageInstruction[0].asNeededBoolean).toBe(true);
+    expect(rq3.dispenseRequest.expectedSupplyDuration).toBeUndefined();
   });
 });

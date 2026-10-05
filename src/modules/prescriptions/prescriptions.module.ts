@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PrescriptionItem } from './entities/prescription-item.entity';
 import { PrescriptionReview } from './entities/prescription-review.entity';
+import { PrescriptionSignature } from './entities/prescription-signature.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import { PhysicalExamination } from '../physical-examination/entities/physical-examination.entity';
 import { PrescriptionsController } from './prescriptions.controller';
@@ -14,6 +15,7 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
     TypeOrmModule.forFeature([
       PrescriptionItem,
       PrescriptionReview,
+      PrescriptionSignature,
       Encounter,
       PhysicalExamination,
     ]),

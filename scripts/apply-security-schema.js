@@ -23,6 +23,7 @@ const MIGRATIONS = [
   '1790000000000-SatusehatRmeRawatJalan',
   '1790010000000-SatusehatPenunjangFarmasi',
   '1790020000000-SatusehatOnboarding',
+  '1790030000000-ResepSederhana',
 ];
 
 async function main() {

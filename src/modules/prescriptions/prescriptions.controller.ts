@@ -21,6 +21,7 @@ import {
   CreatePrescriptionItemDto,
   DispensePrescriptionDto,
   SavePrescriptionReviewDto,
+  SavePrescriptionSignatureDto,
   SetPrescriptionCodingDto,
 } from './dto/prescription-item.dto';
 import { PRESCRIPTION_REVIEW_GROUPS } from './prescription-review.questions';
@@ -75,6 +76,48 @@ export class PrescriptionsController {
       `attachment; filename="resep-${encounterId}.pdf"`,
     );
     res.end(pdfBuffer);
+  }
+
+  @Get('signature')
+  @ApiOperation({ summary: 'Tanda tangan dokter pada resep' })
+  async getSignature(
+    @Param('encounterId', ParseIntPipe) encounterId: number,
+    @ClinicId() clinicId: number,
+  ) {
+    const data = await this.prescriptionsService.getSignature(
+      encounterId,
+      clinicId,
+    );
+    return { success: true, data };
+  }
+
+  @Put('signature')
+  @Audit('MedicalRecord', AuditActionType.UPDATE)
+  @ApiOperation({ summary: 'Simpan tanda tangan dokter pada resep' })
+  async saveSignature(
+    @Param('encounterId', ParseIntPipe) encounterId: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: SavePrescriptionSignatureDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.prescriptionsService.saveSignature(
+      encounterId,
+      clinicId,
+      dto,
+      user.userId,
+    );
+    return { success: true, data };
+  }
+
+  @Delete('signature')
+  @Audit('MedicalRecord', AuditActionType.UPDATE)
+  @ApiOperation({ summary: 'Hapus tanda tangan dokter pada resep' })
+  async removeSignature(
+    @Param('encounterId', ParseIntPipe) encounterId: number,
+    @ClinicId() clinicId: number,
+  ) {
+    await this.prescriptionsService.removeSignature(encounterId, clinicId);
+    return { success: true, data: null };
   }
 
   @Post()

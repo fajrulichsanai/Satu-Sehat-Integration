@@ -4,6 +4,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { PrescriptionsService } from '../prescriptions.service';
 import { PrescriptionItem } from '../entities/prescription-item.entity';
+import { PrescriptionSignature } from '../entities/prescription-signature.entity';
 import { Encounter } from '../../encounters/entities/encounter.entity';
 
 describe('PrescriptionsService', () => {
@@ -17,6 +18,7 @@ describe('PrescriptionsService', () => {
     findOne?: jest.Mock;
   };
   let encounterRepo: { findOne: jest.Mock };
+  let signatureRepo: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     itemRepo = {
@@ -27,12 +29,22 @@ describe('PrescriptionsService', () => {
       delete: jest.fn(),
     };
     encounterRepo = { findOne: jest.fn() };
+    signatureRepo = {
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn((d) => d),
+      save: jest.fn((d) => Promise.resolve(d)),
+      delete: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PrescriptionsService,
         { provide: getRepositoryToken(PrescriptionItem), useValue: itemRepo },
         { provide: getRepositoryToken(Encounter), useValue: encounterRepo },
+        {
+          provide: getRepositoryToken(PrescriptionSignature),
+          useValue: signatureRepo,
+        },
         {
           provide: getRepositoryToken(PrescriptionReview),
           useValue: {
@@ -195,6 +207,79 @@ describe('PrescriptionsService', () => {
         service.setCoding(1, 99, 7, { kfaCode: '93001019' }, 9),
       ).rejects.toThrow(NotFoundException);
       expect(itemRepo.save).not.toHaveBeenCalled();
+    });
+  });
+  describe('resep sederhana & tanda tangan', () => {
+    it('stores numero/signa and fills the legacy quantity/frequency columns (positive)', async () => {
+      encounterRepo.findOne.mockResolvedValue({ id: 1, clinicId: 1 });
+      itemRepo.count.mockResolvedValue(0);
+      const res = await service.create(
+        1,
+        1,
+        {
+          drugName: 'Amoxicillin',
+          dosage: '500 mg',
+          dosageForm: 'Kapsul',
+          numero: 15,
+          signa: {
+            timesPerDay: 3,
+            amount: 1,
+            unit: 'CAP',
+            when: 'PC',
+            route: 'O',
+            latin: 'S 3 dd caps I p.c.',
+            text: '3 x sehari 1 kapsul sesudah makan',
+          },
+        },
+        9,
+      );
+      expect(res).toMatchObject({
+        numero: 15,
+        quantity: '15',
+        frequency: '3 x sehari 1 kapsul sesudah makan',
+        routeCode: 'O',
+      });
+    });
+
+    it('saves the signature once per encounter and updates it on re-sign (edge)', async () => {
+      encounterRepo.findOne.mockResolvedValue({ id: 1, clinicId: 1 });
+      await service.saveSignature(
+        1,
+        1,
+        { signature: 'data:image/png;base64,AAAA' },
+        9,
+      );
+      signatureRepo.findOne.mockResolvedValue({
+        id: 5,
+        encounterId: 1,
+        signature: 'old',
+      });
+      const res = await service.saveSignature(
+        1,
+        1,
+        { signature: 'data:image/png;base64,BBBB' },
+        9,
+      );
+      expect(res.signature).toBe('data:image/png;base64,BBBB');
+      expect(signatureRepo.save).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          id: 5,
+          signature: 'data:image/png;base64,BBBB',
+        }),
+      );
+    });
+
+    it('refuses signatures for an encounter outside the clinic (negative)', async () => {
+      encounterRepo.findOne.mockResolvedValue(null);
+      await expect(
+        service.saveSignature(
+          1,
+          99,
+          { signature: 'data:image/png;base64,AAAA' },
+          9,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(signatureRepo.save).not.toHaveBeenCalled();
     });
   });
 });

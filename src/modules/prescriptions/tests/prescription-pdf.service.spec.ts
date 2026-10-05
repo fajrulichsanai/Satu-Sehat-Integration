@@ -13,6 +13,7 @@ jest.mock('pdfmake', () => ({
 
 import { PrescriptionPdfService } from '../prescription-pdf.service';
 import { PrescriptionItem } from '../entities/prescription-item.entity';
+import { PrescriptionSignature } from '../entities/prescription-signature.entity';
 import { Encounter } from '../../encounters/entities/encounter.entity';
 import { PhysicalExamination } from '../../physical-examination/entities/physical-examination.entity';
 
@@ -21,6 +22,7 @@ describe('PrescriptionPdfService', () => {
   let itemRepo: { find: jest.Mock };
   let encounterRepo: { findOne: jest.Mock };
   let examRepo: { findOne: jest.Mock };
+  let signatureRepo: { findOne: jest.Mock };
 
   const baseEncounter = {
     id: 1,
@@ -38,6 +40,7 @@ describe('PrescriptionPdfService', () => {
     itemRepo = { find: jest.fn() };
     encounterRepo = { findOne: jest.fn() };
     examRepo = { findOne: jest.fn().mockResolvedValue(null) };
+    signatureRepo = { findOne: jest.fn().mockResolvedValue(null) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -47,6 +50,10 @@ describe('PrescriptionPdfService', () => {
         {
           provide: getRepositoryToken(PhysicalExamination),
           useValue: examRepo,
+        },
+        {
+          provide: getRepositoryToken(PrescriptionSignature),
+          useValue: signatureRepo,
         },
       ],
     }).compile();
@@ -125,11 +132,34 @@ describe('PrescriptionPdfService', () => {
     await service.generatePrescriptionPdf(1, 1);
 
     const doc = createPdfMock.mock.calls[0][0];
-    const rxBlocks = doc.content.filter(
-      (c: any) =>
-        c.stack?.[0]?.text?.[1]?.text === 'A' ||
-        c.stack?.[0]?.text?.[1]?.text === 'B',
+    const rxBlocks = doc.content.filter((c: any) =>
+      ['A', 'B'].includes(c.stack?.[0]?.columns?.[0]?.text?.[1]?.text),
     );
     expect(rxBlocks).toHaveLength(2);
+  });
+  it('writes numero in roman numerals, the signa, and the doctor signature (positive)', async () => {
+    encounterRepo.findOne.mockResolvedValue({ ...baseEncounter });
+    itemRepo.find.mockResolvedValue([
+      {
+        drugName: 'Amoxicillin',
+        dosage: '500 mg',
+        dosageForm: 'Kapsul',
+        numero: 15,
+        signa: {
+          latin: 'S 3 dd caps I p.c.',
+          text: '3 x sehari 1 kapsul sesudah makan',
+        },
+      },
+    ]);
+    signatureRepo.findOne.mockResolvedValue({
+      signature: 'data:image/png;base64,iVBORw0KGgo=',
+    });
+    await service.generatePrescriptionPdf(1, 1);
+    const doc = JSON.stringify(createPdfMock.mock.calls[0][0]);
+    expect(doc).toContain('Amoxicillin 500 mg Kapsul');
+    expect(doc).toContain('No. XV');
+    expect(doc).toContain('S 3 dd caps I p.c.');
+    expect(doc).toContain('(3 x sehari 1 kapsul sesudah makan)');
+    expect(doc).toContain('data:image/png;base64,iVBORw0KGgo=');
   });
 });

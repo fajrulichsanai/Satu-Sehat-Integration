@@ -10,11 +10,13 @@ import { Encounter } from '../encounters/entities/encounter.entity';
 import {
   AdministerPrescriptionDto,
   CreatePrescriptionItemDto,
+  SavePrescriptionSignatureDto,
   SetPrescriptionCodingDto,
   DispensePrescriptionDto,
   SavePrescriptionReviewDto,
 } from './dto/prescription-item.dto';
 import { PrescriptionReview } from './entities/prescription-review.entity';
+import { PrescriptionSignature } from './entities/prescription-signature.entity';
 import { PRESCRIPTION_REVIEW_QUESTIONS } from './prescription-review.questions';
 
 @Injectable()
@@ -26,6 +28,8 @@ export class PrescriptionsService {
     private readonly encounterRepository: Repository<Encounter>,
     @InjectRepository(PrescriptionReview)
     private readonly reviewRepository: Repository<PrescriptionReview>,
+    @InjectRepository(PrescriptionSignature)
+    private readonly signatureRepository: Repository<PrescriptionSignature>,
   ) {}
 
   async listByEncounter(
@@ -59,7 +63,10 @@ export class PrescriptionsService {
       compoundFormName: compound ? (dto.compoundFormName ?? null) : null,
       compoundUnit: compound ? dto.compoundUnit : null,
       ingredients: compound ? dto.ingredients : null,
-      routeCode: dto.routeCode ?? null,
+      routeCode: dto.routeCode ?? dto.signa?.route ?? null,
+      // Kolom lama tetap terisi (PDF/laporan lama, tampilan riwayat)
+      quantity: dto.numero ? String(dto.numero) : dto.quantity,
+      frequency: dto.signa?.text ?? dto.frequency,
       sortOrder: count,
       createdBy: userId,
     });
@@ -93,6 +100,52 @@ export class PrescriptionsService {
       updatedBy: userId,
     });
     return this.itemRepository.save(item);
+  }
+
+  // ── Tanda tangan dokter pada resep ──
+
+  async getSignature(encounterId: number, clinicId: number) {
+    await this.assertEncounterExists(encounterId, clinicId);
+    const sig = await this.signatureRepository.findOne({
+      where: { encounterId },
+    });
+    return sig
+      ? {
+          signature: sig.signature,
+          signedAt: sig.signedAt,
+          signedBy: sig.createdBy,
+        }
+      : null;
+  }
+
+  async saveSignature(
+    encounterId: number,
+    clinicId: number,
+    dto: SavePrescriptionSignatureDto,
+    userId: number,
+  ) {
+    await this.assertEncounterExists(encounterId, clinicId);
+    const existing = await this.signatureRepository.findOne({
+      where: { encounterId },
+    });
+    const sig = existing ?? this.signatureRepository.create({ encounterId });
+    Object.assign(sig, {
+      signature: dto.signature,
+      signedAt: new Date(),
+      createdBy: userId,
+      updatedBy: userId,
+    });
+    const saved = await this.signatureRepository.save(sig);
+    return {
+      signature: saved.signature,
+      signedAt: saved.signedAt,
+      signedBy: userId,
+    };
+  }
+
+  async removeSignature(encounterId: number, clinicId: number) {
+    await this.assertEncounterExists(encounterId, clinicId);
+    await this.signatureRepository.delete({ encounterId });
   }
 
   async remove(

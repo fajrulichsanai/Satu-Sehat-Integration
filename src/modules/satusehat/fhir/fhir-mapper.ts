@@ -86,6 +86,7 @@ export const SYS = {
   LOINC: 'http://loinc.org',
   SNOMED: 'http://snomed.info/sct',
   UCUM: 'http://unitsofmeasure.org',
+  DOSE_RATE_TYPE: 'http://terminology.hl7.org/CodeSystem/dose-rate-type',
   ICD10: 'http://hl7.org/fhir/sid/icd-10',
   ICD9CM: 'http://hl7.org/fhir/sid/icd-9-cm',
   KFA: 'http://sys-ids.kemkes.go.id/kfa',
@@ -315,6 +316,18 @@ function routeOf(item: PrescriptionItem, kfa: KfaProduct | null) {
   };
 }
 
+/** Satuan dosis yang dikenal FHIR (orderableDrugForm / UCUM) */
+const DOSE_UNITS = new Set(['TAB', 'CAP', 'SUPP', 'DROP', 'mL']);
+
+/** Lama pemakaian dari numero ÷ (frekuensi × jumlah per kali), bila satuannya sama */
+function supplyDays(item: PrescriptionItem): number | undefined {
+  const s = item.signa;
+  if (!item.numero || !s?.timesPerDay || !s.amount || s.prn) return undefined;
+  if (!s.unit || !['TAB', 'CAP', 'SUPP'].includes(s.unit)) return undefined;
+  const days = Math.ceil(item.numero / (s.timesPerDay * s.amount));
+  return days > 0 && days <= 365 ? days : undefined;
+}
+
 /** Jumlah obat: satuan racikan (CAP/POWD…) atau satuan produk KFA */
 function dispenseQuantity(
   item: PrescriptionItem,
@@ -323,6 +336,10 @@ function dispenseQuantity(
 ) {
   if (item.compoundType && item.compoundUnit)
     return strengthQuantity(value, item.compoundUnit);
+  // Numero dalam satuan per kali pakai (TAB/CAP/SUPP) bila aturan pakainya begitu
+  const unit = item.signa?.unit;
+  if (unit && unit !== 'mL' && DOSE_UNITS.has(unit))
+    return { ...strengthQuantity(value, unit), unit };
   return { value, ...(kfa?.uom ? { unit: kfa.uom } : {}) };
 }
 
@@ -1062,8 +1079,13 @@ export class FhirMapper {
     ]
       .filter(Boolean)
       .join(', ');
-    const quantity = leadingNumber(item.quantity);
-    const days = durationDays(item.duration);
+    const signa = item.signa;
+    const quantity = item.numero ?? leadingNumber(item.quantity);
+    const days = durationDays(item.duration) ?? supplyDays(item);
+    const dose =
+      signa?.amount && signa.unit && DOSE_UNITS.has(signa.unit)
+        ? { ...strengthQuantity(signa.amount, signa.unit), unit: signa.unit }
+        : null;
     return {
       resourceType: 'MedicationRequest',
       identifier: [
@@ -1103,11 +1125,45 @@ export class FhirMapper {
       dosageInstruction: [
         {
           sequence: 1,
-          text: text || item.drugName,
-          ...(item.instructions
-            ? { patientInstruction: item.instructions }
+          text: signa?.text || text || item.drugName,
+          ...(signa?.latin
+            ? { additionalInstruction: [{ text: signa.latin }] }
             : {}),
+          ...(item.instructions || signa?.text
+            ? { patientInstruction: item.instructions || signa!.text }
+            : {}),
+          ...(signa?.timesPerDay
+            ? {
+                timing: {
+                  repeat: {
+                    frequency: signa.timesPerDay,
+                    period: 1,
+                    periodUnit: 'd',
+                    ...(signa.when ? { when: [signa.when] } : {}),
+                  },
+                },
+              }
+            : {}),
+          ...(signa?.prn ? { asNeededBoolean: true } : {}),
           ...routeOf(item, kfa),
+          ...(dose
+            ? {
+                doseAndRate: [
+                  {
+                    type: {
+                      coding: [
+                        {
+                          system: SYS.DOSE_RATE_TYPE,
+                          code: 'ordered',
+                          display: 'Ordered',
+                        },
+                      ],
+                    },
+                    doseQuantity: dose,
+                  },
+                ],
+              }
+            : {}),
         },
       ],
       dispenseRequest: {
@@ -2045,8 +2101,8 @@ export class FhirMapper {
     ctx: FhirContext,
   ) {
     const at = fhirDateTime(item.dispensedAt);
-    const quantity = leadingNumber(item.quantity);
-    const days = durationDays(item.duration);
+    const quantity = item.numero ?? leadingNumber(item.quantity);
+    const days = durationDays(item.duration) ?? supplyDays(item);
     const text = [
       item.dosage,
       item.frequency,

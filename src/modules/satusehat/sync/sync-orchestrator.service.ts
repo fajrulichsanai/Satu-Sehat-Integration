@@ -88,6 +88,11 @@ const diagnosisLinkType = (dx: SoapDiagnosis) =>
  * Log sync tidak menyimpan payload FHIR (data sensitif) dan pesan error
  * disamarkan dengan redactSyncError.
  */
+/** OperationOutcome: kode KFA tidak ada di terminologi SATUSEHAT */
+function isUnknownKfaCode(message?: string | null) {
+  return !!message && /code not found/i.test(message) && /kfa/i.test(message);
+}
+
 @Injectable()
 export class SyncOrchestratorService {
   private readonly logger = new Logger(SyncOrchestratorService.name);
@@ -1095,7 +1100,7 @@ export class SyncOrchestratorService {
       };
     }
 
-    const kfa = compound ? null : await this.kfaDetail(rx);
+    let kfa = compound ? null : await this.kfaDetail(rx);
     const medicationFor = (
       identifier: string,
       batch?: { lotNumber?: string | null; expirationDate?: string | null },
@@ -1105,11 +1110,36 @@ export class SyncOrchestratorService {
         : FhirMapper.toMedication(kfa!, ctx, identifier, batch);
 
     const out: SyncStep[] = [];
-    const med = await this.sendLinked(clinicId, step, {
+    let med = await this.sendLinked(clinicId, step, {
       localType: 'rx_medication',
       localId: rx.id,
       resource: medicationFor(`RX-${rx.id}`),
     });
+    // Kode produk aktual (93…) belum dikenal terminologi SATUSEHAT →
+    // kirim ulang dengan kode produk generik/template (92…) dari KFA.
+    if (
+      med.status === 'failed' &&
+      kfa?.template?.code &&
+      kfa.template.code !== kfa.kfaCode &&
+      isUnknownKfaCode(med.message)
+    ) {
+      const original = kfa.kfaCode;
+      kfa = {
+        ...kfa,
+        kfaCode: kfa.template.code,
+        name: kfa.template.name || kfa.name,
+      };
+      med = await this.sendLinked(clinicId, step, {
+        localType: 'rx_medication',
+        localId: rx.id,
+        resource: medicationFor(`RX-${rx.id}`),
+      });
+      if (med.status === 'success')
+        med.message = `Kode KFA ${original} belum dikenal SATUSEHAT — dikirim dengan kode generik ${kfa.kfaCode}`;
+    }
+    if (med.status === 'failed' && isUnknownKfaCode(med.message)) {
+      med.message = `Kode KFA ${rx.kfaCode} untuk "${rx.drugName}" belum dikenal server SATUSEHAT — pilih produk KFA lain (Perbaiki obat). ${med.message ?? ''}`;
+    }
     out.push(med);
     if (med.status !== 'success') return { steps: out, requestId: null };
     const request = await this.sendLinked(

@@ -38,6 +38,41 @@ export interface CompoundIngredient {
   perUnit: StrengthUnit;
 }
 
+/** Waktu minum (v3 TimingEvent): sebelum/sesudah/bersama makan, sebelum tidur */
+export const SIGNA_WHEN = ['AC', 'PC', 'C', 'HS'] as const;
+export type SignaWhen = (typeof SIGNA_WHEN)[number];
+
+/** Satuan per kali pakai untuk doseQuantity FHIR */
+export const SIGNA_UNITS = [
+  'TAB',
+  'CAP',
+  'mL',
+  'DROP',
+  'APPL',
+  'PUFF',
+  'SUPP',
+] as const;
+export type SignaUnit = (typeof SIGNA_UNITS)[number];
+
+/**
+ * Aturan pakai (signa). `latin` = tulisan resep ("S 3 dd tab I p.c."),
+ * `text` = untuk pasien ("3 x sehari 1 tablet sesudah makan").
+ */
+export interface Signa {
+  /** Kode pilihan di form, mis. "oral-3x1" */
+  code?: string | null;
+  timesPerDay?: number | null;
+  /** Jumlah per kali pakai (boleh 0.5) */
+  amount?: number | null;
+  unit?: SignaUnit | null;
+  when?: SignaWhen | null;
+  /** Bila perlu (p.r.n) */
+  prn?: boolean;
+  route?: RouteCode | null;
+  latin: string;
+  text: string;
+}
+
 /**
  * One prescribed drug line item for an encounter's SOAP Treatment section.
  * Plain free-text fields (not linked to Gudang stock) — this documents
@@ -74,6 +109,19 @@ export class PrescriptionItem extends BaseEntity {
 
   @Column({ type: 'text', nullable: true })
   instructions: string;
+
+  // ── Resep sederhana: sediaan, numero, aturan pakai terstruktur ──
+  /** Bentuk sediaan, mis. "Tablet", "Sirup", "Salep" */
+  @Column({ name: 'dosage_form', type: 'varchar', length: 100, nullable: true })
+  dosageForm: string | null;
+
+  /** Jumlah yang diberikan (ditulis "No. XV" di resep) */
+  @Column({ type: 'int', nullable: true })
+  numero: number | null;
+
+  /** Aturan pakai terstruktur — sumber tulisan resep & dosageInstruction FHIR */
+  @Column({ type: 'json', nullable: true })
+  signa: Signa | null;
 
   // ── Racikan ──
   @Column({ name: 'compound_type', type: 'varchar', length: 2, nullable: true })

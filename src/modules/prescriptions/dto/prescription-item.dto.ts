@@ -4,7 +4,9 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsDateString,
+  IsInt,
   IsIn,
   IsNotEmpty,
   IsNumber,
@@ -13,18 +15,24 @@ import {
   IsPositive,
   IsString,
   Matches,
+  Max,
   MaxLength,
+  Min,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import {
   COMPOUND_TYPES,
   ROUTES,
+  SIGNA_UNITS,
+  SIGNA_WHEN,
   STRENGTH_UNITS,
 } from '../entities/prescription-item.entity';
 import type {
   CompoundType,
   RouteCode,
+  SignaUnit,
+  SignaWhen,
   StrengthUnit,
 } from '../entities/prescription-item.entity';
 
@@ -62,6 +70,59 @@ export class CompoundIngredientDto {
   perUnit: StrengthUnit;
 }
 
+export class SignaDto {
+  @ApiPropertyOptional({ example: 'oral-3x1' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  code?: string | null;
+
+  @ApiPropertyOptional({ example: 3, description: 'Kali per hari' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(24)
+  timesPerDay?: number | null;
+
+  @ApiPropertyOptional({ example: 1, description: 'Jumlah per kali pakai' })
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  amount?: number | null;
+
+  @ApiPropertyOptional({ enum: SIGNA_UNITS })
+  @IsOptional()
+  @IsIn(SIGNA_UNITS)
+  unit?: SignaUnit | null;
+
+  @ApiPropertyOptional({ enum: SIGNA_WHEN })
+  @IsOptional()
+  @IsIn(SIGNA_WHEN)
+  when?: SignaWhen | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  prn?: boolean;
+
+  @ApiPropertyOptional({ enum: ROUTES })
+  @IsOptional()
+  @IsIn(ROUTES)
+  route?: RouteCode | null;
+
+  @ApiProperty({ example: 'S 3 dd tab I p.c.' })
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(120)
+  latin: string;
+
+  @ApiProperty({ example: '3 x sehari 1 tablet sesudah makan' })
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(200)
+  text: string;
+}
+
 export class CreatePrescriptionItemDto {
   @ApiProperty({ description: 'Nama obat', example: 'Amoxicillin 500mg' })
   @IsNotEmpty()
@@ -81,6 +142,25 @@ export class CreatePrescriptionItemDto {
   @IsString()
   @MaxLength(255)
   kfaName?: string;
+
+  @ApiPropertyOptional({ description: 'Bentuk sediaan', example: 'Tablet' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  dosageForm?: string;
+
+  @ApiPropertyOptional({ description: 'Numero (jumlah)', example: 15 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(9999)
+  numero?: number;
+
+  @ApiPropertyOptional({ type: SignaDto, description: 'Aturan pakai' })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SignaDto)
+  signa?: SignaDto;
 
   @ApiPropertyOptional({ description: 'Dosis', example: '500 mg' })
   @IsOptional()
@@ -219,4 +299,13 @@ export class SavePrescriptionReviewDto {
   @IsOptional()
   @IsString()
   note?: string;
+}
+
+export class SavePrescriptionSignatureDto {
+  @ApiProperty({ description: 'Tanda tangan dokter (data URL PNG)' })
+  @Matches(/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/, {
+    message: 'Tanda tangan harus berupa gambar PNG/JPEG',
+  })
+  @MaxLength(2_000_000)
+  signature: string;
 }
