@@ -27,8 +27,10 @@ import {
 import { Audit } from '../audit-log/decorators/audit.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
 import { AuditActionType } from '../audit-log/entities/audit-log.entity';
+import { RequireFeature } from '../features/require-feature.decorator';
 
 @ApiTags('operational-records')
+@RequireFeature('operasional')
 @Controller('operational-records')
 @UseGuards(JwtAuthGuard, RolesGuard, ClinicContextGuard)
 @UseInterceptors(AuditInterceptor)
@@ -79,7 +81,9 @@ export class OperationalRecordsController {
     @ClinicId() clinicId: number,
     @Req() req: any,
   ) {
-    req.auditBefore = await this.service.findOne(id, clinicId).catch(() => null);
+    req.auditBefore = await this.service
+      .findOne(id, clinicId)
+      .catch(() => null);
     return this.service.update(id, dto, clinicId, user.userId);
   }
 
@@ -92,7 +96,9 @@ export class OperationalRecordsController {
     @ClinicId() clinicId: number,
     @Req() req: any,
   ) {
-    req.auditBefore = await this.service.findOne(id, clinicId).catch(() => null);
+    req.auditBefore = await this.service
+      .findOne(id, clinicId)
+      .catch(() => null);
     return this.service.remove(id, clinicId);
   }
 }

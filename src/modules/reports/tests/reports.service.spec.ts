@@ -6,7 +6,10 @@ import { Billing } from '../../billing/entities/billing.entity';
 import { Payment } from '../../payments/entities/payment.entity';
 import { SatusehatSyncLog } from '../../satusehat/sync/entities/satusehat-sync-log.entity';
 import { BillingItem } from '../../billing-item/entities/billing-item.entity';
-import { DoctorFeeConfig, FeeType } from '../../doctor-fee/entities/doctor-fee-config.entity';
+import {
+  DoctorFeeConfig,
+  FeeType,
+} from '../../doctor-fee/entities/doctor-fee-config.entity';
 import { OperationalRecord } from '../../operational-records/entities/operational-record.entity';
 import { Barang } from '../../gudang/entities/barang.entity';
 import { StokTransaksi } from '../../gudang/entities/stok-transaksi.entity';
@@ -53,7 +56,10 @@ describe('ReportsService', () => {
   };
 
   beforeEach(async () => {
-    encounterRepo = { createQueryBuilder: jest.fn(() => buildQb()), query: jest.fn() };
+    encounterRepo = {
+      createQueryBuilder: jest.fn(() => buildQb()),
+      query: jest.fn(),
+    };
     billingRepo = { query: jest.fn() };
     paymentRepo = { query: jest.fn() };
     syncLogRepo = {
@@ -78,14 +84,26 @@ describe('ReportsService', () => {
         { provide: getRepositoryToken(Encounter), useValue: encounterRepo },
         { provide: getRepositoryToken(Billing), useValue: billingRepo },
         { provide: getRepositoryToken(Payment), useValue: paymentRepo },
-        { provide: getRepositoryToken(SatusehatSyncLog), useValue: syncLogRepo },
+        {
+          provide: getRepositoryToken(SatusehatSyncLog),
+          useValue: syncLogRepo,
+        },
         { provide: getRepositoryToken(BillingItem), useValue: billingItemRepo },
         { provide: getRepositoryToken(DoctorFeeConfig), useValue: {} },
-        { provide: getRepositoryToken(OperationalRecord), useValue: operationalRecordRepo },
+        {
+          provide: getRepositoryToken(OperationalRecord),
+          useValue: operationalRecordRepo,
+        },
         { provide: getRepositoryToken(Barang), useValue: barangRepo },
-        { provide: getRepositoryToken(StokTransaksi), useValue: stokTransaksiRepo },
+        {
+          provide: getRepositoryToken(StokTransaksi),
+          useValue: stokTransaksiRepo,
+        },
         { provide: getRepositoryToken(Patient), useValue: patientRepo },
-        { provide: getRepositoryToken(PatientOriginGeocode), useValue: patientOriginGeocodeRepo },
+        {
+          provide: getRepositoryToken(PatientOriginGeocode),
+          useValue: patientOriginGeocodeRepo,
+        },
       ],
     }).compile();
 
@@ -208,7 +226,11 @@ describe('ReportsService', () => {
     it('appends a practitioner filter to the SQL and params when practitionerId is given (positive)', async () => {
       billingItemRepo.query.mockResolvedValue([]);
 
-      await service.getDoctorFeeShareReport(1, { year: 2026, month: 1 } as any, 42);
+      await service.getDoctorFeeShareReport(
+        1,
+        { year: 2026, month: 1 } as any,
+        42,
+      );
 
       const [sql, params] = billingItemRepo.query.mock.calls[0];
       expect(sql).toContain('AND pr.id = ?');
@@ -232,7 +254,11 @@ describe('ReportsService', () => {
         },
       ]);
 
-      const result = await service.getDoctorFeeShareReport(1, { year: 2026, month: 1 } as any, 42);
+      const result = await service.getDoctorFeeShareReport(
+        1,
+        { year: 2026, month: 1 } as any,
+        42,
+      );
 
       expect(result.data).toHaveLength(1);
       expect(result.data[0].practitionerId).toBe(42);
@@ -240,7 +266,12 @@ describe('ReportsService', () => {
       expect(result.data[0].totalTindakan).toBe(2);
       expect(result.data[0].totalShareFee).toBe(2 * (200000 * 0.15));
       expect(result.data[0].breakdown).toEqual([
-        expect.objectContaining({ tarifId: 7, tarifName: 'Scaling', count: 2, feeType: FeeType.PERCENTAGE }),
+        expect.objectContaining({
+          tarifId: 7,
+          tarifName: 'Scaling',
+          count: 2,
+          feeType: FeeType.PERCENTAGE,
+        }),
       ]);
     });
 
@@ -301,7 +332,11 @@ describe('ReportsService', () => {
       billingRepo.query.mockResolvedValue([
         { totalPaid: '1000000', totalBillings: '4' },
       ]);
-      const result = await (service as any).computeArpv(1, '2026-01-01', '2026-01-31');
+      const result = await (service as any).computeArpv(
+        1,
+        '2026-01-01',
+        '2026-01-31',
+      );
       expect(result).toBe(250000);
     });
 
@@ -309,7 +344,11 @@ describe('ReportsService', () => {
       billingRepo.query.mockResolvedValue([
         { totalPaid: null, totalBillings: '0' },
       ]);
-      const result = await (service as any).computeArpv(1, '2026-01-01', '2026-01-31');
+      const result = await (service as any).computeArpv(
+        1,
+        '2026-01-01',
+        '2026-01-31',
+      );
       expect(result).toBe(0);
     });
   });
@@ -398,7 +437,12 @@ describe('ReportsService', () => {
   describe('computeCategoryProfitability (private)', () => {
     it('computes net profit and margin per tarif category (positive)', async () => {
       billingItemRepo.query.mockResolvedValue([
-        { kategori: 'Konservasi', frekuensi: '10', pendapatan: '1000000', modal: '400000' },
+        {
+          kategori: 'Konservasi',
+          frekuensi: '10',
+          pendapatan: '1000000',
+          modal: '400000',
+        },
       ]);
 
       const result = await (service as any).computeCategoryProfitability(
@@ -522,8 +566,14 @@ describe('ReportsService', () => {
     it('assembles all sub-metrics into a single object, threading averageLtv into the marketing calc (positive)', async () => {
       const ltvSpy = jest
         .spyOn(service as any, 'computeLtv')
-        .mockResolvedValue({ averageLtv: 777, averageVisitsPerPatient: 2, patientCount: 9 });
-      const arpvSpy = jest.spyOn(service as any, 'computeArpv').mockResolvedValue(111);
+        .mockResolvedValue({
+          averageLtv: 777,
+          averageVisitsPerPatient: 2,
+          patientCount: 9,
+        });
+      const arpvSpy = jest
+        .spyOn(service as any, 'computeArpv')
+        .mockResolvedValue(111);
       const paretoSpy = jest
         .spyOn(service as any, 'computeParetoConcentration')
         .mockResolvedValue({ top20PercentPatientShare: 40, patientCount: 9 });
@@ -532,13 +582,22 @@ describe('ReportsService', () => {
         .mockResolvedValue({ averageDays: 3, outstandingCount: 1 });
       const retentionSpy = jest
         .spyOn(service as any, 'computeRetentionRate')
-        .mockResolvedValue({ retentionRatePercent: 25, previousPeriodPatients: 4, returningPatients: 1 });
+        .mockResolvedValue({
+          retentionRatePercent: 25,
+          previousPeriodPatients: 4,
+          returningPatients: 1,
+        });
       const categorySpy = jest
         .spyOn(service as any, 'computeCategoryProfitability')
         .mockResolvedValue([{ kategori: 'X' }]);
       const marketingSpy = jest
         .spyOn(service as any, 'computeMarketingMetrics')
-        .mockResolvedValue({ totalAdSpend: 0, newPatients: 0, cac: null, ltvCacRatio: null });
+        .mockResolvedValue({
+          totalAdSpend: 0,
+          newPatients: 0,
+          cac: null,
+          ltvCacRatio: null,
+        });
 
       const result = await (service as any).computeBusinessMetrics(
         1,
@@ -546,15 +605,29 @@ describe('ReportsService', () => {
         '2026-01-31',
       );
 
-      expect(marketingSpy).toHaveBeenCalledWith(1, '2026-01-01', '2026-01-31', 777);
+      expect(marketingSpy).toHaveBeenCalledWith(
+        1,
+        '2026-01-01',
+        '2026-01-31',
+        777,
+      );
       expect(result).toEqual({
         ltv: { averageLtv: 777, averageVisitsPerPatient: 2, patientCount: 9 },
         arpv: 111,
         pareto: { top20PercentPatientShare: 40, patientCount: 9 },
         dso: { averageDays: 3, outstandingCount: 1 },
-        retention: { retentionRatePercent: 25, previousPeriodPatients: 4, returningPatients: 1 },
+        retention: {
+          retentionRatePercent: 25,
+          previousPeriodPatients: 4,
+          returningPatients: 1,
+        },
         categoryProfitability: [{ kategori: 'X' }],
-        marketing: { totalAdSpend: 0, newPatients: 0, cac: null, ltvCacRatio: null },
+        marketing: {
+          totalAdSpend: 0,
+          newPatients: 0,
+          cac: null,
+          ltvCacRatio: null,
+        },
       });
 
       ltvSpy.mockRestore();
@@ -750,9 +823,17 @@ describe('ReportsService', () => {
 
   describe('computeStockReport (private)', () => {
     it('reports total inventory value and top material usage by cost (positive)', async () => {
-      barangRepo.query.mockResolvedValue([{ totalValue: '5000000', totalItems: '20' }]);
+      barangRepo.query.mockResolvedValue([
+        { totalValue: '5000000', totalItems: '20' },
+      ]);
       stokTransaksiRepo.query.mockResolvedValue([
-        { barangId: 1, barangName: 'Kapas', satuan: 'box', qtyUsed: '10', totalCost: '100000' },
+        {
+          barangId: 1,
+          barangName: 'Kapas',
+          satuan: 'box',
+          qtyUsed: '10',
+          totalCost: '100000',
+        },
       ]);
 
       const result = await (service as any).computeStockReport(
@@ -773,7 +854,9 @@ describe('ReportsService', () => {
     });
 
     it('defaults to zero inventory value when the clinic has no active barang (negative/edge)', async () => {
-      barangRepo.query.mockResolvedValue([{ totalValue: null, totalItems: '0' }]);
+      barangRepo.query.mockResolvedValue([
+        { totalValue: null, totalItems: '0' },
+      ]);
       stokTransaksiRepo.query.mockResolvedValue([]);
 
       const result = await (service as any).computeStockReport(
@@ -793,7 +876,14 @@ describe('ReportsService', () => {
     });
 
     it('returns the cached row without calling Nominatim when already geocoded (positive)', async () => {
-      const cached = { id: 1, kecamatan: 'A', city: 'B', lat: 1, lng: 2, resolved: true };
+      const cached = {
+        id: 1,
+        kecamatan: 'A',
+        city: 'B',
+        lat: 1,
+        lng: 2,
+        resolved: true,
+      };
       patientOriginGeocodeRepo.findOne.mockResolvedValue(cached);
 
       const result = await (service as any).geocodeKecamatan('A', 'B');
@@ -809,7 +899,10 @@ describe('ReportsService', () => {
         json: async () => [{ lat: '-6.2', lon: '106.8' }],
       });
 
-      const result = await (service as any).geocodeKecamatan('Menteng', 'Jakarta');
+      const result = await (service as any).geocodeKecamatan(
+        'Menteng',
+        'Jakarta',
+      );
 
       expect(result.resolved).toBe(true);
       expect(result.lat).toBeCloseTo(-6.2);
@@ -824,7 +917,10 @@ describe('ReportsService', () => {
         json: async () => [],
       });
 
-      const result = await (service as any).geocodeKecamatan('Unknown', 'Nowhere');
+      const result = await (service as any).geocodeKecamatan(
+        'Unknown',
+        'Nowhere',
+      );
 
       expect(result.resolved).toBe(false);
       expect(result.lat).toBeNull();
@@ -873,7 +969,14 @@ describe('ReportsService', () => {
       const result = await service.getPatientOriginMap(1);
 
       expect(result.data).toEqual([
-        { kecamatan: 'Menteng', city: 'Jakarta', count: 5, lat: -6.2, lng: 106.8, resolved: true },
+        {
+          kecamatan: 'Menteng',
+          city: 'Jakarta',
+          count: 5,
+          lat: -6.2,
+          lng: 106.8,
+          resolved: true,
+        },
       ]);
       expect(geocodeSpy).not.toHaveBeenCalled();
     });
@@ -924,15 +1027,35 @@ describe('ReportsService', () => {
   describe('getPatientOriginByKelurahan', () => {
     it('aggregates patient counts by kelurahan without geocoding (positive)', async () => {
       patientRepo.query.mockResolvedValue([
-        { kelurahan: 'Balai Nan Duo', kecamatan: 'Payakumbuh Barat', city: 'Kota Payakumbuh', count: '9' },
-        { kelurahan: 'Sungai Durian', kecamatan: 'Payakumbuh Utara', city: 'Kota Payakumbuh', count: '4' },
+        {
+          kelurahan: 'Balai Nan Duo',
+          kecamatan: 'Payakumbuh Barat',
+          city: 'Kota Payakumbuh',
+          count: '9',
+        },
+        {
+          kelurahan: 'Sungai Durian',
+          kecamatan: 'Payakumbuh Utara',
+          city: 'Kota Payakumbuh',
+          count: '4',
+        },
       ]);
 
       const result = await service.getPatientOriginByKelurahan(1);
 
       expect(result.data).toEqual([
-        { kelurahan: 'Balai Nan Duo', kecamatan: 'Payakumbuh Barat', city: 'Kota Payakumbuh', count: 9 },
-        { kelurahan: 'Sungai Durian', kecamatan: 'Payakumbuh Utara', city: 'Kota Payakumbuh', count: 4 },
+        {
+          kelurahan: 'Balai Nan Duo',
+          kecamatan: 'Payakumbuh Barat',
+          city: 'Kota Payakumbuh',
+          count: 9,
+        },
+        {
+          kelurahan: 'Sungai Durian',
+          kecamatan: 'Payakumbuh Utara',
+          city: 'Kota Payakumbuh',
+          count: 4,
+        },
       ]);
     });
 
@@ -958,14 +1081,34 @@ describe('ReportsService', () => {
 
     function mockAllQueries(overrides: any[] = []) {
       const defaults = [
-        [{ total: '10', finished: '6', cancelled: '2', inProgress: '2', avgDuration: '45.6' }], // 1 summary
+        [
+          {
+            total: '10',
+            finished: '6',
+            cancelled: '2',
+            inProgress: '2',
+            avgDuration: '45.6',
+          },
+        ], // 1 summary
         [{ date: '2026-01-01', count: '10' }], // 2 byDay
         [{ practitionerName: 'Dr. A', count: '10' }], // 3 byDoctor
-        [{ gender: 'male', count: '6' }, { gender: 'female', count: '4' }], // 4 byGender
+        [
+          { gender: 'male', count: '6' },
+          { gender: 'female', count: '4' },
+        ], // 4 byGender
         [{ ageGroup: '26-40 (Dewasa)', count: '10' }], // 5 byAgeGroupRaw
-        [{ patientType: 'new', count: '3' }, { patientType: 'returning', count: '7' }], // 6 newVsReturningRaw
-        [{ tindakan: 'Tambal', kategori: 'Konservasi', count: '8' }, { tindakan: 'Cabut', kategori: 'Bedah', count: '2' }], // 7 procedureRows
-        [{ hour: '9', count: '5' }, { hour: '10', count: '5' }], // 8 byHourRaw
+        [
+          { patientType: 'new', count: '3' },
+          { patientType: 'returning', count: '7' },
+        ], // 6 newVsReturningRaw
+        [
+          { tindakan: 'Tambal', kategori: 'Konservasi', count: '8' },
+          { tindakan: 'Cabut', kategori: 'Bedah', count: '2' },
+        ], // 7 procedureRows
+        [
+          { hour: '9', count: '5' },
+          { hour: '10', count: '5' },
+        ], // 8 byHourRaw
         [{ dow: '2', count: '10' }], // 9 byDayOfWeekRaw
         [{ total: '8' }], // 10 prevSummaryRow
       ];
@@ -1006,7 +1149,10 @@ describe('ReportsService', () => {
         inProgress: 2,
         avgDurationMinutes: 46,
       });
-      expect(result.data.demographics.newVsReturning).toEqual({ new: 3, returning: 7 });
+      expect(result.data.demographics.newVsReturning).toEqual({
+        new: 3,
+        returning: 7,
+      });
       expect(result.data.demographics.byAgeGroup).toEqual([
         { group: '26-40 (Dewasa)', count: 10 },
       ]);
@@ -1017,15 +1163,33 @@ describe('ReportsService', () => {
       expect(result.data.procedureMix.avgProceduresPerVisit).toBe(1); // 10 procedures / 10 total
       expect(result.data.byHour.find((h: any) => h.hour === 9)?.count).toBe(5);
       expect(result.data.byHour.find((h: any) => h.hour === 3)?.count).toBe(0);
-      expect(result.data.byDayOfWeek.find((d: any) => d.day === 'Senin')?.count).toBe(10);
-      expect(result.data.comparison).toEqual({ previousTotal: 8, changePercent: 25 });
+      expect(
+        result.data.byDayOfWeek.find((d: any) => d.day === 'Senin')?.count,
+      ).toBe(10);
+      expect(result.data.comparison).toEqual({
+        previousTotal: 8,
+        changePercent: 25,
+      });
       expect(result.data.encounters[0].durationMinutes).toBe(30);
-      expect(result.meta).toEqual({ total: 1, page: 1, limit: 50, totalPages: 1 });
+      expect(result.meta).toEqual({
+        total: 1,
+        page: 1,
+        limit: 50,
+        totalPages: 1,
+      });
     });
 
     it('reports avgDurationMinutes as null (not 0) when no encounter has both timestamps (negative/edge)', async () => {
       mockAllQueries([
-        [{ total: '5', finished: '0', cancelled: '0', inProgress: '5', avgDuration: null }],
+        [
+          {
+            total: '5',
+            finished: '0',
+            cancelled: '0',
+            inProgress: '5',
+            avgDuration: null,
+          },
+        ],
       ]);
       const result = await service.getVisitReport(
         1,
@@ -1047,7 +1211,15 @@ describe('ReportsService', () => {
 
     it('reports avgProceduresPerVisit as 0 instead of dividing by zero when there were no visits (negative/edge)', async () => {
       mockAllQueries([
-        [{ total: '0', finished: '0', cancelled: '0', inProgress: '0', avgDuration: null }],
+        [
+          {
+            total: '0',
+            finished: '0',
+            cancelled: '0',
+            inProgress: '0',
+            avgDuration: null,
+          },
+        ],
       ]);
       const result = await service.getVisitReport(
         1,
@@ -1081,11 +1253,17 @@ describe('ReportsService', () => {
 
       await service.getVisitReport(
         1,
-        { dateFrom: '2026-01-01', dateTo: '2026-01-07', practitionerId: 9 } as any,
+        {
+          dateFrom: '2026-01-01',
+          dateTo: '2026-01-07',
+          practitionerId: 9,
+        } as any,
         admin,
       );
 
-      expect(qb.andWhere).toHaveBeenCalledWith('e.practitionerId = :pid', { pid: 9 });
+      expect(qb.andWhere).toHaveBeenCalledWith('e.practitionerId = :pid', {
+        pid: 9,
+      });
     });
   });
 
@@ -1184,16 +1362,18 @@ describe('ReportsService', () => {
   });
 
   describe('getFinancialReport', () => {
-    function mockDirectQueries(overrides: {
-      summaryRow?: any[];
-      byDay?: any[];
-      byPaymentMethod?: any[];
-      byDoctorRevenue?: any[];
-      shareRows?: any[];
-      tindakanRows?: any[];
-      pengeluaranRow?: any[];
-      prevSummaryRow?: any[];
-    } = {}) {
+    function mockDirectQueries(
+      overrides: {
+        summaryRow?: any[];
+        byDay?: any[];
+        byPaymentMethod?: any[];
+        byDoctorRevenue?: any[];
+        shareRows?: any[];
+        tindakanRows?: any[];
+        pengeluaranRow?: any[];
+        prevSummaryRow?: any[];
+      } = {},
+    ) {
       billingRepo.query
         .mockResolvedValueOnce(
           overrides.summaryRow ?? [
@@ -1208,19 +1388,31 @@ describe('ReportsService', () => {
         )
         .mockResolvedValueOnce(overrides.byDay ?? [])
         .mockResolvedValueOnce(overrides.byDoctorRevenue ?? [])
-        .mockResolvedValueOnce(overrides.prevSummaryRow ?? [{ totalPaid: '0' }]);
+        .mockResolvedValueOnce(
+          overrides.prevSummaryRow ?? [{ totalPaid: '0' }],
+        );
       paymentRepo.query.mockResolvedValueOnce(overrides.byPaymentMethod ?? []);
       billingItemRepo.query
         .mockResolvedValueOnce(overrides.shareRows ?? [])
         .mockResolvedValueOnce(overrides.tindakanRows ?? []);
-      operationalRecordRepo.query.mockResolvedValueOnce(overrides.pengeluaranRow ?? [{ total: '0' }]);
+      operationalRecordRepo.query.mockResolvedValueOnce(
+        overrides.pengeluaranRow ?? [{ total: '0' }],
+      );
     }
 
     let businessMetricsSpy: jest.SpyInstance;
     beforeEach(() => {
       businessMetricsSpy = jest
         .spyOn(service as any, 'computeBusinessMetrics')
-        .mockResolvedValue({ ltv: {}, arpv: 0, pareto: {}, dso: {}, retention: {}, categoryProfitability: [], marketing: {} });
+        .mockResolvedValue({
+          ltv: {},
+          arpv: 0,
+          pareto: {},
+          dso: {},
+          retention: {},
+          categoryProfitability: [],
+          marketing: {},
+        });
       jest.spyOn(service as any, 'getPaymentStats').mockResolvedValue({});
       jest.spyOn(service as any, 'getDiscountStats').mockResolvedValue({});
     });
@@ -1240,13 +1432,23 @@ describe('ReportsService', () => {
         collectionRate: 80,
         totalRefunded: 0,
       });
-      expect(businessMetricsSpy).toHaveBeenCalledWith(1, '2026-01-01', '2026-01-31');
+      expect(businessMetricsSpy).toHaveBeenCalledWith(
+        1,
+        '2026-01-01',
+        '2026-01-31',
+      );
     });
 
     it('reports collectionRate as 0 instead of NaN when there is no billing at all (negative/edge)', async () => {
       mockDirectQueries({
         summaryRow: [
-          { totalBilling: null, totalPaid: null, totalOutstanding: null, totalRefunded: null, totalBillings: '0' },
+          {
+            totalBilling: null,
+            totalPaid: null,
+            totalOutstanding: null,
+            totalRefunded: null,
+            totalBillings: '0',
+          },
         ],
       });
 
@@ -1260,7 +1462,9 @@ describe('ReportsService', () => {
 
     it('attributes doctor-fee share correctly to byDoctor revenue rows (positive)', async () => {
       mockDirectQueries({
-        byDoctorRevenue: [{ practitionerId: 1, practitionerName: 'Dr. A', revenue: '500000' }],
+        byDoctorRevenue: [
+          { practitionerId: 1, practitionerName: 'Dr. A', revenue: '500000' },
+        ],
         shareRows: [
           {
             practitionerId: 1,
@@ -1288,7 +1492,13 @@ describe('ReportsService', () => {
     it('computes modal, labaBersih and marginPersen from tindakanTerlaris + pengeluaran (positive)', async () => {
       mockDirectQueries({
         summaryRow: [
-          { totalBilling: '1000000', totalPaid: '1000000', totalOutstanding: '0', totalRefunded: '0', totalBillings: '5' },
+          {
+            totalBilling: '1000000',
+            totalPaid: '1000000',
+            totalOutstanding: '0',
+            totalRefunded: '0',
+            totalBillings: '5',
+          },
         ],
         tindakanRows: [
           {
@@ -1328,7 +1538,13 @@ describe('ReportsService', () => {
     it('computes a positive changePercent against a nonzero previous period (positive)', async () => {
       mockDirectQueries({
         summaryRow: [
-          { totalBilling: '1200000', totalPaid: '1200000', totalOutstanding: '0', totalRefunded: '0', totalBillings: '5' },
+          {
+            totalBilling: '1200000',
+            totalPaid: '1200000',
+            totalOutstanding: '0',
+            totalRefunded: '0',
+            totalBillings: '5',
+          },
         ],
         prevSummaryRow: [{ totalPaid: '1000000' }],
       });
@@ -1344,15 +1560,43 @@ describe('ReportsService', () => {
     it('combines the base financial report with Pro-only sections and computes labaKotor (positive)', async () => {
       const baseReport = {
         data: {
-          summary: { totalBilling: 1000000, totalPaid: 900000, totalOutstanding: 100000, collectionRate: 90, totalRefunded: 0 },
+          summary: {
+            totalBilling: 1000000,
+            totalPaid: 900000,
+            totalOutstanding: 100000,
+            collectionRate: 90,
+            totalRefunded: 0,
+          },
           comparison: { previousPendapatan: 0, changePercent: null },
           byDay: [],
           byPaymentMethod: [],
           byDoctor: [],
-          ringkasan: { pendapatanTotal: 900000, modal: 300000, labaBersih: 500000, pengeluaran: 100000, marginPersen: 55.6 },
+          ringkasan: {
+            pendapatanTotal: 900000,
+            modal: 300000,
+            labaBersih: 500000,
+            pengeluaran: 100000,
+            marginPersen: 55.6,
+          },
           tindakanTerlaris: [
-            { tarifId: 1, namaTindakan: 'A', modal: 1000, hargaJual: 2000, frekuensi: 5, totalDiskon: 5000, labaBersih: 4000 },
-            { tarifId: 2, namaTindakan: 'B', modal: 500, hargaJual: 1000, frekuensi: 2, totalDiskon: 10000, labaBersih: 1000 },
+            {
+              tarifId: 1,
+              namaTindakan: 'A',
+              modal: 1000,
+              hargaJual: 2000,
+              frekuensi: 5,
+              totalDiskon: 5000,
+              labaBersih: 4000,
+            },
+            {
+              tarifId: 2,
+              namaTindakan: 'B',
+              modal: 500,
+              hargaJual: 1000,
+              frekuensi: 2,
+              totalDiskon: 10000,
+              labaBersih: 1000,
+            },
           ],
           businessMetrics: {},
         },
@@ -1362,16 +1606,38 @@ describe('ReportsService', () => {
         .mockResolvedValue(baseReport as any);
       const monthlyTrendSpy = jest
         .spyOn(service as any, 'computeMonthlyTrend')
-        .mockResolvedValue([{ month: '2026-01', revenue: 100, modal: 10, expense: 5, netProfit: 85, marginPercent: 85, visits: 1, newPatients: 1 }]);
+        .mockResolvedValue([
+          {
+            month: '2026-01',
+            revenue: 100,
+            modal: 10,
+            expense: 5,
+            netProfit: 85,
+            marginPercent: 85,
+            visits: 1,
+            newPatients: 1,
+          },
+        ]);
       const byDoctorProfitSpy = jest
         .spyOn(service as any, 'computeByDoctorProfit')
-        .mockResolvedValue([{ practitionerName: 'Dr. A', revenue: 100, doctorFeeShare: 10, labaBersih: 90 }]);
+        .mockResolvedValue([
+          {
+            practitionerName: 'Dr. A',
+            revenue: 100,
+            doctorFeeShare: 10,
+            labaBersih: 90,
+          },
+        ]);
       const heatmapSpy = jest
         .spyOn(service as any, 'computeVisitHeatmap')
         .mockResolvedValue([{ dayOfWeek: 2, hour: 9, count: 3 }]);
       const stockSpy = jest
         .spyOn(service as any, 'computeStockReport')
-        .mockResolvedValue({ totalInventoryValue: 1000, totalActiveItems: 5, usage: [] });
+        .mockResolvedValue({
+          totalInventoryValue: 1000,
+          totalActiveItems: 5,
+          usage: [],
+        });
 
       const result = await service.getFinancialReportPro(1, {
         dateFrom: '2026-01-01',
@@ -1384,31 +1650,62 @@ describe('ReportsService', () => {
       });
       expect(result.data.labaKotor).toBe(900000 - 300000); // totalPaid - modal
       expect(result.data.monthlyTrend).toEqual([
-        { month: '2026-01', revenue: 100, modal: 10, expense: 5, netProfit: 85, marginPercent: 85, visits: 1, newPatients: 1 },
+        {
+          month: '2026-01',
+          revenue: 100,
+          modal: 10,
+          expense: 5,
+          netProfit: 85,
+          marginPercent: 85,
+          visits: 1,
+          newPatients: 1,
+        },
       ]);
       expect(result.data.byDoctorProfit[0].practitionerName).toBe('Dr. A');
       expect(result.data.visitHeatmap[0].count).toBe(3);
       expect(result.data.stockReport.totalActiveItems).toBe(5);
       // discount ranking: only positive-discount items, sorted desc by discount
-      expect(result.data.discountRanking.map((t: any) => t.tarifId)).toEqual([2, 1]);
+      expect(result.data.discountRanking.map((t: any) => t.tarifId)).toEqual([
+        2, 1,
+      ]);
     });
 
     it('excludes zero-discount tindakan from discountRanking (negative/edge)', async () => {
       const baseReport = {
         data: {
-          summary: {}, comparison: {}, byDay: [], byPaymentMethod: [], byDoctor: [],
+          summary: {},
+          comparison: {},
+          byDay: [],
+          byPaymentMethod: [],
+          byDoctor: [],
           ringkasan: { modal: 0 },
           tindakanTerlaris: [
-            { tarifId: 1, namaTindakan: 'A', modal: 0, hargaJual: 0, frekuensi: 0, totalDiskon: 0, labaBersih: 0 },
+            {
+              tarifId: 1,
+              namaTindakan: 'A',
+              modal: 0,
+              hargaJual: 0,
+              frekuensi: 0,
+              totalDiskon: 0,
+              labaBersih: 0,
+            },
           ],
           businessMetrics: {},
         },
       };
-      jest.spyOn(service, 'getFinancialReport').mockResolvedValue(baseReport as any);
+      jest
+        .spyOn(service, 'getFinancialReport')
+        .mockResolvedValue(baseReport as any);
       jest.spyOn(service as any, 'computeMonthlyTrend').mockResolvedValue([]);
       jest.spyOn(service as any, 'computeByDoctorProfit').mockResolvedValue([]);
       jest.spyOn(service as any, 'computeVisitHeatmap').mockResolvedValue([]);
-      jest.spyOn(service as any, 'computeStockReport').mockResolvedValue({ totalInventoryValue: 0, totalActiveItems: 0, usage: [] });
+      jest
+        .spyOn(service as any, 'computeStockReport')
+        .mockResolvedValue({
+          totalInventoryValue: 0,
+          totalActiveItems: 0,
+          usage: [],
+        });
 
       const result = await service.getFinancialReportPro(1, {
         dateFrom: '2026-01-01',
@@ -1422,30 +1719,161 @@ describe('ReportsService', () => {
   describe('getInvestorReportData', () => {
     it('assembles 12-month totals, growth%, retention% and top doctors (positive)', async () => {
       const monthly = [
-        { month: '2025-08', revenue: 1000000, modal: 200000, expense: 100000, netProfit: 700000, marginPercent: 70, visits: 10, newPatients: 2 },
-        { month: '2025-09', revenue: 1000000, modal: 200000, expense: 100000, netProfit: 700000, marginPercent: 70, visits: 10, newPatients: 2 },
-        { month: '2025-10', revenue: 1000000, modal: 200000, expense: 100000, netProfit: 700000, marginPercent: 70, visits: 10, newPatients: 2 },
-        { month: '2025-11', revenue: 1000000, modal: 200000, expense: 100000, netProfit: 700000, marginPercent: 70, visits: 10, newPatients: 2 },
-        { month: '2025-12', revenue: 1000000, modal: 200000, expense: 100000, netProfit: 700000, marginPercent: 70, visits: 10, newPatients: 2 },
-        { month: '2026-01', revenue: 1000000, modal: 200000, expense: 100000, netProfit: 700000, marginPercent: 70, visits: 10, newPatients: 2 },
-        { month: '2026-02', revenue: 2000000, modal: 200000, expense: 100000, netProfit: 1700000, marginPercent: 85, visits: 20, newPatients: 4 },
-        { month: '2026-03', revenue: 2000000, modal: 200000, expense: 100000, netProfit: 1700000, marginPercent: 85, visits: 20, newPatients: 4 },
-        { month: '2026-04', revenue: 2000000, modal: 200000, expense: 100000, netProfit: 1700000, marginPercent: 85, visits: 20, newPatients: 4 },
-        { month: '2026-05', revenue: 2000000, modal: 200000, expense: 100000, netProfit: 1700000, marginPercent: 85, visits: 20, newPatients: 4 },
-        { month: '2026-06', revenue: 2000000, modal: 200000, expense: 100000, netProfit: 1700000, marginPercent: 85, visits: 20, newPatients: 4 },
-        { month: '2026-07', revenue: 2000000, modal: 200000, expense: 100000, netProfit: 1700000, marginPercent: 85, visits: 20, newPatients: 4 },
+        {
+          month: '2025-08',
+          revenue: 1000000,
+          modal: 200000,
+          expense: 100000,
+          netProfit: 700000,
+          marginPercent: 70,
+          visits: 10,
+          newPatients: 2,
+        },
+        {
+          month: '2025-09',
+          revenue: 1000000,
+          modal: 200000,
+          expense: 100000,
+          netProfit: 700000,
+          marginPercent: 70,
+          visits: 10,
+          newPatients: 2,
+        },
+        {
+          month: '2025-10',
+          revenue: 1000000,
+          modal: 200000,
+          expense: 100000,
+          netProfit: 700000,
+          marginPercent: 70,
+          visits: 10,
+          newPatients: 2,
+        },
+        {
+          month: '2025-11',
+          revenue: 1000000,
+          modal: 200000,
+          expense: 100000,
+          netProfit: 700000,
+          marginPercent: 70,
+          visits: 10,
+          newPatients: 2,
+        },
+        {
+          month: '2025-12',
+          revenue: 1000000,
+          modal: 200000,
+          expense: 100000,
+          netProfit: 700000,
+          marginPercent: 70,
+          visits: 10,
+          newPatients: 2,
+        },
+        {
+          month: '2026-01',
+          revenue: 1000000,
+          modal: 200000,
+          expense: 100000,
+          netProfit: 700000,
+          marginPercent: 70,
+          visits: 10,
+          newPatients: 2,
+        },
+        {
+          month: '2026-02',
+          revenue: 2000000,
+          modal: 200000,
+          expense: 100000,
+          netProfit: 1700000,
+          marginPercent: 85,
+          visits: 20,
+          newPatients: 4,
+        },
+        {
+          month: '2026-03',
+          revenue: 2000000,
+          modal: 200000,
+          expense: 100000,
+          netProfit: 1700000,
+          marginPercent: 85,
+          visits: 20,
+          newPatients: 4,
+        },
+        {
+          month: '2026-04',
+          revenue: 2000000,
+          modal: 200000,
+          expense: 100000,
+          netProfit: 1700000,
+          marginPercent: 85,
+          visits: 20,
+          newPatients: 4,
+        },
+        {
+          month: '2026-05',
+          revenue: 2000000,
+          modal: 200000,
+          expense: 100000,
+          netProfit: 1700000,
+          marginPercent: 85,
+          visits: 20,
+          newPatients: 4,
+        },
+        {
+          month: '2026-06',
+          revenue: 2000000,
+          modal: 200000,
+          expense: 100000,
+          netProfit: 1700000,
+          marginPercent: 85,
+          visits: 20,
+          newPatients: 4,
+        },
+        {
+          month: '2026-07',
+          revenue: 2000000,
+          modal: 200000,
+          expense: 100000,
+          netProfit: 1700000,
+          marginPercent: 85,
+          visits: 20,
+          newPatients: 4,
+        },
       ];
-      jest.spyOn(service as any, 'computeMonthlyTrend').mockResolvedValue(monthly);
-      jest.spyOn(service as any, 'computeLtv').mockResolvedValue({ averageLtv: 500000, averageVisitsPerPatient: 2, patientCount: 50 });
-      jest.spyOn(service as any, 'computeDso').mockResolvedValue({ averageDays: 10, outstandingCount: 3 });
+      jest
+        .spyOn(service as any, 'computeMonthlyTrend')
+        .mockResolvedValue(monthly);
+      jest
+        .spyOn(service as any, 'computeLtv')
+        .mockResolvedValue({
+          averageLtv: 500000,
+          averageVisitsPerPatient: 2,
+          patientCount: 50,
+        });
+      jest
+        .spyOn(service as any, 'computeDso')
+        .mockResolvedValue({ averageDays: 10, outstandingCount: 3 });
       jest.spyOn(service as any, 'computeArpv').mockResolvedValue(150000);
-      jest.spyOn(service as any, 'computeCategoryProfitability').mockResolvedValue([]);
-      jest.spyOn(service as any, 'computeMarketingMetrics').mockResolvedValue({ totalAdSpend: 0, newPatients: 0, cac: null, ltvCacRatio: null });
+      jest
+        .spyOn(service as any, 'computeCategoryProfitability')
+        .mockResolvedValue([]);
+      jest
+        .spyOn(service as any, 'computeMarketingMetrics')
+        .mockResolvedValue({
+          totalAdSpend: 0,
+          newPatients: 0,
+          cac: null,
+          ltvCacRatio: null,
+        });
 
       encounterRepo.query.mockResolvedValueOnce([{ total: '80' }]); // totalPatientsRow
       billingRepo.query
-        .mockResolvedValueOnce([{ prevPatients: '20', returningPatients: '15' }]) // halfYearRetentionRow
-        .mockResolvedValueOnce([{ practitionerId: 1, practitionerName: 'Dr. A', revenue: '5000000' }]); // byDoctorRevenue
+        .mockResolvedValueOnce([
+          { prevPatients: '20', returningPatients: '15' },
+        ]) // halfYearRetentionRow
+        .mockResolvedValueOnce([
+          { practitionerId: 1, practitionerName: 'Dr. A', revenue: '5000000' },
+        ]); // byDoctorRevenue
 
       const result = await service.getInvestorReportData(1);
 
@@ -1455,7 +1883,10 @@ describe('ReportsService', () => {
       // last3 (2026-05,06,07 = 6,000,000) vs prior3 (2026-02,03,04 = 6,000,000) -> 0% growth
       expect(result.summary.recentGrowthPercent).toBe(0);
       expect(result.unitEconomics.halfYearRetentionPercent).toBe(75); // 15/20
-      expect(result.byDoctor[0]).toEqual({ practitionerName: 'Dr. A', revenue: 5000000 });
+      expect(result.byDoctor[0]).toEqual({
+        practitionerName: 'Dr. A',
+        revenue: 5000000,
+      });
       const realMonthKeys = (service as any).getTrailingMonthKeys(12);
       expect(result.periodStart).toBe(realMonthKeys[0]);
       expect(result.periodEnd).toBe(realMonthKeys[11]);
@@ -1472,12 +1903,31 @@ describe('ReportsService', () => {
         visits: 0,
         newPatients: 0,
       }));
-      jest.spyOn(service as any, 'computeMonthlyTrend').mockResolvedValue(monthly);
-      jest.spyOn(service as any, 'computeLtv').mockResolvedValue({ averageLtv: 0, averageVisitsPerPatient: 0, patientCount: 0 });
-      jest.spyOn(service as any, 'computeDso').mockResolvedValue({ averageDays: 0, outstandingCount: 0 });
+      jest
+        .spyOn(service as any, 'computeMonthlyTrend')
+        .mockResolvedValue(monthly);
+      jest
+        .spyOn(service as any, 'computeLtv')
+        .mockResolvedValue({
+          averageLtv: 0,
+          averageVisitsPerPatient: 0,
+          patientCount: 0,
+        });
+      jest
+        .spyOn(service as any, 'computeDso')
+        .mockResolvedValue({ averageDays: 0, outstandingCount: 0 });
       jest.spyOn(service as any, 'computeArpv').mockResolvedValue(0);
-      jest.spyOn(service as any, 'computeCategoryProfitability').mockResolvedValue([]);
-      jest.spyOn(service as any, 'computeMarketingMetrics').mockResolvedValue({ totalAdSpend: 0, newPatients: 0, cac: null, ltvCacRatio: null });
+      jest
+        .spyOn(service as any, 'computeCategoryProfitability')
+        .mockResolvedValue([]);
+      jest
+        .spyOn(service as any, 'computeMarketingMetrics')
+        .mockResolvedValue({
+          totalAdSpend: 0,
+          newPatients: 0,
+          cac: null,
+          ltvCacRatio: null,
+        });
       encounterRepo.query.mockResolvedValueOnce([{ total: '0' }]);
       billingRepo.query
         .mockResolvedValueOnce([{ prevPatients: '0', returningPatients: '0' }])
@@ -1491,14 +1941,38 @@ describe('ReportsService', () => {
     it('reports halfYearRetentionPercent as null when there were no patients in the first half (negative/edge)', async () => {
       jest.spyOn(service as any, 'computeMonthlyTrend').mockResolvedValue(
         Array.from({ length: 12 }, (_, i) => ({
-          month: `m${i}`, revenue: 0, modal: 0, expense: 0, netProfit: 0, marginPercent: 0, visits: 0, newPatients: 0,
+          month: `m${i}`,
+          revenue: 0,
+          modal: 0,
+          expense: 0,
+          netProfit: 0,
+          marginPercent: 0,
+          visits: 0,
+          newPatients: 0,
         })),
       );
-      jest.spyOn(service as any, 'computeLtv').mockResolvedValue({ averageLtv: 0, averageVisitsPerPatient: 0, patientCount: 0 });
-      jest.spyOn(service as any, 'computeDso').mockResolvedValue({ averageDays: 0, outstandingCount: 0 });
+      jest
+        .spyOn(service as any, 'computeLtv')
+        .mockResolvedValue({
+          averageLtv: 0,
+          averageVisitsPerPatient: 0,
+          patientCount: 0,
+        });
+      jest
+        .spyOn(service as any, 'computeDso')
+        .mockResolvedValue({ averageDays: 0, outstandingCount: 0 });
       jest.spyOn(service as any, 'computeArpv').mockResolvedValue(0);
-      jest.spyOn(service as any, 'computeCategoryProfitability').mockResolvedValue([]);
-      jest.spyOn(service as any, 'computeMarketingMetrics').mockResolvedValue({ totalAdSpend: 0, newPatients: 0, cac: null, ltvCacRatio: null });
+      jest
+        .spyOn(service as any, 'computeCategoryProfitability')
+        .mockResolvedValue([]);
+      jest
+        .spyOn(service as any, 'computeMarketingMetrics')
+        .mockResolvedValue({
+          totalAdSpend: 0,
+          newPatients: 0,
+          cac: null,
+          ltvCacRatio: null,
+        });
       encounterRepo.query.mockResolvedValueOnce([{ total: '0' }]);
       billingRepo.query
         .mockResolvedValueOnce([{ prevPatients: '0', returningPatients: '0' }])
@@ -1531,7 +2005,12 @@ describe('ReportsService', () => {
       } as any);
 
       expect(result.data.data[0].tindakan).toBe('Tambal, Cabut');
-      expect(result.data.meta).toEqual({ total: 1, page: 1, limit: 20, totalPages: 1 });
+      expect(result.data.meta).toEqual({
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      });
     });
 
     it('falls back to "-" when an encounter has no billed tindakan yet (negative/edge)', async () => {
@@ -1557,7 +2036,9 @@ describe('ReportsService', () => {
     });
 
     it('applies pagination offset based on page/limit (positive)', async () => {
-      encounterRepo.query.mockResolvedValueOnce([]).mockResolvedValueOnce([{ total: '0' }]);
+      encounterRepo.query
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ total: '0' }]);
 
       await service.getFinancialVisitDetail(1, {
         dateFrom: '2026-01-01',
@@ -1573,7 +2054,9 @@ describe('ReportsService', () => {
     });
 
     it('returns an empty page (not an error) when nothing matches the date range (negative/edge)', async () => {
-      encounterRepo.query.mockResolvedValueOnce([]).mockResolvedValueOnce([{ total: '0' }]);
+      encounterRepo.query
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ total: '0' }]);
 
       const result = await service.getFinancialVisitDetail(1, {
         dateFrom: '2026-01-01',
@@ -1588,7 +2071,9 @@ describe('ReportsService', () => {
   describe('getSatusehatSyncReport', () => {
     it('computes the sync rate and per-resource breakdown (positive)', async () => {
       syncLogRepo.query
-        .mockResolvedValueOnce([{ total: '10', synced: '8', failed: '2', pending: '0' }])
+        .mockResolvedValueOnce([
+          { total: '10', synced: '8', failed: '2', pending: '0' },
+        ])
         .mockResolvedValueOnce([
           { resourceType: 'Patient', synced: '5', failed: '1', pending: '0' },
         ]);
@@ -1602,7 +2087,9 @@ describe('ReportsService', () => {
 
     it('reports a 0% sync rate instead of NaN when there are no sync logs yet (negative/edge)', async () => {
       syncLogRepo.query
-        .mockResolvedValueOnce([{ total: '0', synced: '0', failed: '0', pending: '0' }])
+        .mockResolvedValueOnce([
+          { total: '0', synced: '0', failed: '0', pending: '0' },
+        ])
         .mockResolvedValueOnce([]);
       syncLogRepo.find.mockResolvedValue([]);
 
@@ -1613,7 +2100,9 @@ describe('ReportsService', () => {
 
     it('lists up to the most recent failed items with error details (positive)', async () => {
       syncLogRepo.query
-        .mockResolvedValueOnce([{ total: '1', synced: '0', failed: '1', pending: '0' }])
+        .mockResolvedValueOnce([
+          { total: '1', synced: '0', failed: '1', pending: '0' },
+        ])
         .mockResolvedValueOnce([]);
       syncLogRepo.find.mockResolvedValue([
         {
@@ -1633,7 +2122,9 @@ describe('ReportsService', () => {
 
   describe('retrySync', () => {
     it('reports the number of queued retries (positive)', async () => {
-      const qb = buildQb({ execute: jest.fn().mockResolvedValue({ affected: 3 }) });
+      const qb = buildQb({
+        execute: jest.fn().mockResolvedValue({ affected: 3 }),
+      });
       syncLogRepo.createQueryBuilder.mockReturnValue(qb);
 
       const result = await service.retrySync(1, {} as any);
@@ -1653,7 +2144,9 @@ describe('ReportsService', () => {
     });
 
     it('reports 0 queued when nothing matches (negative/edge)', async () => {
-      const qb = buildQb({ execute: jest.fn().mockResolvedValue({ affected: 0 }) });
+      const qb = buildQb({
+        execute: jest.fn().mockResolvedValue({ affected: 0 }),
+      });
       syncLogRepo.createQueryBuilder.mockReturnValue(qb);
 
       const result = await service.retrySync(1, {} as any);

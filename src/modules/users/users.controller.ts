@@ -131,7 +131,9 @@ export class UsersController {
 
   @Post('invite')
   @Audit('Staff', AuditActionType.CREATE, { labelField: 'email' })
-  @Notify(NotificationType.USER_JOINED, 'User baru bergabung ke klinik', { labelField: 'email' })
+  @Notify(NotificationType.USER_JOINED, 'User baru bergabung ke klinik', {
+    labelField: 'email',
+  })
   @Roles(UserRole.OWNER, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Create/invite a new user directly with a role' })
   @ApiResponse({ status: 201, description: 'User created successfully' })
@@ -164,7 +166,9 @@ export class UsersController {
     this.logger.log(
       `[PATCH /users/:id] Request masuk | userId=${id}, requestedBy=${user.userId}`,
     );
-    req.auditBefore = await this.usersService.findOne(id, user).catch(() => null);
+    req.auditBefore = await this.usersService
+      .findOne(id, user)
+      .catch(() => null);
     const result = await this.usersService.update(id, dto, user);
     this.logger.log(`[PATCH /users/:id] Response dikirim | userId=${id}`);
     return result;
@@ -188,7 +192,9 @@ export class UsersController {
     this.logger.log(
       `[POST /users/:id/activate] Request masuk | userId=${id}, requestedBy=${user.userId}`,
     );
-    req.auditBefore = await this.usersService.findOne(id, user).catch(() => null);
+    req.auditBefore = await this.usersService
+      .findOne(id, user)
+      .catch(() => null);
     const result = await this.usersService.activate(id, user);
     this.logger.log(
       `[POST /users/:id/activate] Response dikirim | userId=${id}`,
@@ -212,7 +218,9 @@ export class UsersController {
     this.logger.log(
       `[POST /users/:id/deactivate] Request masuk | userId=${id}, requestedBy=${user.userId}`,
     );
-    req.auditBefore = await this.usersService.findOne(id, user).catch(() => null);
+    req.auditBefore = await this.usersService
+      .findOne(id, user)
+      .catch(() => null);
     const result = await this.usersService.deactivate(id, user);
     this.logger.log(
       `[POST /users/:id/deactivate] Response dikirim | userId=${id}`,
@@ -235,7 +243,9 @@ export class UsersController {
     this.logger.log(
       `[DELETE /users/:id] Request masuk | userId=${id}, requestedBy=${user.userId}`,
     );
-    const existing = await this.usersService.findOne(id, user).catch(() => null);
+    const existing = await this.usersService
+      .findOne(id, user)
+      .catch(() => null);
     req.auditBefore = existing;
     req.auditEntityLabel = (existing as any)?.data?.email;
     const result = await this.usersService.remove(id, user);
@@ -261,7 +271,9 @@ export class UsersController {
     this.logger.log(
       `[PATCH /users/:id/role] Request masuk | userId=${id}, newRole=${dto.role}`,
     );
-    req.auditBefore = await this.usersService.findOne(id, user).catch(() => null);
+    req.auditBefore = await this.usersService
+      .findOne(id, user)
+      .catch(() => null);
     const result = await this.usersService.updateRole(id, dto.role, user);
     this.logger.log(`[PATCH /users/:id/role] Response dikirim | userId=${id}`);
     return result;
@@ -283,7 +295,9 @@ export class UsersController {
     this.logger.log(
       `[PATCH /users/:id/assign-role] Request masuk | userId=${id}, newRole=${dto.role}, requestedBy=${user.userId}`,
     );
-    req.auditBefore = await this.usersService.findOne(id, user).catch(() => null);
+    req.auditBefore = await this.usersService
+      .findOne(id, user)
+      .catch(() => null);
     const result = await this.usersService.assignRole(id, dto.role, user);
     this.logger.log(
       `[PATCH /users/:id/assign-role] Response dikirim | userId=${id}`,

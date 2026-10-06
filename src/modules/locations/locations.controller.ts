@@ -45,7 +45,7 @@ export class LocationsController {
   constructor(private readonly locationsService: LocationsService) {}
 
   @Get()
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DOKTER)
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DOKTER, UserRole.PERAWAT)
   @ApiOperation({ summary: 'Get all locations in clinic' })
   @ApiQuery({
     name: 'activeOnly',
@@ -67,7 +67,7 @@ export class LocationsController {
   }
 
   @Get(':id')
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DOKTER)
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DOKTER, UserRole.PERAWAT)
   @ApiOperation({ summary: 'Get location by ID' })
   @ApiParam({ name: 'id', type: Number })
   @ApiResponse({
@@ -115,7 +115,9 @@ export class LocationsController {
     @ClinicId() clinicId: number,
     @Req() req: any,
   ) {
-    req.auditBefore = await this.locationsService.findOne(id, clinicId).catch(() => null);
+    req.auditBefore = await this.locationsService
+      .findOne(id, clinicId)
+      .catch(() => null);
     return this.locationsService.update(id, dto, clinicId, user.userId);
   }
 
@@ -131,7 +133,9 @@ export class LocationsController {
     @ClinicId() clinicId: number,
     @Req() req: any,
   ) {
-    req.auditBefore = await this.locationsService.findOne(id, clinicId).catch(() => null);
+    req.auditBefore = await this.locationsService
+      .findOne(id, clinicId)
+      .catch(() => null);
     return this.locationsService.remove(id, clinicId);
   }
 

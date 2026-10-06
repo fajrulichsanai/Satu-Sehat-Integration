@@ -4,6 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
+import { FeaturesModule } from './modules/features/features.module';
+import { FeatureAccessGuard } from './modules/features/feature-access.guard';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './modules/auth/auth.module';
@@ -69,7 +71,8 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
             limit: parseInt(config.get<string>('THROTTLE_LIMIT', '300'), 10),
           },
         ],
-        errorMessage: 'Terlalu banyak permintaan. Silakan coba lagi sebentar lagi.',
+        errorMessage:
+          'Terlalu banyak permintaan. Silakan coba lagi sebentar lagi.',
       }),
     }),
     ScheduleModule.forRoot(),
@@ -135,6 +138,7 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     NotificationsModule,
     GudangModule,
     SubscriptionsModule,
+    FeaturesModule,
     RecallsModule,
     ConsentsModule,
     MultiClinicModule,
@@ -160,6 +164,11 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     {
       provide: APP_GUARD,
       useExisting: SubscriptionGuard,
+    },
+    // Fitur yang dimatikan super admin (per klinik) / owner (per user)
+    {
+      provide: APP_GUARD,
+      useExisting: FeatureAccessGuard,
     },
   ],
 })

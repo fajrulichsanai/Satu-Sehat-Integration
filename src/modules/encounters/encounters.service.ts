@@ -11,7 +11,7 @@ import { Repository } from 'typeorm';
 import { Encounter } from './entities/encounter.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { Billing, BillingStatus } from '../billing/entities/billing.entity';
-import { EncounterStatus, ServiceType } from '../../enums';
+import { EncounterStatus, ServiceType, isClinician } from '../../enums';
 import { ReservationStatus } from '../../enums/reservation-status.enum';
 import { UserRole } from '../../enums/user-role.enum';
 import {
@@ -56,7 +56,7 @@ export class EncountersService {
       .where('e.clinicId = :clinicId', { clinicId });
 
     // Dokter only sees own encounters
-    if (user.role === UserRole.DOKTER) {
+    if (isClinician(user.role)) {
       qb.andWhere(
         'e.practitionerId = (SELECT id FROM practitioners WHERE user_id = :uid LIMIT 1)',
         {
@@ -146,7 +146,7 @@ export class EncountersService {
       throw new NotFoundException(`Encounter dengan ID ${id} tidak ditemukan`);
     }
 
-    if (user?.role === UserRole.DOKTER) {
+    if (isClinician(user?.role)) {
       const isOwn = await this.isDokterOwn(
         encounter.practitionerId,
         user.userId,
@@ -232,7 +232,7 @@ export class EncountersService {
       throw new NotFoundException(`Encounter dengan ID ${id} tidak ditemukan`);
     }
 
-    if (user.role === UserRole.DOKTER) {
+    if (isClinician(user.role)) {
       const isOwn = await this.isDokterOwn(
         encounter.practitionerId,
         user.userId,
@@ -287,7 +287,7 @@ export class EncountersService {
       throw new NotFoundException(`Encounter dengan ID ${id} tidak ditemukan`);
     }
 
-    if (user.role === UserRole.DOKTER) {
+    if (isClinician(user.role)) {
       const isOwn = await this.isDokterOwn(
         encounter.practitionerId,
         user.userId,

@@ -4,6 +4,7 @@ export enum UserRole {
   OWNER = 'owner',
   ADMIN = 'admin',
   DOKTER = 'dokter',
+  PERAWAT = 'perawat',
   PENDING = 'pending',
 }
 
@@ -14,5 +15,21 @@ export const ROLE_LEVEL: Record<UserRole, number> = {
   [UserRole.OWNER]: 1,
   [UserRole.ADMIN]: 2,
   [UserRole.DOKTER]: 3,
+  [UserRole.PERAWAT]: 3,
   [UserRole.PENDING]: 99,
 };
+
+/**
+ * Tenaga kesehatan yang memakai akun klinis (rekam medis, kunjungan miliknya).
+ * Perawat diperlakukan sama persis dengan dokter.
+ */
+export const CLINICIAN_ROLES: readonly UserRole[] = [
+  UserRole.DOKTER,
+  UserRole.PERAWAT,
+];
+
+export function isClinician(
+  role: UserRole | string | null | undefined,
+): boolean {
+  return CLINICIAN_ROLES.includes(role as UserRole);
+}

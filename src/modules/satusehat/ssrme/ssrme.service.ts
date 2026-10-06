@@ -11,7 +11,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Encounter } from '../../encounters/entities/encounter.entity';
 import { Clinic } from '../../clinics/entities/clinic.entity';
-import { UserRole } from '../../../enums/user-role.enum';
+import { UserRole, isClinician } from '../../../enums/user-role.enum';
 import { SatusehatClientService } from '../satusehat-client.service';
 import { SyncOrchestratorService } from '../sync/sync-orchestrator.service';
 
@@ -149,7 +149,7 @@ export class SsrmeService {
     }
     // Dokter hanya boleh membuka rekam medis pasien yang ia tangani
     if (
-      actor.role === UserRole.DOKTER &&
+      isClinician(actor.role) &&
       encounter.practitioner.userId !== actor.userId
     ) {
       throw new ForbiddenException('Akses ditolak: bukan pasien Anda');

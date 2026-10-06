@@ -18,7 +18,9 @@ describe('ReportsController', () => {
 
   beforeEach(async () => {
     reportsService = {
-      getDoctorFeeShareReport: jest.fn().mockResolvedValue({ success: true, data: [] }),
+      getDoctorFeeShareReport: jest
+        .fn()
+        .mockResolvedValue({ success: true, data: [] }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -45,7 +47,10 @@ describe('ReportsController', () => {
         practitionerId: null,
       });
 
-      expect(reportsService.getDoctorFeeShareReport).toHaveBeenCalledWith(1, query);
+      expect(reportsService.getDoctorFeeShareReport).toHaveBeenCalledWith(
+        1,
+        query,
+      );
     });
 
     it('does not restrict by practitioner for an ADMIN caller (positive)', async () => {
@@ -55,7 +60,10 @@ describe('ReportsController', () => {
         practitionerId: null,
       });
 
-      expect(reportsService.getDoctorFeeShareReport).toHaveBeenCalledWith(1, query);
+      expect(reportsService.getDoctorFeeShareReport).toHaveBeenCalledWith(
+        1,
+        query,
+      );
     });
 
     it('forces the filter to the caller’s own practitionerId for a DOKTER (positive)', async () => {
@@ -65,15 +73,27 @@ describe('ReportsController', () => {
         practitionerId: 42,
       });
 
-      expect(reportsService.getDoctorFeeShareReport).toHaveBeenCalledWith(1, query, 42);
+      expect(reportsService.getDoctorFeeShareReport).toHaveBeenCalledWith(
+        1,
+        query,
+        42,
+      );
     });
 
     it('ignores any attempt to pass a different practitionerId — DOKTER always gets their own from the JWT (negative)', async () => {
-      const dokterUser = { userId: 5, role: UserRole.DOKTER, practitionerId: 42 };
+      const dokterUser = {
+        userId: 5,
+        role: UserRole.DOKTER,
+        practitionerId: 42,
+      };
       // Even if a malicious/malformed query object smuggled a practitionerId,
       // the DTO has no such field and the controller must not read it from
       // anywhere but the authenticated user's own JWT claim.
-      await controller.getDoctorFeeShare(1, { ...query, practitionerId: 999 } as any, dokterUser);
+      await controller.getDoctorFeeShare(
+        1,
+        { ...query, practitionerId: 999 } as any,
+        dokterUser,
+      );
 
       expect(reportsService.getDoctorFeeShareReport).toHaveBeenCalledWith(
         1,
@@ -91,7 +111,16 @@ describe('ReportsController', () => {
           {
             practitionerId: 42,
             practitionerName: 'Dr. Own',
-            breakdown: [{ tarifId: 7, tarifName: 'Scaling', count: 2, feeType: 'percentage', feeValue: 15, totalShare: 60000 }],
+            breakdown: [
+              {
+                tarifId: 7,
+                tarifName: 'Scaling',
+                count: 2,
+                feeType: 'percentage',
+                feeValue: 15,
+                totalShare: 60000,
+              },
+            ],
             totalTindakan: 2,
             totalShareFee: 60000,
           },

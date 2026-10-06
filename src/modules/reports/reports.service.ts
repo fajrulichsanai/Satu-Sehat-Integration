@@ -8,7 +8,7 @@ import {
   SatusehatSyncLog,
   SyncLogStatus,
 } from '../satusehat/sync/entities/satusehat-sync-log.entity';
-import { UserRole } from '../../enums/user-role.enum';
+import { UserRole, isClinician } from '../../enums/user-role.enum';
 import {
   DoctorFeeShareReportQueryDto,
   FinancialReportQueryDto,
@@ -184,7 +184,7 @@ export class ReportsService {
         dateTo: query.dateTo,
       });
 
-    if (user.role === UserRole.DOKTER) {
+    if (isClinician(user.role)) {
       qb.andWhere(
         'e.practitionerId = (SELECT id FROM practitioners WHERE user_id = :uid LIMIT 1)',
         { uid: user.userId },

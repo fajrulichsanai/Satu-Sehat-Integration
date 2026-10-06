@@ -25,7 +25,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { UserRole } from '../../enums/user-role.enum';
+import { UserRole, isClinician } from '../../enums/user-role.enum';
 
 @ApiTags('reports')
 @ApiBearerAuth('JWT-auth')
@@ -187,7 +187,7 @@ export class ReportsController {
 
   @Get('doctor-fee-share')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DOKTER)
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.DOKTER, UserRole.PERAWAT)
   @ApiOperation({
     summary:
       'Monthly doctor fee share report (dokter sees only their own share)',
@@ -197,7 +197,7 @@ export class ReportsController {
     @Query() query: DoctorFeeShareReportQueryDto,
     @CurrentUser() user: any,
   ) {
-    if (user.role === UserRole.DOKTER) {
+    if (isClinician(user.role)) {
       // A dokter must never see a colleague's fee breakdown. Force the
       // filter to their own linked practitioner row rather than trusting a
       // query param — there isn't one exposed for this on purpose. If the

@@ -41,9 +41,7 @@ describe('OperationalRecordsService', () => {
       ],
     }).compile();
 
-    service = module.get<OperationalRecordsService>(
-      OperationalRecordsService,
-    );
+    service = module.get<OperationalRecordsService>(OperationalRecordsService);
   });
 
   it('should be defined', () => expect(service).toBeDefined());
@@ -86,9 +84,7 @@ describe('OperationalRecordsService', () => {
 
     it('throws NotFoundException when missing (negative)', async () => {
       repo.findOne.mockResolvedValue(null);
-      await expect(service.findOne(999, 1)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.findOne(999, 1)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -109,20 +105,15 @@ describe('OperationalRecordsService', () => {
   describe('update', () => {
     it('merges fields into the existing record (positive)', async () => {
       repo.findOne.mockResolvedValue({ id: 1, clinicId: 1, deskripsi: 'Old' });
-      const result = await service.update(
-        1,
-        { deskripsi: 'New' } as any,
-        1,
-        9,
-      );
+      const result = await service.update(1, { deskripsi: 'New' } as any, 1, 9);
       expect(result.data.deskripsi).toBe('New');
     });
 
     it('throws NotFoundException when missing (negative)', async () => {
       repo.findOne.mockResolvedValue(null);
-      await expect(
-        service.update(999, {} as any, 1, 9),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.update(999, {} as any, 1, 9)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -136,9 +127,7 @@ describe('OperationalRecordsService', () => {
 
     it('throws NotFoundException when missing (negative)', async () => {
       repo.findOne.mockResolvedValue(null);
-      await expect(service.remove(999, 1)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.remove(999, 1)).rejects.toThrow(NotFoundException);
     });
   });
 });

@@ -12,7 +12,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { User } from './entities/user.entity';
 import { Practitioner } from '../practitioners/entities/practitioner.entity';
-import { UserRole, ROLE_LEVEL } from '../../enums';
+import { UserRole, ROLE_LEVEL, isClinician } from '../../enums';
 import { InviteUserDto, UpdateUserDto } from './dto/user.dto';
 
 interface CurrentUserPayload {
@@ -42,22 +42,35 @@ export class UsersService {
     const existing = await this.practitionerRepository.findOne({
       where: { userId: user.id },
     });
-    if (existing) return;
+    if (existing) {
+      await this.linkPractitioner(user, existing.id);
+      return;
+    }
 
     const practitioner = this.practitionerRepository.create({
       userId: user.id,
       clinicId: user.clinicId,
       name: user.name,
       email: user.email,
+      // Nakes perawat: profesi tercatat supaya mudah dibedakan dari dokter
+      ...(user.role === UserRole.PERAWAT ? { specialization: 'Perawat' } : {}),
       isActive: true,
       createdBy: user.id,
       updatedBy: user.id,
     });
 
     await this.practitionerRepository.save(practitioner);
+    await this.linkPractitioner(user, practitioner.id);
     this.logger.log(
       `[AUTO-PRACTITIONER] Practitioner dibuat otomatis | userId=${user.id}, clinicId=${user.clinicId}`,
     );
+  }
+
+  /** users.practitioner_id dipakai laporan "Share Fee Saya" — selalu tautkan */
+  private async linkPractitioner(user: User, practitionerId: number) {
+    if (user.practitionerId === practitionerId) return;
+    user.practitionerId = practitionerId;
+    await this.userRepository.update(user.id, { practitionerId });
   }
 
   private isSuperAdmin(currentUser: CurrentUserPayload): boolean {
@@ -290,7 +303,7 @@ export class UsersService {
     const user = await this.findByIdOrThrow(id, currentUser);
     this.assertCanManage(currentUser, user);
 
-    if (user.role === UserRole.DOKTER) {
+    if (isClinician(user.role)) {
       await this.practitionerRepository.delete({ userId: user.id });
       this.logger.log(
         `[DELETE] Practitioner terkait ikut dihapus | userId=${id}`,
@@ -319,10 +332,12 @@ export class UsersService {
           { value: UserRole.OWNER, label: 'Owner' },
           { value: UserRole.ADMIN, label: 'Admin' },
           { value: UserRole.DOKTER, label: 'Dokter' },
+          { value: UserRole.PERAWAT, label: 'Perawat' },
         ]
       : [
           { value: UserRole.ADMIN, label: 'Admin' },
           { value: UserRole.DOKTER, label: 'Dokter' },
+          { value: UserRole.PERAWAT, label: 'Perawat' },
         ];
 
     return { success: true, data: roles };
@@ -400,7 +415,7 @@ export class UsersService {
 
     await this.userRepository.save(user);
 
-    if (newRole === UserRole.DOKTER) {
+    if (isClinician(newRole)) {
       await this.ensurePractitionerForUser(user);
     }
 
@@ -445,12 +460,20 @@ export class UsersService {
       });
     }
 
-    if (![UserRole.ADMIN, UserRole.DOKTER, UserRole.OWNER].includes(newRole)) {
+    if (
+      ![
+        UserRole.ADMIN,
+        UserRole.DOKTER,
+        UserRole.PERAWAT,
+        UserRole.OWNER,
+      ].includes(newRole)
+    ) {
       throw new BadRequestException({
         success: false,
         error: {
           code: 'INVALID_ROLE',
-          message: 'Role hanya bisa diubah ke admin, dokter, atau owner',
+          message:
+            'Role hanya bisa diubah ke admin, dokter, perawat, atau owner',
         },
       });
     }
@@ -461,7 +484,7 @@ export class UsersService {
 
     await this.userRepository.save(user);
 
-    if (newRole === UserRole.DOKTER) {
+    if (isClinician(newRole)) {
       await this.ensurePractitionerForUser(user);
     }
 
@@ -540,7 +563,7 @@ export class UsersService {
 
     await this.userRepository.save(user);
 
-    if (dto.role === UserRole.DOKTER) {
+    if (isClinician(dto.role)) {
       await this.ensurePractitionerForUser(user);
     }
 

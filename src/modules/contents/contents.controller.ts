@@ -35,6 +35,7 @@ import {
   UpdateContentDto,
 } from './dto/content.dto';
 import { contentImageUploadOptions } from './upload/content-image.upload';
+import { RequireFeature } from '../features/require-feature.decorator';
 
 const PHOTOS: ContentPhoto[] = ['before', 'after', 'rendered'];
 
@@ -56,6 +57,7 @@ const sendImage = (
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.OWNER, UserRole.ADMIN)
+@RequireFeature('konten')
 @Controller('contents')
 export class ContentsController {
   constructor(private readonly service: ContentsService) {}

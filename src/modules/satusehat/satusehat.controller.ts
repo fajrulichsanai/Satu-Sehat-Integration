@@ -39,6 +39,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserRole } from '../../enums/user-role.enum';
 import { ApiResponse } from '../../common/response/api-response';
 import { readableFhirError } from './fhir/fhir-error';
+import { RequireFeature } from '../features/require-feature.decorator';
 
 const OWNERS = [UserRole.OWNER, UserRole.MULTI_CLINIC_OWNER];
 const VIEWERS = [...OWNERS, UserRole.ADMIN];
@@ -47,6 +48,7 @@ const VIEWERS = [...OWNERS, UserRole.ADMIN];
 @ApiBearerAuth('JWT-auth')
 @UseGuards(ClinicContextGuard, RolesGuard)
 @Roles(...OWNERS)
+@RequireFeature('satusehat')
 @Controller('satusehat')
 export class SatusehatController {
   constructor(

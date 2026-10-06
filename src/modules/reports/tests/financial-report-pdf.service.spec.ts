@@ -20,18 +20,36 @@ function baseFinancialData(overrides: Partial<Record<string, any>> = {}) {
     ringkasan: { pengeluaran: 3000000, labaBersih: 6500000, marginPersen: 65 },
     labaKotor: 9500000,
     monthlyTrend: [
-      { month: '2026-01', revenue: 10000000, expense: 3000000, netProfit: 6500000 },
+      {
+        month: '2026-01',
+        revenue: 10000000,
+        expense: 3000000,
+        netProfit: 6500000,
+      },
     ],
     tindakanTerlaris: [
-      { namaTindakan: 'Tambal', frekuensi: 10, modal: 500000, totalDiskon: 0, labaBersih: 4500000 },
+      {
+        namaTindakan: 'Tambal',
+        frekuensi: 10,
+        modal: 500000,
+        totalDiskon: 0,
+        labaBersih: 4500000,
+      },
     ],
     byDoctorProfit: [
-      { practitionerName: 'Dr. A', revenue: 5000000, doctorFeeShare: 1000000, labaBersih: 4000000 },
+      {
+        practitionerName: 'Dr. A',
+        revenue: 5000000,
+        doctorFeeShare: 1000000,
+        labaBersih: 4000000,
+      },
     ],
     stockReport: {
       totalInventoryValue: 2000000,
       totalActiveItems: 15,
-      usage: [{ barangName: 'Kapas', qtyUsed: 5, satuan: 'box', totalCost: 50000 }],
+      usage: [
+        { barangName: 'Kapas', qtyUsed: 5, satuan: 'box', totalCost: 50000 },
+      ],
     },
     ...overrides,
   };
@@ -47,7 +65,9 @@ describe('FinancialReportPdfService', () => {
     createPdfMock.mockReturnValue({
       getBuffer: jest.fn().mockResolvedValue(Buffer.from('pdf-bytes')),
     });
-    clinicRepo = { findOne: jest.fn().mockResolvedValue({ id: 1, name: 'Klinik A' }) };
+    clinicRepo = {
+      findOne: jest.fn().mockResolvedValue({ id: 1, name: 'Klinik A' }),
+    };
     reportsService = { getFinancialReportPro: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -81,7 +101,10 @@ describe('FinancialReportPdfService', () => {
       data: baseFinancialData(),
     });
 
-    await service.generate(1, { dateFrom: '2026-01-01', dateTo: '2026-01-31' } as any);
+    await service.generate(1, {
+      dateFrom: '2026-01-01',
+      dateTo: '2026-01-31',
+    } as any);
 
     const doc = createPdfMock.mock.calls[0][0];
     const periodLine = doc.content.find((c: any) => c.style === 'periodLine');
@@ -94,7 +117,10 @@ describe('FinancialReportPdfService', () => {
       data: baseFinancialData({ tindakanTerlaris: [] }),
     });
 
-    await service.generate(1, { dateFrom: '2026-01-01', dateTo: '2026-01-31' } as any);
+    await service.generate(1, {
+      dateFrom: '2026-01-01',
+      dateTo: '2026-01-31',
+    } as any);
 
     const doc = createPdfMock.mock.calls[0][0];
     expect(JSON.stringify(doc)).toContain('Belum ada data tindakan');
@@ -105,7 +131,10 @@ describe('FinancialReportPdfService', () => {
       data: baseFinancialData({ byDoctorProfit: [] }),
     });
 
-    await service.generate(1, { dateFrom: '2026-01-01', dateTo: '2026-01-31' } as any);
+    await service.generate(1, {
+      dateFrom: '2026-01-01',
+      dateTo: '2026-01-31',
+    } as any);
 
     const doc = createPdfMock.mock.calls[0][0];
     expect(JSON.stringify(doc)).toContain('Belum ada data dokter');
@@ -113,13 +142,20 @@ describe('FinancialReportPdfService', () => {
 
   it('shows a fallback row when there is no material usage yet (negative/edge)', async () => {
     reportsService.getFinancialReportPro.mockResolvedValue({
-      data: baseFinancialData({ stockReport: { ...baseFinancialData().stockReport, usage: [] } }),
+      data: baseFinancialData({
+        stockReport: { ...baseFinancialData().stockReport, usage: [] },
+      }),
     });
 
-    await service.generate(1, { dateFrom: '2026-01-01', dateTo: '2026-01-31' } as any);
+    await service.generate(1, {
+      dateFrom: '2026-01-01',
+      dateTo: '2026-01-31',
+    } as any);
 
     const doc = createPdfMock.mock.calls[0][0];
-    expect(JSON.stringify(doc)).toContain('Belum ada pemakaian bahan pada periode ini');
+    expect(JSON.stringify(doc)).toContain(
+      'Belum ada pemakaian bahan pada periode ini',
+    );
   });
 
   it('caps the rendered material usage rows at 10 (edge)', async () => {
@@ -130,10 +166,15 @@ describe('FinancialReportPdfService', () => {
       totalCost: 1000,
     }));
     reportsService.getFinancialReportPro.mockResolvedValue({
-      data: baseFinancialData({ stockReport: { ...baseFinancialData().stockReport, usage } }),
+      data: baseFinancialData({
+        stockReport: { ...baseFinancialData().stockReport, usage },
+      }),
     });
 
-    await service.generate(1, { dateFrom: '2026-01-01', dateTo: '2026-01-31' } as any);
+    await service.generate(1, {
+      dateFrom: '2026-01-01',
+      dateTo: '2026-01-31',
+    } as any);
 
     const doc = createPdfMock.mock.calls[0][0];
     const stockTable = doc.content.find(
@@ -148,7 +189,10 @@ describe('FinancialReportPdfService', () => {
       data: baseFinancialData(),
     });
 
-    await service.generate(1, { dateFrom: '2026-01-01', dateTo: '2026-01-31' } as any);
+    await service.generate(1, {
+      dateFrom: '2026-01-01',
+      dateTo: '2026-01-31',
+    } as any);
 
     const doc = createPdfMock.mock.calls[0][0];
     expect(doc.content[0].stack[0].text).toBe('Klinik');

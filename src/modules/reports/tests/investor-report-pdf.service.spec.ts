@@ -37,10 +37,24 @@ function baseInvestorData(overrides: Partial<Record<string, any>> = {}) {
       marketing: { cac: 50000, ltvCacRatio: 12 },
     },
     monthly: [
-      { month: '2026-01', revenue: 10000000, modal: 3000000, expense: 2000000, netProfit: 5000000, marginPercent: 50, visits: 40 },
+      {
+        month: '2026-01',
+        revenue: 10000000,
+        modal: 3000000,
+        expense: 2000000,
+        netProfit: 5000000,
+        marginPercent: 50,
+        visits: 40,
+      },
     ],
     categoryProfitability: [
-      { kategori: 'Konservasi', frekuensi: 20, pendapatan: 5000000, labaBersih: 2000000, marginPersen: 40 },
+      {
+        kategori: 'Konservasi',
+        frekuensi: 20,
+        pendapatan: 5000000,
+        labaBersih: 2000000,
+        marginPersen: 40,
+      },
     ],
     byDoctor: [{ practitionerName: 'Dr. A', revenue: 30000000 }],
     ...overrides,
@@ -57,7 +71,9 @@ describe('InvestorReportPdfService', () => {
     createPdfMock.mockReturnValue({
       getBuffer: jest.fn().mockResolvedValue(Buffer.from('pdf-bytes')),
     });
-    clinicRepo = { findOne: jest.fn().mockResolvedValue({ id: 1, name: 'Klinik A' }) };
+    clinicRepo = {
+      findOne: jest.fn().mockResolvedValue({ id: 1, name: 'Klinik A' }),
+    };
     reportsService = { getInvestorReportData: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -102,7 +118,9 @@ describe('InvestorReportPdfService', () => {
     await service.generate(1);
 
     const doc = createPdfMock.mock.calls[0][0];
-    expect(JSON.stringify(doc)).toContain('belum dapat dihitung (data pembanding belum cukup)');
+    expect(JSON.stringify(doc)).toContain(
+      'belum dapat dihitung (data pembanding belum cukup)',
+    );
   });
 
   it('flags retention as not-yet-computable when halfYearRetentionPercent is null (negative/edge)', async () => {
@@ -149,7 +167,9 @@ describe('InvestorReportPdfService', () => {
     await service.generate(1);
 
     const doc = createPdfMock.mock.calls[0][0];
-    expect(JSON.stringify(doc)).toContain('masih tipis dan memerlukan perhatian');
+    expect(JSON.stringify(doc)).toContain(
+      'masih tipis dan memerlukan perhatian',
+    );
   });
 
   it('renders a fallback row when there is no category profitability data yet (negative/edge)', async () => {
@@ -160,7 +180,9 @@ describe('InvestorReportPdfService', () => {
     await service.generate(1);
 
     const doc = createPdfMock.mock.calls[0][0];
-    expect(JSON.stringify(doc)).toContain('Belum ada data tindakan pada periode ini');
+    expect(JSON.stringify(doc)).toContain(
+      'Belum ada data tindakan pada periode ini',
+    );
   });
 
   it('renders a fallback row when there is no doctor revenue data yet (negative/edge)', async () => {
@@ -171,7 +193,9 @@ describe('InvestorReportPdfService', () => {
     await service.generate(1);
 
     const doc = createPdfMock.mock.calls[0][0];
-    expect(JSON.stringify(doc)).toContain('Belum ada data dokter pada periode ini');
+    expect(JSON.stringify(doc)).toContain(
+      'Belum ada data dokter pada periode ini',
+    );
   });
 
   it('falls back to a generic clinic name when the clinic record is missing (negative/edge)', async () => {

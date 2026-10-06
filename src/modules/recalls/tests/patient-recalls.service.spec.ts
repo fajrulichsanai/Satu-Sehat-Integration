@@ -2,7 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { PatientRecallsService } from '../patient-recalls.service';
-import { PatientRecall, PatientRecallStatus } from '../entities/patient-recall.entity';
+import {
+  PatientRecall,
+  PatientRecallStatus,
+} from '../entities/patient-recall.entity';
 import { Reservation } from '../../reservations/entities/reservation.entity';
 import { RecallIntervalsService } from '../recall-intervals.service';
 import { ReservationStatus } from '../../../enums';
@@ -22,7 +25,11 @@ function buildQb(result: [any[], number] = [[], 0]) {
 
 describe('PatientRecallsService', () => {
   let service: PatientRecallsService;
-  let recallRepo: { createQueryBuilder: jest.Mock; findOne: jest.Mock; save: jest.Mock };
+  let recallRepo: {
+    createQueryBuilder: jest.Mock;
+    findOne: jest.Mock;
+    save: jest.Mock;
+  };
   let reservationRepo: { find: jest.Mock };
   let intervalsService: { findMapForClinic: jest.Mock };
   let manager: { create: jest.Mock; save: jest.Mock };
@@ -167,9 +174,9 @@ describe('PatientRecallsService', () => {
 
     it('throws NotFoundException when the recall does not exist (negative)', async () => {
       recallRepo.findOne.mockResolvedValue(null);
-      await expect(
-        service.update(999, clinicId, {} as any, 9),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.update(999, clinicId, {} as any, 9)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 

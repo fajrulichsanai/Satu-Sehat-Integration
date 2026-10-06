@@ -76,7 +76,12 @@ export class User extends BaseEntity {
   termsAcceptedAt: Date | null;
 
   /** Version (effective date) of the legal documents that were accepted. */
-  @Column({ name: 'terms_version', type: 'varchar', length: 20, nullable: true })
+  @Column({
+    name: 'terms_version',
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
   termsVersion: string | null;
 
   // Relations

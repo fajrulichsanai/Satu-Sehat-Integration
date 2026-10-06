@@ -230,9 +230,7 @@ describe('UsersService', () => {
 
     it('throws NotFoundException when target does not exist (negative)', async () => {
       userRepo.findOne.mockResolvedValue(null);
-      await expect(service.remove(2, owner)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.remove(2, owner)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -240,7 +238,7 @@ describe('UsersService', () => {
     it('returns limited roles for non-super-admin (positive)', () => {
       const result = service.getRoles(owner);
       const values = result.data.map((r) => r.value);
-      expect(values).toEqual([UserRole.ADMIN, UserRole.DOKTER]);
+      expect(values).toEqual([UserRole.ADMIN, UserRole.DOKTER, UserRole.PERAWAT]);
     });
 
     it('returns full role list for super admin (positive)', () => {
@@ -267,7 +265,13 @@ describe('UsersService', () => {
     });
 
     it('creates a practitioner row when assigning DOKTER role (positive)', async () => {
-      const user = { id: 2, clinicId: 1, role: UserRole.PENDING, name: 'Dr A', email: 'a@x.com' };
+      const user = {
+        id: 2,
+        clinicId: 1,
+        role: UserRole.PENDING,
+        name: 'Dr A',
+        email: 'a@x.com',
+      };
       userRepo.findOne.mockResolvedValue(user);
       practitionerRepo.findOne.mockResolvedValue(null);
 

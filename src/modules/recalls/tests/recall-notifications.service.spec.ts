@@ -2,7 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { RecallNotificationsService } from '../recall-notifications.service';
-import { PatientRecall, PatientRecallStatus } from '../entities/patient-recall.entity';
+import {
+  PatientRecall,
+  PatientRecallStatus,
+} from '../entities/patient-recall.entity';
 import { Clinic } from '../../clinics/entities/clinic.entity';
 import { User } from '../../users/entities/user.entity';
 
@@ -25,9 +28,16 @@ describe('RecallNotificationsService', () => {
   let userRepo: { find: jest.Mock };
 
   beforeEach(async () => {
-    recallRepo = { find: jest.fn(), save: jest.fn().mockResolvedValue(undefined) };
-    clinicRepo = { findOne: jest.fn().mockResolvedValue({ id: 1, name: 'Klinik A' }) };
-    userRepo = { find: jest.fn().mockResolvedValue([{ email: 'owner@x.com' }]) };
+    recallRepo = {
+      find: jest.fn(),
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    clinicRepo = {
+      findOne: jest.fn().mockResolvedValue({ id: 1, name: 'Klinik A' }),
+    };
+    userRepo = {
+      find: jest.fn().mockResolvedValue([{ email: 'owner@x.com' }]),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [

@@ -89,7 +89,7 @@ export class UpdateUserRoleDto {
 export class AssignUserRoleDto {
   @ApiProperty({
     example: 'dokter',
-    enum: [UserRole.OWNER, UserRole.ADMIN, UserRole.DOKTER],
+    enum: [UserRole.OWNER, UserRole.ADMIN, UserRole.DOKTER, UserRole.PERAWAT],
     description: 'Role yang akan di-assign (tidak bisa pending)',
   })
   @IsEnum(UserRole)

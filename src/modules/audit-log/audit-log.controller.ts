@@ -1,4 +1,13 @@
-import { Controller, Get, Param, ParseIntPipe, Query, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { AuditLogService } from './audit-log.service';
@@ -9,18 +18,23 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../../enums';
 import { AuditActionType } from './entities/audit-log.entity';
+import { RequireFeature } from '../features/require-feature.decorator';
 
 @ApiTags('audit-log')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(ClinicContextGuard, RolesGuard)
 @Roles(UserRole.OWNER, UserRole.SUPER_ADMIN)
+@RequireFeature('audit-log')
 @Controller('audit-logs')
 export class AuditLogController {
   constructor(private readonly auditLogService: AuditLogService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List audit log entries for the owner\'s clinic' })
-  async findAll(@ClinicId({ optional: true }) clinicId: number | null, @Query() query: AuditLogQueryDto) {
+  @ApiOperation({ summary: "List audit log entries for the owner's clinic" })
+  async findAll(
+    @ClinicId({ optional: true }) clinicId: number | null,
+    @Query() query: AuditLogQueryDto,
+  ) {
     const data = await this.auditLogService.findAll(clinicId, query);
     return { success: true, data };
   }
@@ -54,8 +68,13 @@ export class AuditLogController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get single audit log entry detail (full before/after)' })
-  async findOne(@Param('id', ParseIntPipe) id: number, @ClinicId({ optional: true }) clinicId: number | null) {
+  @ApiOperation({
+    summary: 'Get single audit log entry detail (full before/after)',
+  })
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId({ optional: true }) clinicId: number | null,
+  ) {
     const entry = await this.auditLogService.findOne(id, clinicId);
     return { success: true, data: entry };
   }

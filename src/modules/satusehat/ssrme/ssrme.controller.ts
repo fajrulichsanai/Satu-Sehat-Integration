@@ -21,6 +21,7 @@ import { AuditInterceptor } from '../../audit-log/interceptors/audit.interceptor
 import { Audit } from '../../audit-log/decorators/audit.decorator';
 import { AuditActionType } from '../../audit-log/entities/audit-log.entity';
 import { SsrmeService } from './ssrme.service';
+import { RequireFeature } from '../../features/require-feature.decorator';
 
 export class SsrmeConsentDto {
   /** Kondisi gawat darurat: bypass persetujuan pasien (form darurat SSRME) */
@@ -34,12 +35,14 @@ const CLINICIANS = [
   UserRole.OWNER,
   UserRole.MULTI_CLINIC_OWNER,
   UserRole.DOKTER,
+  UserRole.PERAWAT,
 ];
 
 @ApiTags('satusehat')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(ClinicContextGuard, RolesGuard)
 @UseInterceptors(AuditInterceptor)
+@RequireFeature('satusehat')
 @Controller('satusehat/ssrme/encounters/:encounterId')
 export class SsrmeController {
   constructor(private readonly ssrme: SsrmeService) {}
