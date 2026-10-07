@@ -7,10 +7,17 @@ import {
   IsInt,
   IsNotEmpty,
   IsOptional,
+  IsArray,
+  IsIn,
   IsString,
+  Matches,
   MaxLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { FAMILY_RELATIONSHIP_CODES } from '../family-history';
+import type { FamilyRelationship } from '../family-history';
 import {
   Gender,
   MaritalStatus,
@@ -24,6 +31,28 @@ import {
 } from '../../../enums';
 import { PaginationDto } from '../../../common/dto/pagination.dto';
 import { IsValidNIK } from '../../../common/validators/nik.validator';
+
+export class FamilyHistoryEntryDto {
+  @ApiPropertyOptional({ description: 'Kunci baris yang sudah ada' })
+  @IsOptional()
+  @Matches(/^[a-z0-9]{6,12}$/)
+  key?: string;
+
+  @ApiProperty({ enum: FAMILY_RELATIONSHIP_CODES, example: 'FTH' })
+  @IsIn(FAMILY_RELATIONSHIP_CODES)
+  relationship: FamilyRelationship;
+
+  @ApiProperty({ description: 'Kode ICD-10', example: 'I10' })
+  @IsString()
+  @MaxLength(10)
+  code: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  note?: string | null;
+}
 
 function isMinor(dateOfBirth?: string): boolean {
   if (!dateOfBirth) return false;
@@ -222,6 +251,16 @@ export class CreatePatientDto {
   @IsOptional()
   @IsString()
   catatanSistemikLainnya?: string;
+
+  @ApiPropertyOptional({
+    type: [FamilyHistoryEntryDto],
+    description: 'Riwayat penyakit keluarga (ganti seluruh daftar)',
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => FamilyHistoryEntryDto)
+  riwayatKeluarga?: FamilyHistoryEntryDto[];
 
   @ApiPropertyOptional({ example: false })
   @IsOptional()

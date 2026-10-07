@@ -28,6 +28,7 @@ import {
 import { paginate, PaginatedResult } from '../../common/dto/pagination.dto';
 import { SatusehatClientService } from '../satusehat/satusehat-client.service';
 import { TreatmentPlansService } from '../treatment-plans/treatment-plans.service';
+import { FamilyHistoryService } from './family-history.service';
 import { hashNik, maskNik } from '../../common/utils/nik-crypto.util';
 
 @Injectable()
@@ -56,6 +57,7 @@ export class PatientsService {
     private readonly dataSource: DataSource,
     private readonly satusehatClient: SatusehatClientService,
     private readonly treatmentPlansService: TreatmentPlansService,
+    private readonly familyHistory: FamilyHistoryService,
   ) {}
 
   async findAll(
@@ -465,7 +467,21 @@ export class PatientsService {
       await this.checkDuplicateNik(dto.nik, clinicId);
     }
 
-    const saved = await this.createWithNoRmRetry(clinicId, dto, noRmOverride);
+    const riwayatKeluarga = dto.riwayatKeluarga?.length
+      ? await this.familyHistory.normalize(
+          dto.riwayatKeluarga,
+          null,
+          clinicId,
+          null,
+        )
+      : null;
+    const saved = await this.createWithNoRmRetry(
+      clinicId,
+      { ...dto, riwayatKeluarga: undefined },
+      noRmOverride,
+      1,
+      riwayatKeluarga,
+    );
 
     this.logger.log(
       `[CREATE] Pasien berhasil dibuat | id=${saved.id}, noRm=${saved.noRm}, clinicId=${clinicId}`,
@@ -478,6 +494,7 @@ export class PatientsService {
     dto: CreatePatientDto,
     noRmOverride?: string,
     attempt = 1,
+    riwayatKeluarga: Patient['riwayatKeluarga'] = null,
   ): Promise<Patient> {
     try {
       return await this.dataSource.transaction(async (manager) => {
@@ -522,6 +539,7 @@ export class PatientsService {
           riwayatSyaraf: dto.riwayatSyaraf ?? false,
           riwayatSistemikLainnya: dto.riwayatSistemikLainnya ?? false,
           catatanSistemikLainnya: dto.catatanSistemikLainnya,
+          riwayatKeluarga,
           alergiObat: dto.alergiObat ?? false,
           alergiMakanan: dto.alergiMakanan ?? false,
           preferensiKontak: dto.preferensiKontak,
@@ -553,7 +571,13 @@ export class PatientsService {
         );
       }
       if (isDuplicateNoRm && !noRmOverride && attempt < 5) {
-        return this.createWithNoRmRetry(clinicId, dto, undefined, attempt + 1);
+        return this.createWithNoRmRetry(
+          clinicId,
+          dto,
+          undefined,
+          attempt + 1,
+          riwayatKeluarga,
+        );
       }
       throw err;
     }
@@ -571,6 +595,15 @@ export class PatientsService {
 
     if (dto.nik && dto.nik !== patient.nik) {
       await this.checkDuplicateNik(dto.nik, clinicId, id);
+    }
+
+    if (dto.riwayatKeluarga !== undefined) {
+      patient.riwayatKeluarga = await this.familyHistory.normalize(
+        dto.riwayatKeluarga,
+        patient.riwayatKeluarga,
+        clinicId,
+        patient.id,
+      );
     }
 
     Object.assign(patient, {

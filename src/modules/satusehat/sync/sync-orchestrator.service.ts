@@ -23,6 +23,8 @@ import { PatientRecall } from '../../recalls/entities/patient-recall.entity';
 import { LabOrder } from '../../diagnostics/entities/lab-order.entity';
 import { RadiologyOrder } from '../../diagnostics/entities/radiology-order.entity';
 import { ClinicalCatalogService } from '../../terminology/clinical-catalog.service';
+import { PatientRelationsMapper } from '../fhir/patient-relations-mapper';
+import { familyHistoryLinkType } from '../../patients/family-history';
 import { DiagnosticsMapper } from '../fhir/diagnostics-mapper';
 import { SatusehatOrganization } from '../onboarding/entities/satusehat-organization.entity';
 import {
@@ -333,6 +335,31 @@ export class SyncOrchestratorService {
     }
     for (const r of FhirMapper.toAllergies(patient, ctx, examAt)) {
       steps.push(await this.sendLinked(clinicId, '03. Riwayat Alergi', r));
+    }
+
+    // 03. Wali (RelatedPerson) & riwayat penyakit keluarga (FamilyMemberHistory)
+    const related = PatientRelationsMapper.toRelatedPerson(patient, ctx);
+    if (related) {
+      steps.push(await this.sendLinked(clinicId, '03. Wali Pasien', related));
+    }
+    const voided: string[] = [];
+    for (const r of PatientRelationsMapper.toFamilyHistories(
+      patient,
+      ctx,
+      examAt,
+    )) {
+      const step = await this.sendLinked(clinicId, '03. Riwayat Keluarga', r);
+      steps.push(step);
+      if (r.resource.status === 'entered-in-error' && step.status === 'success')
+        voided.push(r.localType);
+    }
+    if (voided.length) {
+      // Pembatalan sudah diterima SATUSEHAT → buang dari daftar pasien
+      await this.patientRepo.update(patient.id, {
+        riwayatKeluarga: (patient.riwayatKeluarga ?? []).filter(
+          (e) => !voided.includes(familyHistoryLinkType(e.key)),
+        ),
+      });
     }
 
     // 04. Pemeriksaan fisik — tanda vital

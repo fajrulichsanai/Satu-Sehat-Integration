@@ -1,3 +1,4 @@
+import type { FamilyHistoryEntry } from '../family-history';
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { BaseEntity } from '../../../common/base.entity';
 import { nikColumnTransformer } from '../../../common/utils/nik-crypto.util';
@@ -178,6 +179,10 @@ export class Patient extends BaseEntity {
 
   @Column('text', { name: 'catatan_sistemik_lainnya', nullable: true })
   catatanSistemikLainnya: string;
+
+  /** Riwayat penyakit keluarga (FamilyMemberHistory) */
+  @Column({ name: 'riwayat_keluarga', type: 'json', nullable: true })
+  riwayatKeluarga: FamilyHistoryEntry[] | null;
 
   @Column({ name: 'alergi_obat', default: false })
   alergiObat: boolean;

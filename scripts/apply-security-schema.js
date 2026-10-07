@@ -26,6 +26,7 @@ const MIGRATIONS = [
   '1790030000000-ResepSederhana',
   '1790040000000-RolePerawatDanFitur',
   '1790060000000-PemeriksaanTambahan',
+  '1790070000000-RiwayatKeluarga',
 ];
 
 async function main() {

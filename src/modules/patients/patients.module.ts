@@ -1,3 +1,6 @@
+import { SatusehatResourceLink } from '../satusehat/sync/entities/satusehat-resource-link.entity';
+import { TerminologyModule } from '../terminology/terminology.module';
+import { FamilyHistoryService } from './family-history.service';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Patient } from './entities/patient.entity';
@@ -30,14 +33,16 @@ import { NotificationsModule } from '../notifications/notifications.module';
       Billing,
       SupportingExamImage,
       PatientRecall,
+      SatusehatResourceLink,
     ]),
     SatusehatModule,
+    TerminologyModule,
     TreatmentPlansModule,
     AuditLogModule,
     NotificationsModule,
   ],
   controllers: [PatientsController, PatientImportController],
-  providers: [PatientsService, PatientImportService],
+  providers: [PatientsService, PatientImportService, FamilyHistoryService],
   exports: [PatientsService],
 })
 export class PatientsModule {}

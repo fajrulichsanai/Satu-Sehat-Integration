@@ -1,3 +1,4 @@
+import { FamilyHistoryService } from '../family-history.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource, QueryFailedError } from 'typeorm';
@@ -110,6 +111,10 @@ describe('PatientsService', () => {
         { provide: DataSource, useValue: dataSource },
         { provide: SatusehatClientService, useValue: satusehatClient },
         { provide: TreatmentPlansService, useValue: treatmentPlansService },
+        {
+          provide: FamilyHistoryService,
+          useValue: { normalize: jest.fn(async () => []) },
+        },
       ],
     }).compile();
 
