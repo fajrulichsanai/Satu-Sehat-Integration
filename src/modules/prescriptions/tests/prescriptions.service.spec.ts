@@ -6,6 +6,7 @@ import { PrescriptionsService } from '../prescriptions.service';
 import { PrescriptionItem } from '../entities/prescription-item.entity';
 import { PrescriptionSignature } from '../entities/prescription-signature.entity';
 import { Encounter } from '../../encounters/entities/encounter.entity';
+import { SatusehatResourceLink } from '../../satusehat/sync/entities/satusehat-resource-link.entity';
 
 describe('PrescriptionsService', () => {
   let service: PrescriptionsService;
@@ -18,6 +19,7 @@ describe('PrescriptionsService', () => {
     findOne?: jest.Mock;
   };
   let encounterRepo: { findOne: jest.Mock };
+  let linkRepo: { exists: jest.Mock };
   let signatureRepo: Record<string, jest.Mock>;
 
   beforeEach(async () => {
@@ -29,6 +31,7 @@ describe('PrescriptionsService', () => {
       delete: jest.fn(),
     };
     encounterRepo = { findOne: jest.fn() };
+    linkRepo = { exists: jest.fn().mockResolvedValue(false) };
     signatureRepo = {
       findOne: jest.fn().mockResolvedValue(null),
       create: jest.fn((d) => d),
@@ -41,6 +44,10 @@ describe('PrescriptionsService', () => {
         PrescriptionsService,
         { provide: getRepositoryToken(PrescriptionItem), useValue: itemRepo },
         { provide: getRepositoryToken(Encounter), useValue: encounterRepo },
+        {
+          provide: getRepositoryToken(SatusehatResourceLink),
+          useValue: linkRepo,
+        },
         {
           provide: getRepositoryToken(PrescriptionSignature),
           useValue: signatureRepo,
@@ -130,6 +137,13 @@ describe('PrescriptionsService', () => {
     it('throws NotFoundException for an encounter outside the clinic (negative)', async () => {
       encounterRepo.findOne.mockResolvedValue(null);
       await expect(service.remove(1, 99, 5)).rejects.toThrow(NotFoundException);
+      expect(itemRepo.delete).not.toHaveBeenCalled();
+    });
+
+    it('refuses to delete an item already sent to SATUSEHAT (negative)', async () => {
+      encounterRepo.findOne.mockResolvedValue({ id: 1, clinicId: 1 });
+      linkRepo.exists.mockResolvedValue(true);
+      await expect(service.remove(1, 1, 5)).rejects.toThrow('sudah terkirim');
       expect(itemRepo.delete).not.toHaveBeenCalled();
     });
   });

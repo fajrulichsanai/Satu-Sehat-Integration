@@ -1,3 +1,4 @@
+import { SatusehatResourceLink } from '../satusehat/sync/entities/satusehat-resource-link.entity';
 import {
   BadRequestException,
   Injectable,
@@ -30,7 +31,25 @@ export class PrescriptionsService {
     private readonly reviewRepository: Repository<PrescriptionReview>,
     @InjectRepository(PrescriptionSignature)
     private readonly signatureRepository: Repository<PrescriptionSignature>,
+    @InjectRepository(SatusehatResourceLink)
+    private readonly linkRepository: Repository<SatusehatResourceLink>,
   ) {}
+
+  /**
+   * Data yang sudah ada di SATUSEHAT tidak boleh dihapus/dibatalkan diam-diam
+   * (akan tertinggal di SATUSEHAT tanpa pasangan di klinik).
+   */
+  private async assertNotSent(
+    clinicId: number,
+    localType: string,
+    localId: number,
+    message: string,
+  ) {
+    const sent = await this.linkRepository.exists({
+      where: { clinicId, localType, localId },
+    });
+    if (sent) throw new BadRequestException(message);
+  }
 
   async listByEncounter(
     encounterId: number,
@@ -154,6 +173,12 @@ export class PrescriptionsService {
     itemId: number,
   ): Promise<void> {
     await this.assertEncounterExists(encounterId, clinicId);
+    await this.assertNotSent(
+      clinicId,
+      'rx_item',
+      itemId,
+      'Resep ini sudah terkirim ke SATUSEHAT dan tidak bisa dihapus',
+    );
     const result = await this.itemRepository.delete({
       id: itemId,
       encounterId,
@@ -187,6 +212,12 @@ export class PrescriptionsService {
     userId: number,
   ) {
     const item = await this.findItem(encounterId, clinicId, itemId);
+    await this.assertNotSent(
+      clinicId,
+      'rx_dispense',
+      itemId,
+      'Pengeluaran obat ini sudah terkirim ke SATUSEHAT dan tidak bisa dibatalkan',
+    );
     Object.assign(item, {
       dispensedAt: null,
       dispensedBy: null,
@@ -222,6 +253,12 @@ export class PrescriptionsService {
     userId: number,
   ) {
     const item = await this.findItem(encounterId, clinicId, itemId);
+    await this.assertNotSent(
+      clinicId,
+      'rx_administration',
+      itemId,
+      'Pemberian obat ini sudah terkirim ke SATUSEHAT dan tidak bisa dibatalkan',
+    );
     Object.assign(item, {
       administeredAt: null,
       administeredBy: null,
