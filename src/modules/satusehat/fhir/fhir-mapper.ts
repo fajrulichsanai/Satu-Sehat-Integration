@@ -32,6 +32,7 @@ import {
 } from '../../prescriptions/prescription-review.questions';
 import { KfaProduct } from '../kfa/kfa.service';
 import { Patient } from '../../patients/entities/patient.entity';
+import { medicationHistoryLinkType } from '../../patients/medication-history';
 import { ToothCondition } from '../../odontogram/entities/tooth-condition.entity';
 import { DentalBridge } from '../../odontogram/entities/dental-bridge.entity';
 import { SatusehatOrganization } from '../onboarding/entities/satusehat-organization.entity';
@@ -1406,6 +1407,53 @@ export class FhirMapper {
       out.push(make('pt_allergy_food', ALLERGY.food, ['food']));
     if (!out.length) out.push(make('pt_allergy_other', ALLERGY.other, []));
     return out;
+  }
+
+  /**
+   * Riwayat pengobatan (Postman "03. Riwayat Pengobatan — Obat bukan dari
+   * Fasyankes Sendiri"): satu MedicationStatement per obat berkode KFA.
+   * Obat tanpa kode KFA hanya dicatat di klinik (tidak dikirim).
+   */
+  static toMedicationStatements(
+    patient: Patient,
+    ctx: FhirContext,
+    when: Date,
+  ): LinkedResource[] {
+    const t = fhirDateTime(when);
+    return (patient.riwayatObat ?? [])
+      .filter((e) => !!e.kfaCode)
+      .map((e) => ({
+        localType: medicationHistoryLinkType(e.key),
+        localId: patient.id,
+        resource: {
+          resourceType: 'MedicationStatement',
+          status: e.removed
+            ? 'entered-in-error'
+            : e.active
+              ? 'active'
+              : 'completed',
+          category: {
+            coding: [
+              {
+                system:
+                  'http://terminology.hl7.org/CodeSystem/medication-statement-category',
+                code: 'outpatient',
+                display: 'Outpatient',
+              },
+            ],
+          },
+          medicationCodeableConcept: {
+            coding: [{ system: SYS.KFA, code: e.kfaCode, display: e.name }],
+          },
+          subject: patientRef(ctx),
+          ...(e.dosage ? { dosage: [{ text: e.dosage }] } : {}),
+          effectiveDateTime: t,
+          dateAsserted: t,
+          // Dilaporkan oleh pasien saat anamnesis
+          informationSource: patientRef(ctx),
+          context: encounterRef(ctx),
+        },
+      }));
   }
 
   /** Keluhan utama terkode SNOMED (Postman "03. Keluhan Utama"). */

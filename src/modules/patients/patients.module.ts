@@ -1,6 +1,7 @@
 import { SatusehatResourceLink } from '../satusehat/sync/entities/satusehat-resource-link.entity';
 import { TerminologyModule } from '../terminology/terminology.module';
 import { FamilyHistoryService } from './family-history.service';
+import { MedicationHistoryService } from './medication-history.service';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Patient } from './entities/patient.entity';
@@ -42,7 +43,12 @@ import { NotificationsModule } from '../notifications/notifications.module';
     NotificationsModule,
   ],
   controllers: [PatientsController, PatientImportController],
-  providers: [PatientsService, PatientImportService, FamilyHistoryService],
+  providers: [
+    PatientsService,
+    PatientImportService,
+    FamilyHistoryService,
+    MedicationHistoryService,
+  ],
   exports: [PatientsService],
 })
 export class PatientsModule {}

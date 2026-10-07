@@ -1,4 +1,5 @@
 import { FamilyHistoryService } from '../family-history.service';
+import { MedicationHistoryService } from '../medication-history.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource, QueryFailedError } from 'typeorm';
@@ -113,6 +114,10 @@ describe('PatientsService', () => {
         { provide: TreatmentPlansService, useValue: treatmentPlansService },
         {
           provide: FamilyHistoryService,
+          useValue: { normalize: jest.fn(async () => []) },
+        },
+        {
+          provide: MedicationHistoryService,
           useValue: { normalize: jest.fn(async () => []) },
         },
       ],

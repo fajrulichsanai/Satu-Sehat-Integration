@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
   IsBoolean,
   IsDateString,
   IsEmail,
@@ -52,6 +53,38 @@ export class FamilyHistoryEntryDto {
   @IsString()
   @MaxLength(300)
   note?: string | null;
+}
+
+export class MedicationHistoryEntryDto {
+  @ApiPropertyOptional({ description: 'Kunci baris yang sudah ada' })
+  @IsOptional()
+  @Matches(/^[a-z0-9]{6,12}$/)
+  key?: string;
+
+  @ApiPropertyOptional({
+    description: 'Kode produk KFA (92…/93…); kosong = tidak dikirim',
+    example: '93001819',
+  })
+  @IsOptional()
+  @Matches(/^9[23]\d{6}$/)
+  kfaCode?: string | null;
+
+  @ApiProperty({ example: 'Amlodipine Besilate 5 mg Tablet' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  name: string;
+
+  @ApiPropertyOptional({ example: '1 tablet sekali sehari' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  dosage?: string | null;
+
+  @ApiPropertyOptional({ description: 'Masih dikonsumsi', default: true })
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
 }
 
 function isMinor(dateOfBirth?: string): boolean {
@@ -261,6 +294,17 @@ export class CreatePatientDto {
   @ValidateNested({ each: true })
   @Type(() => FamilyHistoryEntryDto)
   riwayatKeluarga?: FamilyHistoryEntryDto[];
+
+  @ApiPropertyOptional({
+    type: [MedicationHistoryEntryDto],
+    description: 'Riwayat obat yang dikonsumsi (ganti seluruh daftar)',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => MedicationHistoryEntryDto)
+  riwayatObat?: MedicationHistoryEntryDto[];
 
   @ApiPropertyOptional({ example: false })
   @IsOptional()

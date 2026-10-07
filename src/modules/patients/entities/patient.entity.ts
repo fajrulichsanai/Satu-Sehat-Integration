@@ -1,3 +1,4 @@
+import type { MedicationHistoryEntry } from '../medication-history';
 import type { FamilyHistoryEntry } from '../family-history';
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { BaseEntity } from '../../../common/base.entity';
@@ -183,6 +184,10 @@ export class Patient extends BaseEntity {
   /** Riwayat penyakit keluarga (FamilyMemberHistory) */
   @Column({ name: 'riwayat_keluarga', type: 'json', nullable: true })
   riwayatKeluarga: FamilyHistoryEntry[] | null;
+
+  /** Riwayat obat yang dikonsumsi (MedicationStatement) */
+  @Column({ name: 'riwayat_obat', type: 'json', nullable: true })
+  riwayatObat: MedicationHistoryEntry[] | null;
 
   @Column({ name: 'alergi_obat', default: false })
   alergiObat: boolean;

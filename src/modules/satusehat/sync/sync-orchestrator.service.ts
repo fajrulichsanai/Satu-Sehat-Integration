@@ -26,6 +26,7 @@ import { ClinicalCatalogService } from '../../terminology/clinical-catalog.servi
 import { PatientRelationsMapper } from '../fhir/patient-relations-mapper';
 import { ImmunizationMapper } from '../fhir/immunization-mapper';
 import { Immunization } from '../../immunizations/entities/immunization.entity';
+import { medicationHistoryLinkType } from '../../patients/medication-history';
 import { familyHistoryLinkType } from '../../patients/family-history';
 import { DiagnosticsMapper } from '../fhir/diagnostics-mapper';
 import { SatusehatOrganization } from '../onboarding/entities/satusehat-organization.entity';
@@ -339,6 +340,24 @@ export class SyncOrchestratorService {
     }
     for (const r of FhirMapper.toAllergies(patient, ctx, examAt)) {
       steps.push(await this.sendLinked(clinicId, '03. Riwayat Alergi', r));
+    }
+
+    // 03. Riwayat pengobatan (MedicationStatement) — per pasien, PUT di kunjungan berikutnya
+    const voidedMeds: string[] = [];
+    for (const r of FhirMapper.toMedicationStatements(patient, ctx, examAt)) {
+      const step = await this.sendLinked(clinicId, '03. Riwayat Pengobatan', r);
+      steps.push(step);
+      if (r.resource.status === 'entered-in-error' && step.status === 'success')
+        voidedMeds.push(r.localType);
+    }
+    // Baris dihapus tanpa kode KFA tidak pernah terkirim → langsung dibuang
+    const keptMeds = (patient.riwayatObat ?? []).filter(
+      (e) =>
+        !(e.removed && !e.kfaCode) &&
+        !voidedMeds.includes(medicationHistoryLinkType(e.key)),
+    );
+    if (keptMeds.length !== (patient.riwayatObat ?? []).length) {
+      await this.patientRepo.update(patient.id, { riwayatObat: keptMeds });
     }
 
     // 03. Wali (RelatedPerson) & riwayat penyakit keluarga (FamilyMemberHistory)

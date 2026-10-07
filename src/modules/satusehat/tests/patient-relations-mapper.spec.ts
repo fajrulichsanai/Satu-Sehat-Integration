@@ -1,5 +1,5 @@
 import { PatientRelationsMapper } from '../fhir/patient-relations-mapper';
-import { FhirContext } from '../fhir/fhir-mapper';
+import { FhirContext, FhirMapper } from '../fhir/fhir-mapper';
 import { Patient } from '../../patients/entities/patient.entity';
 
 const ctx: FhirContext = {
@@ -130,5 +130,90 @@ describe('PatientRelationsMapper', () => {
       ],
     });
     expect(out[1].resource.status).toBe('entered-in-error');
+  });
+});
+
+describe('FhirMapper.toMedicationStatements', () => {
+  const patient = {
+    id: 7,
+    riwayatObat: [
+      {
+        key: 'aaaa1111',
+        kfaCode: '93001819',
+        name: 'Amlodipine Besilate 5 mg Tablet (HOLI PHARMA)',
+        dosage: '1 tablet sekali sehari',
+        active: true,
+      },
+      {
+        key: 'bbbb2222',
+        kfaCode: null,
+        name: 'Jamu',
+        dosage: null,
+        active: true,
+      },
+      {
+        key: 'cccc3333',
+        kfaCode: '93000001',
+        name: 'Obat lama',
+        dosage: null,
+        active: false,
+        removed: true,
+      },
+    ],
+  } as unknown as Patient;
+
+  it('maps KFA-coded drugs to MedicationStatement per the playbook (positive)', () => {
+    const [r] = FhirMapper.toMedicationStatements(patient, ctx, when);
+    expect(r.localType).toBe('pt_medst_aaaa1111');
+    expect(r.localId).toBe(7);
+    expect(r.resource).toEqual({
+      resourceType: 'MedicationStatement',
+      status: 'active',
+      category: {
+        coding: [
+          {
+            system:
+              'http://terminology.hl7.org/CodeSystem/medication-statement-category',
+            code: 'outpatient',
+            display: 'Outpatient',
+          },
+        ],
+      },
+      medicationCodeableConcept: {
+        coding: [
+          {
+            system: 'http://sys-ids.kemkes.go.id/kfa',
+            code: '93001819',
+            display: 'Amlodipine Besilate 5 mg Tablet (HOLI PHARMA)',
+          },
+        ],
+      },
+      subject: expect.objectContaining({ reference: 'Patient/P02478375538' }),
+      dosage: [{ text: '1 tablet sekali sehari' }],
+      effectiveDateTime: expect.any(String),
+      dateAsserted: expect.any(String),
+      informationSource: expect.objectContaining({
+        reference: 'Patient/P02478375538',
+      }),
+      context: { reference: 'Encounter/ENC' },
+    });
+  });
+
+  it('skips drugs without a KFA code (negative)', () => {
+    const out = FhirMapper.toMedicationStatements(patient, ctx, when);
+    expect(out.map((r) => r.localType)).not.toContain('pt_medst_bbbb2222');
+  });
+
+  it('voids a removed, already-sent drug with entered-in-error (edge)', () => {
+    const out = FhirMapper.toMedicationStatements(patient, ctx, when);
+    const voided = out.find((r) => r.localType === 'pt_medst_cccc3333')!;
+    expect(voided.resource.status).toBe('entered-in-error');
+    expect(
+      FhirMapper.toMedicationStatements(
+        { id: 1, riwayatObat: null } as unknown as Patient,
+        ctx,
+        when,
+      ),
+    ).toEqual([]);
   });
 });

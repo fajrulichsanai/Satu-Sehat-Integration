@@ -29,6 +29,7 @@ import { paginate, PaginatedResult } from '../../common/dto/pagination.dto';
 import { SatusehatClientService } from '../satusehat/satusehat-client.service';
 import { TreatmentPlansService } from '../treatment-plans/treatment-plans.service';
 import { FamilyHistoryService } from './family-history.service';
+import { MedicationHistoryService } from './medication-history.service';
 import { hashNik, maskNik } from '../../common/utils/nik-crypto.util';
 
 @Injectable()
@@ -58,6 +59,7 @@ export class PatientsService {
     private readonly satusehatClient: SatusehatClientService,
     private readonly treatmentPlansService: TreatmentPlansService,
     private readonly familyHistory: FamilyHistoryService,
+    private readonly medicationHistory: MedicationHistoryService,
   ) {}
 
   async findAll(
@@ -475,12 +477,21 @@ export class PatientsService {
           null,
         )
       : null;
+    const riwayatObat = dto.riwayatObat?.length
+      ? await this.medicationHistory.normalize(
+          dto.riwayatObat,
+          null,
+          clinicId,
+          null,
+        )
+      : null;
     const saved = await this.createWithNoRmRetry(
       clinicId,
-      { ...dto, riwayatKeluarga: undefined },
+      { ...dto, riwayatKeluarga: undefined, riwayatObat: undefined },
       noRmOverride,
       1,
       riwayatKeluarga,
+      riwayatObat,
     );
 
     this.logger.log(
@@ -495,6 +506,7 @@ export class PatientsService {
     noRmOverride?: string,
     attempt = 1,
     riwayatKeluarga: Patient['riwayatKeluarga'] = null,
+    riwayatObat: Patient['riwayatObat'] = null,
   ): Promise<Patient> {
     try {
       return await this.dataSource.transaction(async (manager) => {
@@ -540,6 +552,7 @@ export class PatientsService {
           riwayatSistemikLainnya: dto.riwayatSistemikLainnya ?? false,
           catatanSistemikLainnya: dto.catatanSistemikLainnya,
           riwayatKeluarga,
+          riwayatObat,
           alergiObat: dto.alergiObat ?? false,
           alergiMakanan: dto.alergiMakanan ?? false,
           preferensiKontak: dto.preferensiKontak,
@@ -577,6 +590,7 @@ export class PatientsService {
           undefined,
           attempt + 1,
           riwayatKeluarga,
+          riwayatObat,
         );
       }
       throw err;
@@ -595,6 +609,15 @@ export class PatientsService {
 
     if (dto.nik && dto.nik !== patient.nik) {
       await this.checkDuplicateNik(dto.nik, clinicId, id);
+    }
+
+    if (dto.riwayatObat !== undefined) {
+      patient.riwayatObat = await this.medicationHistory.normalize(
+        dto.riwayatObat,
+        patient.riwayatObat,
+        clinicId,
+        patient.id,
+      );
     }
 
     if (dto.riwayatKeluarga !== undefined) {
