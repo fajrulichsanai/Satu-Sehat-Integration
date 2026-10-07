@@ -29,6 +29,7 @@ const MIGRATIONS = [
   '1790070000000-RiwayatKeluarga',
   '1790080000000-Imunisasi',
   '1790090000000-RiwayatObat',
+  '1790100000000-Rujukan',
 ];
 
 async function main() {

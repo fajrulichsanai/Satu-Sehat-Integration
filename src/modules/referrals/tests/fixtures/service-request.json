@@ -1,0 +1,187 @@
+{
+  "basedOn": [
+    {
+      "reference": "CarePlan/a2beed6a-5828-4bab-a9f2-4853c3124244"
+    }
+  ],
+  "category": [
+    {
+      "coding": [
+        {
+          "code": "3457005",
+          "display": "Patient referral",
+          "system": "http://snomed.info/sct"
+        }
+      ]
+    }
+  ],
+  "code": {
+    "coding": [
+      {
+        "code": "737492002",
+        "display": "Outpatient care management",
+        "system": "http://snomed.info/sct"
+      }
+    ],
+    "text": "Rujukan ke rawat jalan untuk pemeriksaan dan penanganan lebih lanjut pasien stroke"
+  },
+  "encounter": {
+    "reference": "Encounter/96c3db0f-a99d-4f8a-b264-68466fe4c108"
+  },
+  "id": "e220ebc6-b5ad-484d-96f2-58b2e846435a",
+  "identifier": [
+    {
+      "system": "http://sys-ids.kemkes.go.id/servicerequest/10000005",
+      "value": "SR0000233"
+    },
+    {
+      "system": "http://sys-ids.kemkes.go.id/referral-number-pcare",
+      "value": "PCare0000012345"
+    },
+    {
+      "system": "http://sys-ids.kemkes.go.id/referral-number-satusehat",
+      "value": "3000000200"
+    },
+    {
+      "system": "https://sys-ids.kemkes.go.id/insurance-subscriber/100071505",
+      "value": "NomorKartu0000123300"
+    }
+  ],
+  "intent": "original-order",
+  "locationCode": [
+    {
+      "coding": [
+        {
+          "code": "HOSP",
+          "display": "Hospital",
+          "system": "http://terminology.hl7.org/CodeSystem/v3-RoleCode"
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "lastUpdated": "2025-10-07T03:49:24.658633+00:00",
+    "versionId": "MTc1OTgwODk2NDY1ODYzMzAwMA"
+  },
+  "occurrenceDateTime": "2025-09-20T08:50:00+00:00",
+  "patientInstruction": "Rujukan ke RS SATUSEHAT",
+  "performer": [
+    {
+      "display": "RS SATUSEHAT",
+      "reference": "Organization/10000002"
+    }
+  ],
+  "performerType": {
+    "coding": [
+      {
+        "code": "39677007",
+        "display": "Internal medicine specialist",
+        "system": "http://snomed.info/sct"
+      }
+    ]
+  },
+  "priority": "stat",
+  "reasonReference": [
+    {
+      "reference": "Condition/2b50c2ec-e8c8-4efc-8100-48e4ca57aaa3"
+    },
+    {
+      "reference": "Condition/3d861d7e-c7b7-4e74-9311-570ddbb1fa32"
+    }
+  ],
+  "requester": {
+    "display": "Puskesmas SATUSEHAT",
+    "reference": "Organization/10000005"
+  },
+  "resourceType": "ServiceRequest",
+  "status": "active",
+  "subject": {
+    "reference": "Patient/P01654557057"
+  },
+  "supportingInfo": [
+    {
+      "display": "Task Respon Kandidat Faskes Rujukan",
+      "reference": "Task/e5ad279b-63b7-4a4e-8ecd-6ebde65897b8"
+    },
+    {
+      "display": "Anamnesis - Keluhan Utama",
+      "reference": "Condition/de66b13c-e341-4b00-8d5b-0b7fbdc58711"
+    },
+    {
+      "display": "Anamnesis - Riwayat Penyakit",
+      "reference": "Condition/3d861d7e-c7b7-4e74-9311-570ddbb1fa32"
+    },
+    {
+      "display": "Anamnesis - Riwayat Alergi",
+      "reference": "AllergyIntolerance/fa00545b-7555-4945-947c-2247771834fe"
+    },
+    {
+      "display": "Asesmen Awal - Pemeriksaan Fisik - Tingkat Kesadaran",
+      "reference": "Observation/edfbdb0a-855b-4b6e-a1c2-dfd713c1d77c"
+    },
+    {
+      "display": "Asesmen Awal - Antropometri - Tinggi Badan",
+      "reference": "Observation/3ff2fed8-ca00-4e4b-ae64-d687c323ef11"
+    },
+    {
+      "display": "Asesmen Awal - Antropometri - Berat Badan",
+      "reference": "Observation/9fa65c3f-2b7b-4386-bb86-8b6db3546cc8"
+    },
+    {
+      "display": "Asesmen Awal - Antropometri - Lingkar Perut",
+      "reference": "Observation/5e892803-d715-4e28-bf5c-b2d33a87719c"
+    },
+    {
+      "display": "Asesmen Awal - Antropometri - IMT",
+      "reference": "Observation/741d1705-dd3b-4859-a82e-67cab1ecda95"
+    },
+    {
+      "display": "Asesmen Awal - Vital Sign - Tekanan Darah Sistolik",
+      "reference": "Observation/4fbf0b03-4a55-4b7c-8e06-de88505ce45a"
+    },
+    {
+      "display": "Asesmen Awal - Vital Sign - Tekanan Darah Diastolik",
+      "reference": "Observation/8fd3eca6-91b1-4fb1-9d67-95ea5a07b8b7"
+    },
+    {
+      "display": "Asesmen Awal - Vital Sign - Nadi",
+      "reference": "Observation/fcd2ede4-68a8-4959-9183-0a609779277d"
+    },
+    {
+      "display": "Asesmen Awal - Vital Sign - Suhu",
+      "reference": "Observation/1387e412-0044-4b67-97f8-529fae91e471"
+    },
+    {
+      "display": "Asesmen Awal - Vital Sign - Pernafasan",
+      "reference": "Observation/0b935c5e-a83a-4d6c-a1de-4721227d6ca7"
+    },
+    {
+      "display": "Asesmen Awal - Skala Nyeri - NRS",
+      "reference": "Observation/b2ce4fd0-de72-4e95-a7af-a32927b5efb1"
+    },
+    {
+      "display": "Pemeriksaan Penunjang - Laboratorium - Pemeriksaan Gula Darah - Hasil",
+      "reference": "Observation/63a5bcf7-23cd-455c-8e85-3371d97d9f23"
+    },
+    {
+      "display": "Pemeriksaan Penunjang - Laboratorium - Pemeriksaan Gula Darah - Laporan",
+      "reference": "DiagnosticReport/08ddbeb5-7a2e-40b9-b755-daa0e09ae3cc"
+    },
+    {
+      "display": "Tindakan/Prosedur Medis - Diagnostik - EKG - Prosedur",
+      "reference": "Procedure/001112c2-c6c3-4e49-a4fa-de4aae7bfcd8"
+    },
+    {
+      "display": "Tindakan/Prosedur Medis - Diagnostik - EKG - Hasil",
+      "reference": "Observation/17bfe3b8-57e2-41a1-a111-f6a67b49dad7"
+    },
+    {
+      "display": "Pengeluaran Obat",
+      "reference": "MedicationDispense/833713e1-264c-4615-952d-93a81144f417"
+    },
+    {
+      "display": "Pemberian Obat",
+      "reference": "MedicationAdministration/aaae1ff2-790d-4f5b-a939-9b75a59f1297"
+    }
+  ]
+}

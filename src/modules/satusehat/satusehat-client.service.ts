@@ -90,6 +90,14 @@ export class SatusehatClientService {
     return this.request(clinicId, method, path, body);
   }
 
+  /** POST Bundle transaction ke base FHIR (mis. Bundle rujukan). */
+  async postBundle(
+    clinicId: number,
+    bundle: object,
+  ): Promise<{ status: number; data: any }> {
+    return this.request(clinicId, 'POST', '', bundle);
+  }
+
   /** GET ke FHIR SATUSEHAT, mis. `Practitioner?identifier=...` */
   async getFhir(
     clinicId: number,
@@ -158,7 +166,11 @@ export class SatusehatClientService {
     const token = await this.getAccessToken(clinicId);
     const baseUrl = SATUSEHAT_BASE[clinic.satusehatEnvironment];
     try {
-      const response = await fetch(`${baseUrl}/fhir-r4/v1/${path}`, {
+      // Bundle transaction dikirim ke base URL tanpa garis miring di akhir
+      const url = path
+        ? `${baseUrl}/fhir-r4/v1/${path}`
+        : `${baseUrl}/fhir-r4/v1`;
+      const response = await fetch(url, {
         method,
         headers: {
           Authorization: `Bearer ${token}`,
@@ -171,7 +183,7 @@ export class SatusehatClientService {
     } catch (err) {
       // Jangan log URL lengkap: query bisa memuat NIK
       this.logger.error(
-        `SATUSEHAT ${method} ${path.split('?')[0]} gagal: ${(err as Error).message}`,
+        `SATUSEHAT ${method} ${path.split('?')[0] || 'Bundle'} gagal: ${(err as Error).message}`,
       );
       throw new ServiceUnavailableException('Koneksi ke SATUSEHAT gagal');
     }
@@ -180,8 +192,8 @@ export class SatusehatClientService {
   private async loadConfiguredClinic(clinicId: number): Promise<Clinic> {
     const clinic = withEffectiveCredentials(
       await this.clinicRepository.findOne({
-      where: { id: clinicId },
-    }),
+        where: { id: clinicId },
+      }),
     );
     if (
       !clinic?.satusehatOrgId ||

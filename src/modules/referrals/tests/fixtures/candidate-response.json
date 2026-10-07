@@ -1,0 +1,297 @@
+{
+  "id": "b34bfd40-4936-436b-a7e0-8e57953b759e",
+  "resourceType": "Task",
+  "contained": [
+    {
+      "resourceType": "QuestionnaireResponse",
+      "id": "54c2cda3-8960-4271-8ae0-7c0d421139fb",
+      "questionnaire": "https://fhir.kemkes.go.id/Questionnaire/Q100",
+      "status": "completed",
+      "subject": {
+        "reference": "Patient/P36506927381"
+      },
+      "encounter": {
+        "reference": "Encounter/96c3db0f-a99d-4f8a-b264-68466fe4c108"
+      },
+      "item": [
+        {
+          "linkId": "0",
+          "text": "GAWAT DARURAT",
+          "item": [
+            {
+              "linkId": "000001",
+              "text": "Mengancam nyawa, membahayakan diri dan orang lain/lingkungan",
+              "answer": [
+                {
+                  "valueBoolean": true
+                }
+              ]
+            },
+            {
+              "linkId": "000002",
+              "text": "Adanya gangguan pada jalan nafas, pernafasan, dan sirkulasi",
+              "answer": [
+                {
+                  "valueBoolean": true
+                }
+              ]
+            },
+            {
+              "linkId": "000003",
+              "text": "Adanya penurunan kesadaran",
+              "answer": [
+                {
+                  "valueBoolean": false
+                }
+              ]
+            },
+            {
+              "linkId": "000004",
+              "text": "Adanya gangguan hemodinamik",
+              "answer": [
+                {
+                  "valueBoolean": true
+                }
+              ]
+            },
+            {
+              "linkId": "000005",
+              "text": "Memerlukan tindakan segera",
+              "answer": [
+                {
+                  "valueBoolean": true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "resourceType": "QuestionnaireResponse",
+      "id": "c7105c9a-2c0a-4a2f-88d0-7527997c4356",
+      "questionnaire": "https://fhir.kemkes.go.id/Questionnaire/Q101",
+      "status": "completed",
+      "subject": {
+        "reference": "Patient/P36506927381"
+      },
+      "encounter": {
+        "reference": "Encounter/96c3db0f-a99d-4f8a-b264-68466fe4c108"
+      },
+      "item": [
+        {
+          "linkId": "1",
+          "text": "Jejaring wilayah rujukan",
+          "item": [
+            {
+              "linkId": "1.1",
+              "text": "Provinsi",
+              "answer": [
+                {
+                  "valueCoding": {
+                    "system": "http://sys-ids.kemkes.go.id/administrative-area",
+                    "code": "31",
+                    "display": "DKI Jakarta"
+                  }
+                }
+              ]
+            },
+            {
+              "linkId": "1.2",
+              "text": "Kabupaten/Kota",
+              "answer": [
+                {
+                  "valueCoding": {
+                    "system": "http://sys-ids.kemkes.go.id/administrative-area",
+                    "code": "3174",
+                    "display": "Kota Jakarta Selatan"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "identifier": [
+    {
+      "system": "http://sys-ids.kemkes.go.id/task/100010957",
+      "value": "qwdjlqwfoiwjd3092ru-3fjascmsa;c"
+    }
+  ],
+  "status": "completed",
+  "intent": "instance-order",
+  "priority": "routine",
+  "code": {
+    "coding": [
+      {
+        "system": "http://terminology.kemkes.go.id",
+        "code": "request-referral-candidate",
+        "display": "Request for referral candidate"
+      }
+    ]
+  },
+  "requester": {
+    "reference": "Organization/100010957"
+  },
+  "owner": {
+    "reference": "Organization/100010957"
+  },
+  "encounter": {
+    "reference": "Encounter/96c3db0f-a99d-4f8a-b264-68466fe4c108"
+  },
+  "input": [
+    {
+      "type": {
+        "coding": [
+          {
+            "system": "http://terminology.kemkes.go.id",
+            "code": "referral-criteria",
+            "display": "Referral Criteria"
+          }
+        ]
+      },
+      "valueReference": {
+        "reference": "#123456789",
+        "display": "Referral Criteria Response"
+      }
+    },
+    {
+      "type": {
+        "coding": [
+          {
+            "system": "http://terminology.kemkes.go.id",
+            "code": "area",
+            "display": "Area"
+          }
+        ]
+      },
+      "valueReference": {
+        "reference": "#123456788",
+        "display": "Jejaring Wilayah Rujukan"
+      }
+    },
+    {
+      "type": {
+        "coding": [
+          {
+            "system": "http://snomed.info/sct",
+            "code": "119270007",
+            "display": "Management procedure"
+          }
+        ]
+      },
+      "valueCoding": {
+        "system": "http://snomed.info/sct",
+        "code": "385868005",
+        "display": "Emergency treatment management"
+      }
+    },
+    {
+      "type": {
+        "coding": [
+          {
+            "code": "TK000562",
+            "display": "Kelompok Layanan",
+            "system": "http://terminology.kemkes.go.id"
+          }
+        ]
+      },
+      "valueCoding": {
+        "code": "TK000563",
+        "display": "Kelompok Layanan Jantung dan Pembuluh Darah",
+        "system": "http://terminology.kemkes.go.id"
+      }
+    },
+    {
+      "type": {
+        "coding": [
+          {
+            "system": "http://terminology.kemkes.go.id",
+            "code": "primary-diagnosis",
+            "display": "Primary Diagnosis"
+          }
+        ]
+      },
+      "valueCoding": {
+        "system": "http://hl7.org/fhir/sid/icd-10",
+        "code": "I61.9",
+        "display": "Intracerebral haemorrhage, unspecified"
+      }
+    },
+    {
+      "type": {
+        "coding": [
+          {
+            "system": "http://terminology.kemkes.go.id",
+            "code": "secondary-diagnosis",
+            "display": "Secondary diagnosis"
+          }
+        ]
+      },
+      "valueCoding": {
+        "system": "http://hl7.org/fhir/sid/icd-10",
+        "code": "E11.9",
+        "display": "Non-insulin-dependent diabetes mellitus, without complications"
+      }
+    }
+  ],
+  "output": [
+    {
+      "extension": [
+        {
+          "extension": [
+            {
+              "url": "distance",
+              "valueQuantity": {
+                "code": "km",
+                "system": "http://unitofmeasure.org",
+                "unit": "km",
+                "value": 85.49
+              }
+            },
+            {
+              "url": "estimated-time",
+              "valueQuantity": {
+                "code": "minute",
+                "system": "http://unitofmeasure.org",
+                "unit": "minute",
+                "value": 128.24
+              }
+            },
+            {
+              "url": "strata",
+              "valueCode": "Utama"
+            },
+            {
+              "url": "bpjs-code",
+              "valueCode": "0902R001"
+            },
+            {
+              "url": "kemkes-code",
+              "valueCode": "3171012"
+            }
+          ],
+          "url": "https://fhir.kemkes.go.id/r4/StructureDefinition/providerAtribute"
+        }
+      ],
+      "type": {
+        "coding": [
+          {
+            "code": "candidate",
+            "display": "Candidate",
+            "system": "http://hl7.org/fhir/uv/sdc/CodeSystem/temp"
+          }
+        ]
+      },
+      "valueReference": {
+        "display": "RSUP Fatmawati",
+        "reference": "Organization/100025589"
+      }
+    }
+  ],
+  "for": {
+    "reference": "Patient/P36506927381"
+  }
+}
