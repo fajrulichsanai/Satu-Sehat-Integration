@@ -44,6 +44,10 @@ import {
   resumeGroupOf,
 } from '../fhir/fhir-mapper';
 import { readableFhirError } from '../fhir/fhir-error';
+import { ClinicalRecordsMapper } from '../fhir/clinical-records-mapper';
+import { PatientCondition } from '../../clinical-records/entities/patient-condition.entity';
+import { ClinicalObservation } from '../../clinical-records/entities/clinical-observation.entity';
+import { ENTERED_IN_ERROR } from '../../clinical-records/clinical-codes';
 
 export interface SyncStep {
   /** Nama langkah sesuai playbook, mis. "07. Diagnosis" */
@@ -140,6 +144,10 @@ export class SyncOrchestratorService {
     private readonly reviewRepo: Repository<PrescriptionReview>,
     @InjectRepository(SatusehatOrganization)
     private readonly ssOrgRepo: Repository<SatusehatOrganization>,
+    @InjectRepository(PatientCondition)
+    private readonly conditionRepo: Repository<PatientCondition>,
+    @InjectRepository(ClinicalObservation)
+    private readonly observationRepo: Repository<ClinicalObservation>,
   ) {}
 
   /**
@@ -335,6 +343,13 @@ export class SyncOrchestratorService {
       steps.push(await this.sendLinked(clinicId, '03. Riwayat Alergi', r));
     }
 
+    // 03. Daftar masalah pasien (Condition problem-list-item) yang dicatat
+    // atau diubah di kunjungan ini
+    const removedSteps = new Set<SyncStep>();
+    const problems = await this.syncProblemList(clinicId, encounter, ctx);
+    steps.push(...problems.steps);
+    problems.removed.forEach((st) => removedSteps.add(st));
+
     // 04. Pemeriksaan fisik — tanda vital
     const physical = await this.physicalRepo.findOne({
       where: { encounterId },
@@ -388,6 +403,11 @@ export class SyncOrchestratorService {
         );
       }
     }
+
+    // 04. Observasi tambahan (katalog Kondisi & Observasi)
+    const observations = await this.syncObservations(clinicId, encounter, ctx);
+    steps.push(...observations.steps);
+    observations.removed.forEach((st) => removedSteps.add(st));
 
     // 07. Diagnosis (SOAP) — utama dulu
     const diagnoses = [...(soap?.diagnoses ?? [])].sort(
@@ -622,6 +642,7 @@ export class SyncOrchestratorService {
         RESUME_GROUPS.map((g) => [g, [] as string[]]),
       ) as Record<ResumeGroup, string[]>;
       for (const st of steps) {
+        if (removedSteps.has(st)) continue;
         const group =
           st.status === 'success' && st.satusehatId
             ? resumeGroupOf(st.localType)
@@ -1450,6 +1471,123 @@ export class SyncOrchestratorService {
     return recall?.dueDate ?? null;
   }
 
+  // ── Kondisi & Observasi ──────────────────────────────────────────────
+
+  /**
+   * Daftar masalah yang dicatat atau diubah di kunjungan ini. Condition
+   * tetap merujuk ke kunjungan tempat ia pertama dicatat (bila kunjungan itu
+   * sudah ada di SATUSEHAT). Yang dihapus setelah terkirim dikirim ulang
+   * sebagai entered-in-error; yang belum pernah terkirim tidak dikirim.
+   */
+  private async syncProblemList(
+    clinicId: number,
+    encounter: Encounter,
+    ctx: FhirContext,
+  ): Promise<{ steps: SyncStep[]; removed: SyncStep[] }> {
+    const rows = await this.conditionRepo.find({
+      where: [
+        { clinicId, patientId: encounter.patientId, encounterId: encounter.id },
+        {
+          clinicId,
+          patientId: encounter.patientId,
+          lastEncounterId: encounter.id,
+        },
+      ],
+      order: { id: 'ASC' },
+    });
+    const steps: SyncStep[] = [];
+    const removed: SyncStep[] = [];
+    for (const c of rows) {
+      const isRemoved = c.verificationStatus === ENTERED_IN_ERROR;
+      // Dihapus: kirim entered-in-error sekali saja, hanya bila pernah terkirim
+      if (isRemoved && (!c.satusehatId || c.syncStatus === 'synced')) continue;
+      let encounterId = ctx.encounterId;
+      if (c.encounterId !== encounter.id) {
+        const origin = await this.encounterRepo.findOne({
+          where: { id: c.encounterId },
+          select: { id: true, satusehatEncounterId: true },
+        });
+        if (origin?.satusehatEncounterId)
+          encounterId = origin.satusehatEncounterId;
+      }
+      const step = await this.sendRecord(
+        clinicId,
+        '03. Daftar Masalah',
+        { resourceType: 'Condition', localId: c.id },
+        () =>
+          ClinicalRecordsMapper.toProblemCondition(c, { ...ctx, encounterId }),
+      );
+      await this.markRecord(this.conditionRepo, c.id, step);
+      steps.push(step);
+      if (isRemoved) removed.push(step);
+    }
+    return { steps, removed };
+  }
+
+  /** Observasi tambahan kunjungan ini (katalog tetap). */
+  private async syncObservations(
+    clinicId: number,
+    encounter: Encounter,
+    ctx: FhirContext,
+  ): Promise<{ steps: SyncStep[]; removed: SyncStep[] }> {
+    const rows = await this.observationRepo.find({
+      where: { clinicId, encounterId: encounter.id },
+      order: { effectiveAt: 'ASC', id: 'ASC' },
+    });
+    const steps: SyncStep[] = [];
+    const removed: SyncStep[] = [];
+    for (const o of rows) {
+      const isRemoved = o.status === ENTERED_IN_ERROR;
+      if (isRemoved && (!o.satusehatId || o.syncStatus === 'synced')) continue;
+      const step = await this.sendRecord(
+        clinicId,
+        '04. Observasi',
+        { resourceType: 'Observation', localId: o.id },
+        () => ClinicalRecordsMapper.toObservation(o, ctx),
+      );
+      await this.markRecord(this.observationRepo, o.id, step);
+      steps.push(step);
+      if (isRemoved) removed.push(step);
+    }
+    return { steps, removed };
+  }
+
+  private async sendRecord(
+    clinicId: number,
+    stepName: string,
+    local: { resourceType: string; localId: number },
+    build: () => LinkedResource,
+  ): Promise<SyncStep> {
+    let r: LinkedResource;
+    try {
+      r = build();
+    } catch (err) {
+      return this.fail(
+        stepName,
+        local.resourceType,
+        'invalid',
+        local.localId,
+        (err as Error).message,
+      );
+    }
+    return this.sendLinked(clinicId, stepName, r);
+  }
+
+  /** Simpan status kirim di baris lokal supaya terlihat di form. */
+  private async markRecord(
+    repo: Repository<PatientCondition> | Repository<ClinicalObservation>,
+    id: number,
+    step: SyncStep,
+  ): Promise<void> {
+    const ok = step.status === 'success';
+    await (repo as Repository<PatientCondition>).update(id, {
+      syncStatus: ok ? 'synced' : 'failed',
+      syncError: ok ? null : (step.message ?? 'Gagal').slice(0, 500),
+      ...(ok && step.satusehatId ? { satusehatId: step.satusehatId } : {}),
+      lastSyncAt: new Date(),
+    });
+  }
+
   private async markEncounterFailed(encounterId: number, err: unknown) {
     await this.encounterRepo.update(encounterId, {
       syncStatus: SyncStatus.FAILED,
@@ -1574,6 +1712,22 @@ export class SyncOrchestratorService {
         return item?.billing?.encounterId;
       }
       default:
+        if (resourceType.startsWith('Condition:cond_problem')) {
+          return (
+            await this.conditionRepo.findOne({
+              where: { id: localId },
+              select: { id: true, lastEncounterId: true },
+            })
+          )?.lastEncounterId;
+        }
+        if (resourceType.startsWith('Observation:clin_obs')) {
+          return (
+            await this.observationRepo.findOne({
+              where: { id: localId },
+              select: { id: true, encounterId: true },
+            })
+          )?.encounterId;
+        }
         return undefined;
     }
   }

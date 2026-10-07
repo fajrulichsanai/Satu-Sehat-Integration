@@ -366,6 +366,12 @@ export type ResumeGroup = (typeof RESUME_GROUPS)[number];
 /** localType link → section resume medis */
 export function resumeGroupOf(localType: string): ResumeGroup | null {
   if (localType === 'soap_chief_complaint') return 'chiefComplaint';
+  // Modul Kondisi & Observasi
+  if (localType === 'cond_problem') return 'history';
+  if (localType === 'clin_obs_vital-signs') return 'vitals';
+  if (localType === 'clin_obs_laboratory') return 'lab';
+  if (localType === 'clin_obs_social-history') return 'history';
+  if (localType.startsWith('clin_obs_')) return 'exam';
   if (localType.startsWith('pt_allergy')) return 'allergy';
   if (localType.startsWith('pt_hist') || localType === 'soap_history')
     return 'history';
