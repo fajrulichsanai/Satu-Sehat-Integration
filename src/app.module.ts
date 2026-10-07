@@ -33,7 +33,6 @@ import { OperationalRecordsModule } from './modules/operational-records/operatio
 import { DoctorFeeModule } from './modules/doctor-fee/doctor-fee.module';
 import { EncounterSoapNotesModule } from './modules/encounter-soap-notes/encounter-soap-notes.module';
 import { PhysicalExaminationModule } from './modules/physical-examination/physical-examination.module';
-import { ClinicalRecordsModule } from './modules/clinical-records/clinical-records.module';
 import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
 import { PrescriptionsModule } from './modules/prescriptions/prescriptions.module';
 import { OdontogramModule } from './modules/odontogram/odontogram.module';
@@ -129,7 +128,6 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     DoctorFeeModule,
     EncounterSoapNotesModule,
     PhysicalExaminationModule,
-    ClinicalRecordsModule,
     DiagnosticsModule,
     PrescriptionsModule,
     OdontogramModule,

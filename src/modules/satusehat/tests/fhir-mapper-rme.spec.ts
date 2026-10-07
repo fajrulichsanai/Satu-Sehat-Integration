@@ -203,6 +203,84 @@ describe('FhirMapper — RME Rawat Jalan poli umum', () => {
   });
 });
 
+describe('FhirMapper — pengukuran tambahan Pemeriksaan Fisik', () => {
+  const pe = {
+    id: 9,
+    updatedAt: when,
+    waistCircumference: '92.5',
+    gcsTotal: 15,
+    bloodGlucose: '145.0',
+    smokingStatus: 'former',
+    otherFindings: 'Luka lecet di lutut kanan',
+  } as unknown as PhysicalExamination;
+
+  it('one Observation per filled measurement with LOINC + UCUM, stable localType per visit (positive)', () => {
+    const out = FhirMapper.toAdditionalMeasurements(pe, ctx);
+    expect(out.map((r) => r.localType)).toEqual([
+      'pe_8280-0',
+      'pe_9269-2',
+      'pe_41653-7',
+      'pe_smoking',
+    ]);
+    const [waist, gcs, glucose, smoking] = out.map((r) => r.resource as any);
+    expect(waist.category[0].coding[0].code).toBe('vital-signs');
+    expect(waist.valueQuantity).toEqual({
+      value: 92.5,
+      unit: 'cm',
+      system: 'http://unitsofmeasure.org',
+      code: 'cm',
+    });
+    expect(gcs.category[0].coding[0].code).toBe('survey');
+    expect(gcs.valueQuantity.code).toBe('{score}');
+    expect(glucose.category[0].coding[0].code).toBe('laboratory');
+    expect(glucose.valueQuantity).toMatchObject({ value: 145, code: 'mg/dL' });
+    expect(smoking.code.coding[0].code).toBe('72166-2');
+    expect(smoking.category[0].coding[0].code).toBe('social-history');
+    expect(smoking.valueCodeableConcept.coding[0]).toEqual({
+      system: 'http://snomed.info/sct',
+      code: '8517006',
+      display: 'Former smoker',
+    });
+    expect(waist.encounter).toEqual({ reference: 'Encounter/ENC-UUID' });
+  });
+
+  it('nothing is sent when no extra measurement is filled (negative)', () => {
+    expect(
+      FhirMapper.toAdditionalMeasurements(
+        { id: 1, height: 170 } as unknown as PhysicalExamination,
+        ctx,
+      ),
+    ).toEqual([]);
+  });
+
+  it('"Temuan lain" joins the existing Physical findings Observation instead of a new one (edge)', () => {
+    const out = FhirMapper.toHeadToToe(
+      { ...pe, skin: 'Turgor baik' } as PhysicalExamination,
+      ctx,
+    );
+    expect(out.map((r) => r.localType)).toEqual(['pe_exam_other']);
+    expect((out[0].resource as any).valueString).toBe(
+      'Kulit: Turgor baik; Temuan lain: Luka lecet di lutut kanan',
+    );
+  });
+
+  it('glucometer code, display and unit match the official SATUSEHAT LOINC lab terminology (positive)', () => {
+    const lab = JSON.parse(
+      gunzipSync(
+        readFileSync(
+          join(__dirname, '../../../../data/terminology/loinc-lab.json.gz'),
+        ),
+      ).toString('utf8'),
+    ) as { tests: { code: string; display: string; unit: string }[] };
+    const glucose = codes.ADDITIONAL_MEASUREMENTS.find(
+      (m) => m.field === 'bloodGlucose',
+    )!;
+    const row = lab.tests.find((t) => t.code === glucose.loinc.code)!;
+    expect(row.display).toBe(glucose.loinc.display);
+    expect(row.unit).toBe(glucose.ucum);
+  });
+});
+
 describe('FhirMapper — anamnesis, odontogram, pulang', () => {
   it('history conditions & allergies from patient data', () => {
     const patient = {

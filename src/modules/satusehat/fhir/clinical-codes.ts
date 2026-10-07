@@ -1,6 +1,8 @@
 import type {
+  PhysicalExamination,
   PregnancyStatus,
   PsychologicalStatus,
+  SmokingStatus,
 } from '../../physical-examination/entities/physical-examination.entity';
 import type { Prognosis } from '../../encounter-soap-notes/entities/encounter-soap-note.entity';
 /**
@@ -408,8 +410,60 @@ export const HEAD_TO_TOE: Record<string, ExamSite> = {
       { key: 'edema', label: 'Edema' },
       { key: 'anemia', label: 'Anemia' },
       { key: 'jaundice', label: 'Ikterus' },
+      { key: 'otherFindings', label: 'Temuan lain' },
     ],
   },
+};
+
+/**
+ * Pengukuran tambahan di Pemeriksaan Fisik → satu Observation per kolom.
+ * Kode LOINC baku; glukometer sama dengan Terminologi LOINC Laboratorium
+ * SATUSEHAT (41653-7). Satuan UCUM.
+ */
+export const ADDITIONAL_MEASUREMENTS: {
+  field: keyof PhysicalExamination;
+  category: [string, string];
+  loinc: Coding;
+  ucum: string;
+}[] = [
+  {
+    field: 'waistCircumference',
+    category: ['vital-signs', 'Vital Signs'],
+    loinc: {
+      code: '8280-0',
+      display: 'Waist Circumference at umbilicus by Tape measure',
+    },
+    ucum: 'cm',
+  },
+  {
+    field: 'headCircumference',
+    category: ['vital-signs', 'Vital Signs'],
+    loinc: { code: '9843-4', display: 'Head Occipital-frontal circumference' },
+    ucum: 'cm',
+  },
+  {
+    field: 'gcsTotal',
+    category: ['survey', 'Survey'],
+    loinc: { code: '9269-2', display: 'Glasgow coma score total' },
+    ucum: '{score}',
+  },
+  {
+    field: 'bloodGlucose',
+    category: ['laboratory', 'Laboratory'],
+    loinc: {
+      code: '41653-7',
+      display: 'Glucose [Mass/volume] in Capillary blood by Glucometer',
+    },
+    ucum: 'mg/dL',
+  },
+];
+
+/** Status merokok (LOINC 72166-2 Tobacco smoking status) */
+export const SMOKING_STATUS: Record<SmokingStatus, Coding> = {
+  never: { code: '266919005', display: 'Never smoked' },
+  former: { code: '8517006', display: 'Former smoker' },
+  occasional: { code: '428041000124106', display: 'Occasional tobacco smoker' },
+  daily: { code: '449868002', display: 'Smokes tobacco daily' },
 };
 
 /** Status psikologis (bab 5, LOINC 8693-4) */

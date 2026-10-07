@@ -39,8 +39,6 @@ import { LabOrder } from '../diagnostics/entities/lab-order.entity';
 import { PrescriptionReview } from '../prescriptions/entities/prescription-review.entity';
 import { LabResult } from '../diagnostics/entities/lab-result.entity';
 import { RadiologyOrder } from '../diagnostics/entities/radiology-order.entity';
-import { PatientCondition } from '../clinical-records/entities/patient-condition.entity';
-import { ClinicalObservation } from '../clinical-records/entities/clinical-observation.entity';
 
 @Module({
   imports: [
@@ -70,8 +68,6 @@ import { ClinicalObservation } from '../clinical-records/entities/clinical-obser
       RadiologyOrder,
       PrescriptionReview,
       SatusehatOrganization,
-      PatientCondition,
-      ClinicalObservation,
     ]),
   ],
   controllers: [SatusehatController, SsrmeController, SatusehatAdminController],

@@ -14,10 +14,12 @@ import { Type } from 'class-transformer';
 import {
   PREGNANCY_STATUSES,
   PSYCHOLOGICAL_STATUSES,
+  SMOKING_STATUSES,
 } from '../entities/physical-examination.entity';
 import type {
   PregnancyStatus,
   PsychologicalStatus,
+  SmokingStatus,
 } from '../entities/physical-examination.entity';
 
 export class UpsertPhysicalExaminationDto {
@@ -171,4 +173,56 @@ export class UpsertPhysicalExaminationDto {
   @IsOptional()
   @IsIn(PREGNANCY_STATUSES)
   pregnancyStatus?: PregnancyStatus | null;
+
+  // Rentang di bawah = nilai yang masuk akal secara klinis; di luar itu
+  // hampir pasti salah ketik dan akan ditolak sebelum dikirim ke SATUSEHAT.
+  @ApiPropertyOptional({ description: 'Lingkar perut (cm)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 1 })
+  @Min(30)
+  @Max(250)
+  waistCircumference?: number | null;
+
+  @ApiPropertyOptional({ description: 'Lingkar kepala (cm)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 1 })
+  @Min(20)
+  @Max(70)
+  headCircumference?: number | null;
+
+  @ApiPropertyOptional({ description: 'Glasgow Coma Scale total (3–15)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(3)
+  @Max(15)
+  gcsTotal?: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Gula darah sewaktu, glukometer (mg/dL)',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 1 })
+  @Min(10)
+  @Max(1000)
+  bloodGlucose?: number | null;
+
+  @ApiPropertyOptional({
+    enum: SMOKING_STATUSES,
+    description: 'Status merokok',
+  })
+  @IsOptional()
+  @IsIn(SMOKING_STATUSES)
+  smokingStatus?: SmokingStatus | null;
+
+  @ApiPropertyOptional({
+    description: 'Temuan lain yang tidak ada kolomnya di form pemeriksaan',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  otherFindings?: string | null;
 }

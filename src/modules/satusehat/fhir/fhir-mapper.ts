@@ -50,12 +50,14 @@ import {
   CONSULTATION,
   Coding,
   DETERMINATION_OF_PROGNOSIS,
+  ADDITIONAL_MEASUREMENTS,
   HEAD_TO_TOE,
   HISTORY_OF_DISORDER,
   OUTPATIENT_CARE_PLAN,
   PREGNANCY_STATUS,
   PROGNOSIS,
   PSYCHOLOGICAL_STATUS,
+  SMOKING_STATUS,
   DENTAL_CARIES,
   DENTAL_FILLING_MATERIAL,
   DISCHARGE_CONDITION,
@@ -366,12 +368,6 @@ export type ResumeGroup = (typeof RESUME_GROUPS)[number];
 /** localType link → section resume medis */
 export function resumeGroupOf(localType: string): ResumeGroup | null {
   if (localType === 'soap_chief_complaint') return 'chiefComplaint';
-  // Modul Kondisi & Observasi
-  if (localType === 'cond_problem') return 'history';
-  if (localType === 'clin_obs_vital-signs') return 'vitals';
-  if (localType === 'clin_obs_laboratory') return 'lab';
-  if (localType === 'clin_obs_social-history') return 'history';
-  if (localType.startsWith('clin_obs_')) return 'exam';
   if (localType.startsWith('pt_allergy')) return 'allergy';
   if (localType.startsWith('pt_hist') || localType === 'soap_history')
     return 'history';
@@ -390,6 +386,7 @@ export function resumeGroupOf(localType: string): ResumeGroup | null {
     localType === 'dental_notes'
   )
     return 'exam';
+  if (localType === 'pe_smoking') return 'history';
   if (localType === 'pe_psychological' || localType === 'pe_pregnancy')
     return 'functional';
   if (['soap_care_plan', 'soap_instruction', 'soap_goal'].includes(localType))
@@ -1903,6 +1900,61 @@ export class FhirMapper {
           }),
           code: { coding },
         },
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Pengukuran tambahan (lingkar perut/kepala, GCS, gula darah glukometer)
+   * dan status merokok — satu Observation per kolom terisi. localType tetap
+   * per kunjungan, jadi kirim ulang memperbarui (PUT), tidak membuat baru.
+   */
+  static toAdditionalMeasurements(
+    pe: PhysicalExamination,
+    ctx: FhirContext,
+  ): LinkedResource[] {
+    const t = fhirDateTime(pe.updatedAt ?? pe.createdAt);
+    const out: LinkedResource[] = ADDITIONAL_MEASUREMENTS.filter((m) =>
+      isFilled(pe[m.field]),
+    ).map((m) => ({
+      localType: `pe_${m.loinc.code}`,
+      localId: pe.id,
+      resource: this.observation(
+        ctx,
+        t,
+        m.category,
+        { system: SYS.LOINC, ...m.loinc },
+        {
+          valueQuantity: {
+            value: Number(pe[m.field]),
+            unit: m.ucum,
+            system: SYS.UCUM,
+            code: m.ucum,
+          },
+        },
+      ),
+    }));
+    const smoking = pe.smokingStatus ? SMOKING_STATUS[pe.smokingStatus] : null;
+    if (smoking) {
+      out.push({
+        localType: 'pe_smoking',
+        localId: pe.id,
+        resource: this.observation(
+          ctx,
+          t,
+          ['social-history', 'Social History'],
+          {
+            system: SYS.LOINC,
+            code: '72166-2',
+            display: 'Tobacco smoking status',
+          },
+          {
+            valueCodeableConcept: {
+              coding: [{ system: SYS.SNOMED, ...smoking }],
+            },
+          },
+        ),
       });
     }
     return out;

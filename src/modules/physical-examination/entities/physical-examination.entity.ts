@@ -17,6 +17,13 @@ export const PREGNANCY_STATUSES = [
   'unknown',
 ] as const;
 export type PregnancyStatus = (typeof PREGNANCY_STATUSES)[number];
+export const SMOKING_STATUSES = [
+  'never',
+  'former',
+  'occasional',
+  'daily',
+] as const;
+export type SmokingStatus = (typeof SMOKING_STATUSES)[number];
 
 /**
  * Head-to-toe physical examination ("status present") for one encounter —
@@ -197,6 +204,51 @@ export class PhysicalExamination extends BaseEntity {
     nullable: true,
   })
   pregnancyStatus: PregnancyStatus | null;
+
+  // Pengukuran tambahan (dikirim sebagai Observation tersendiri)
+  @Column({
+    name: 'waist_circumference',
+    type: 'decimal',
+    precision: 5,
+    scale: 1,
+    nullable: true,
+  })
+  waistCircumference: number | null;
+
+  @Column({
+    name: 'head_circumference',
+    type: 'decimal',
+    precision: 5,
+    scale: 1,
+    nullable: true,
+  })
+  headCircumference: number | null;
+
+  /** Glasgow Coma Scale total (3–15) */
+  @Column({ name: 'gcs_total', type: 'tinyint', nullable: true })
+  gcsTotal: number | null;
+
+  /** Gula darah sewaktu dengan glukometer (mg/dL) */
+  @Column({
+    name: 'blood_glucose',
+    type: 'decimal',
+    precision: 5,
+    scale: 1,
+    nullable: true,
+  })
+  bloodGlucose: number | null;
+
+  @Column({
+    name: 'smoking_status',
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
+  smokingStatus: SmokingStatus | null;
+
+  /** Temuan lain yang tidak ada kolomnya — ikut Observation "Physical findings" */
+  @Column({ name: 'other_findings', type: 'text', nullable: true })
+  otherFindings: string | null;
 
   @ManyToOne(() => Encounter, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'encounter_id' })
