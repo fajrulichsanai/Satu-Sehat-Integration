@@ -24,6 +24,8 @@ import { LabOrder } from '../../diagnostics/entities/lab-order.entity';
 import { RadiologyOrder } from '../../diagnostics/entities/radiology-order.entity';
 import { ClinicalCatalogService } from '../../terminology/clinical-catalog.service';
 import { PatientRelationsMapper } from '../fhir/patient-relations-mapper';
+import { ImmunizationMapper } from '../fhir/immunization-mapper';
+import { Immunization } from '../../immunizations/entities/immunization.entity';
 import { familyHistoryLinkType } from '../../patients/family-history';
 import { DiagnosticsMapper } from '../fhir/diagnostics-mapper';
 import { SatusehatOrganization } from '../onboarding/entities/satusehat-organization.entity';
@@ -142,6 +144,8 @@ export class SyncOrchestratorService {
     private readonly reviewRepo: Repository<PrescriptionReview>,
     @InjectRepository(SatusehatOrganization)
     private readonly ssOrgRepo: Repository<SatusehatOrganization>,
+    @InjectRepository(Immunization)
+    private readonly immunizationRepo: Repository<Immunization>,
   ) {}
 
   /**
@@ -545,6 +549,9 @@ export class SyncOrchestratorService {
       steps.push(...r.steps);
       if (r.requestId) requestIds.push(r.requestId);
     }
+
+    // 09. Imunisasi
+    steps.push(...(await this.syncImmunizations(clinicId, encounterId, ctx)));
 
     // 17. Pengkajian resep (QuestionnaireResponse Q0007)
     const review = await this.reviewRepo.findOne({ where: { encounterId } });
@@ -1514,6 +1521,59 @@ export class SyncOrchestratorService {
       order: { dueDate: 'ASC' },
     });
     return recall?.dueDate ?? null;
+  }
+
+  /**
+   * Imunisasi kunjungan ini. Kode KFA produk yang belum dikenal SATUSEHAT
+   * dicoba ulang dengan kode template-nya. Yang dihapus setelah terkirim
+   * dikirim sekali sebagai entered-in-error lalu barisnya dibuang.
+   */
+  private async syncImmunizations(
+    clinicId: number,
+    encounterId: number,
+    ctx: FhirContext,
+  ): Promise<SyncStep[]> {
+    const step = '09. Imunisasi';
+    const out: SyncStep[] = [];
+    const rows = await this.immunizationRepo.find({
+      where: { clinicId, encounterId },
+      order: { occurredAt: 'ASC', id: 'ASC' },
+    });
+    for (const row of rows) {
+      const removed = row.status === 'entered-in-error';
+      if (removed && !(await this.wasSent(clinicId, 'immunization', row.id))) {
+        await this.immunizationRepo.delete(row.id);
+        continue;
+      }
+      let r = await this.sendLinked(
+        clinicId,
+        step,
+        ImmunizationMapper.toImmunization(row, ctx),
+      );
+      if (r.status === 'failed' && isUnknownKfaCode(r.message)) {
+        const template = await this.kfaService
+          .getProduct(row.kfaCode)
+          .then((p) => p.template)
+          .catch(() => null);
+        if (template?.code) {
+          r = await this.sendLinked(
+            clinicId,
+            step,
+            ImmunizationMapper.toImmunization(row, ctx, {
+              code: template.code,
+              display: template.name || row.vaccineName,
+            }),
+          );
+          if (r.status === 'success')
+            r.message = `Kode KFA ${row.kfaCode} belum dikenal SATUSEHAT — dikirim dengan kode generik ${template.code}`;
+        }
+      }
+      out.push(r);
+      if (removed && r.status === 'success') {
+        await this.immunizationRepo.delete(row.id);
+      }
+    }
+    return out;
   }
 
   private wasSent(clinicId: number, localType: string, localId: number) {

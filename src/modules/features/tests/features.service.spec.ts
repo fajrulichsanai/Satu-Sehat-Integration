@@ -88,6 +88,22 @@ describe('FeaturesService (kontrol fitur per klinik & user)', () => {
     expect(res.custom).toEqual([]);
   });
 
+  it('opt-in features (imunisasi) stay off until the clinic enables them (edge)', async () => {
+    expect((await service.effectiveFor(nurse)).features).not.toContain(
+      'imunisasi',
+    );
+    expect(await service.isExplicitlyDisabled(nurse, 'imunisasi')).toBe(true);
+    const before = await service.clinicFeatures(10);
+    expect(before.standard.find((f) => f.key === 'imunisasi')!.enabled).toBe(
+      false,
+    );
+    await service.setClinicFeature(10, 'imunisasi', true, 0);
+    expect((await service.effectiveFor(nurse)).features).toContain(
+      'imunisasi',
+    );
+    expect(await service.isExplicitlyDisabled(nurse, 'imunisasi')).toBe(false);
+  });
+
   it('clinic switch-off wins over role defaults and user overrides (positive)', async () => {
     await service.setClinicFeature(10, 'gudang', false, 0);
     expect((await service.effectiveFor(owner)).features).not.toContain(

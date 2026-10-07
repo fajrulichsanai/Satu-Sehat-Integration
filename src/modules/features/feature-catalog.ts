@@ -31,6 +31,7 @@ export const STANDARD_FEATURES = [
   { key: 'api', label: 'API Klinik', toggleable: true },
   { key: 'konten', label: 'Konten', toggleable: true },
   { key: 'satusehat', label: 'SATUSEHAT', toggleable: true },
+  { key: 'imunisasi', label: 'Imunisasi / Vaksin', toggleable: true },
   { key: 'info-klinik', label: 'Info Klinik', toggleable: false },
   { key: 'user-management', label: 'Manajemen User', toggleable: false },
   { key: 'langganan', label: 'Langganan', toggleable: false },
@@ -48,6 +49,12 @@ export const TOGGLEABLE_FEATURES: string[] = STANDARD_FEATURES.filter(
 export const STANDARD_FEATURE_KEYS: string[] = STANDARD_FEATURES.map(
   (f) => f.key,
 );
+
+/**
+ * Fitur opt-in: mati sampai super admin menyalakannya untuk klinik
+ * (mis. imunisasi — hanya klinik yang memberi vaksin).
+ */
+export const OPT_IN_FEATURES = new Set<string>(['imunisasi']);
 
 /** Fitur custom dikenali dari awalan kunci */
 export const CUSTOM_PREFIX = 'custom:';
@@ -77,6 +84,7 @@ const FULL_ACCESS: string[] = [
   'api',
   'konten',
   'satusehat',
+  'imunisasi',
 ];
 
 const CLINICIAN = [
@@ -86,6 +94,7 @@ const CLINICIAN = [
   'informed-consent',
   'share-fee-saya',
   'tampilan',
+  'imunisasi',
 ];
 
 /** Fitur bawaan tiap role (cerminan lib/permissions.ts di frontend) */

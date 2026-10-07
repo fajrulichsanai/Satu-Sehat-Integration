@@ -34,6 +34,7 @@ describe('SyncOrchestratorService', () => {
       {} as any, // ClinicalCatalogService
       repo(), // PrescriptionReview
       repo(), // SatusehatOrganization
+      repo(), // Immunization
     );
   });
 

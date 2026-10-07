@@ -20,6 +20,7 @@ import {
   STANDARD_FEATURES,
   TOGGLEABLE_FEATURES,
   isCustomFeature,
+  OPT_IN_FEATURES,
 } from './feature-catalog';
 import { CreateCustomFeatureDto } from './dto/features.dto';
 
@@ -81,6 +82,7 @@ export class FeaturesService {
         continue;
       }
       if (clinic.get(f.key) === false) continue;
+      if (OPT_IN_FEATURES.has(f.key) && clinic.get(f.key) !== true) continue;
       if (user.get(f.key) ?? def) features.add(f.key);
     }
     const custom: { key: string; name: string }[] = [];
@@ -111,6 +113,7 @@ export class FeaturesService {
     }
     if (!TOGGLEABLE_FEATURES.includes(key)) return false;
     if (clinic.get(key) === false) return true;
+    if (OPT_IN_FEATURES.has(key) && clinic.get(key) !== true) return true;
     const user = await this.userSettings(actor.userId, actor.clinicId);
     return user.get(key) === false;
   }
@@ -127,7 +130,7 @@ export class FeaturesService {
       standard: STANDARD_FEATURES.filter((f) => f.toggleable).map((f) => ({
         key: f.key,
         label: f.label,
-        enabled: settings.get(f.key) ?? true,
+        enabled: settings.get(f.key) ?? !OPT_IN_FEATURES.has(f.key),
         isDefault: !settings.has(f.key),
       })),
       custom: customs.map((c) => ({
@@ -212,7 +215,10 @@ export class FeaturesService {
     ]);
     const roleDefaults = ROLE_DEFAULT_FEATURES[target.role] ?? [];
     const standard = STANDARD_FEATURES.filter(
-      (f) => f.toggleable && clinic.get(f.key) !== false,
+      (f) =>
+        f.toggleable &&
+        clinic.get(f.key) !== false &&
+        (!OPT_IN_FEATURES.has(f.key) || clinic.get(f.key) === true),
     ).map((f) => {
       const def = roleDefaults.includes(f.key);
       return {

@@ -39,6 +39,7 @@ import { LabOrder } from '../diagnostics/entities/lab-order.entity';
 import { PrescriptionReview } from '../prescriptions/entities/prescription-review.entity';
 import { LabResult } from '../diagnostics/entities/lab-result.entity';
 import { RadiologyOrder } from '../diagnostics/entities/radiology-order.entity';
+import { Immunization } from '../immunizations/entities/immunization.entity';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { RadiologyOrder } from '../diagnostics/entities/radiology-order.entity';
       RadiologyOrder,
       PrescriptionReview,
       SatusehatOrganization,
+      Immunization,
     ]),
   ],
   controllers: [SatusehatController, SsrmeController, SatusehatAdminController],
