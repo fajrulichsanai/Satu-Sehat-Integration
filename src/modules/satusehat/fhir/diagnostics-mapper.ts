@@ -7,6 +7,7 @@
  * Radiologi: ServiceRequest (+ACSN) → [ImagingStudy dari DICOM router] →
  *            Observation (bacaan) → DiagnosticReport
  */
+import { toUcum } from './ucum';
 import { LabOrder } from '../../diagnostics/entities/lab-order.entity';
 import { LabResult } from '../../diagnostics/entities/lab-result.entity';
 import { RadiologyOrder } from '../../diagnostics/entities/radiology-order.entity';
@@ -43,10 +44,15 @@ export function specimenCoding(specimenType?: string | null) {
   return SPECIMEN_SNOMED[key] ?? null;
 }
 
-const quantity = (value: number, unit?: string | null) => ({
-  value,
-  ...(unit ? { unit, system: SYS.UCUM, code: unit } : {}),
-});
+/** Satuan teks katalog → kode UCUM; tanpa padanan dikirim sebagai teks saja */
+const quantity = (value: number, unit?: string | null) => {
+  const code = toUcum(unit);
+  return {
+    value,
+    ...(unit ? { unit } : {}),
+    ...(code ? { system: SYS.UCUM, code } : {}),
+  };
+};
 
 const orgRef = (ctx: FhirContext) => ({
   reference: `Organization/${ctx.orgId}`,

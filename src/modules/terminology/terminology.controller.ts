@@ -58,7 +58,10 @@ export class TerminologyController {
       success: true,
       data: {
         ...this.catalog.getLab(code),
-        results: this.catalog.labResultsFor(code),
+        // Pilihan jawaban per parameter (hasil ordinal/nominal)
+        results: this.catalog
+          .labResultsFor(code)
+          .map((r) => this.catalog.getLab(r.code)),
       },
     };
   }

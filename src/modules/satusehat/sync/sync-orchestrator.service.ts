@@ -1259,11 +1259,26 @@ export class SyncOrchestratorService {
     const step = '08. Laboratorium';
     const out: SyncStep[] = [];
     const orders = await this.labRepo.find({
-      where: { encounterId, status: Not('cancelled') },
+      where: { encounterId },
       relations: { results: true },
       order: { id: 'ASC', results: { id: 'ASC' } },
     });
     for (const order of orders) {
+      // Dibatalkan: kabari SATUSEHAT (revoked) hanya bila pernah terkirim
+      if (order.status === 'cancelled') {
+        if (await this.wasSent(clinicId, 'lab_request', order.id)) {
+          out.push(
+            await this.sendLinked(clinicId, step, {
+              localType: 'lab_request',
+              localId: order.id,
+              resource: DiagnosticsMapper.toLabServiceRequest(order, ctx, {
+                reasonConditionId,
+              }),
+            }),
+          );
+        }
+        continue;
+      }
       let fastingId: string | null = null;
       const fasting = DiagnosticsMapper.toFastingProcedure(order, ctx);
       if (fasting) {
@@ -1354,7 +1369,7 @@ export class SyncOrchestratorService {
     const step = '08. Radiologi';
     const out: SyncStep[] = [];
     const orders = await this.radiologyRepo.find({
-      where: { encounterId, status: Not('cancelled') },
+      where: { encounterId },
       order: { id: 'ASC' },
     });
     for (const order of orders) {
@@ -1363,6 +1378,25 @@ export class SyncOrchestratorService {
         bodySite = this.catalog.getRadiology(order.code).bodySite;
       } catch {
         bodySite = null;
+      }
+      if (order.status === 'cancelled') {
+        if (await this.wasSent(clinicId, 'rad_request', order.id)) {
+          out.push(
+            await this.sendLinked(clinicId, step, {
+              localType: 'rad_request',
+              localId: order.id,
+              resource: DiagnosticsMapper.toRadiologyServiceRequest(
+                order,
+                ctx,
+                {
+                  reasonConditionId,
+                  bodySite,
+                },
+              ),
+            }),
+          );
+        }
+        continue;
       }
       const sr = await this.sendLinked(clinicId, step, {
         localType: 'rad_request',
@@ -1453,6 +1487,10 @@ export class SyncOrchestratorService {
       order: { dueDate: 'ASC' },
     });
     return recall?.dueDate ?? null;
+  }
+
+  private wasSent(clinicId: number, localType: string, localId: number) {
+    return this.linkRepo.exists({ where: { clinicId, localType, localId } });
   }
 
   private async markEncounterFailed(encounterId: number, err: unknown) {

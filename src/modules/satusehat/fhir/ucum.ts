@@ -1,0 +1,116 @@
+/**
+ * Satuan katalog lab/radiologi SATUSEHAT ditulis untuk dibaca manusia
+ * ("detik", "mg/24 jam", "10^3/µL", "Indeks"). Quantity.code harus kode
+ * UCUM yang valid, jadi dipetakan di sini. Satuan yang tidak punya padanan
+ * UCUM dikirim sebagai teks saja (Quantity.unit tanpa system/code) —
+ * diperbolehkan FHIR dan tidak divalidasi terhadap UCUM.
+ */
+const EXPLICIT: Record<string, string> = {
+  detik: 's',
+  menit: 'min',
+  'menit post ejakulasi': 'min',
+  jam: 'h',
+  hari: 'd',
+  tahun: 'a',
+  'mg/24 jam': 'mg/(24.h)',
+  'g/24 jam': 'g/(24.h)',
+  'ug/24 jam': 'ug/(24.h)',
+  'mmol/24 jam': 'mmol/(24.h)',
+  'mmol/12 jam': 'mmol/(12.h)',
+  'u/24 jam': 'U/(24.h)',
+  'mm/jam': 'mm/h',
+  indeks: '{index}',
+  index: '{index}',
+  '10^3/ul': '10*3/uL',
+  '10^6/ul': '10*6/uL',
+  '10^6/ml': '10*6/mL',
+  '10³/ml': '10*3/mL',
+  'ml/min/1.73 m²': 'mL/min/{1.73_m2}',
+  'iu/ml': '[IU]/mL',
+  'iu/l': '[IU]/L',
+  'miu/ml': 'm[IU]/mL',
+  'miu/l': 'm[IU]/L',
+  'uiu/ml': 'u[IU]/mL',
+  'm[iu]/ml': 'm[IU]/mL',
+  'k[iu]/ml': 'k[IU]/mL',
+  mmhg: 'mm[Hg]',
+  'ru/ml': '{RU}/mL',
+  pru: '{PRU}',
+  bu: '{BU}',
+  mpl: '{MPL}',
+  gpl: '{GPL}',
+  '/lpb': '/[HPF]',
+  't-uptake units': '{T_uptake_unit}',
+};
+
+/** Kode UCUM yang sudah benar & umum dipakai di katalog (dicocokkan persis). */
+const VALID = new Set([
+  '%',
+  'U/mL',
+  'mg/dL',
+  'ng/mL',
+  '/uL',
+  'U/L',
+  'pg/mL',
+  'ug/L',
+  'g/dL',
+  'mg/L',
+  'mmol/L',
+  'ug/dL',
+  'ng/dL',
+  'ug/mL',
+  'fL',
+  'umol/L',
+  'mL',
+  'ng/L',
+  'mm',
+  'ug/g',
+  'U',
+  'pg',
+  'g/L',
+  'U/g{Hb}',
+  'mg/g{creat}',
+  'cP',
+  'nmol/L',
+  'mosm/kg',
+  'mL/s',
+  'nmol.min/L',
+  'nmol',
+  'pmol/L',
+  'min',
+  '10*3/uL',
+  'kU/L',
+  'mm3',
+  '10*6',
+  'mL/min',
+  'ug/mg{creat}',
+  'g/g{creat}',
+  'mg/mL',
+  'ng/mL/h',
+  '/10*5{PMN}',
+  '{Ct_value}',
+  '{copies}/mL',
+  '{titer}',
+  '{Log_IU}/mL',
+  '{Log_copies}/mL',
+  '{log_copies}/mL',
+  'g/cm2',
+  '{T-score}',
+  '{Tscore}',
+  '{Zscore}',
+  'mo',
+  'kg',
+  'cm',
+  's',
+  'h',
+  'd',
+]);
+
+/** "µg/L" → "ug/L"; kembalikan null bila tidak ada padanan UCUM. */
+export function toUcum(unit?: string | null): string | null {
+  const raw = unit?.trim();
+  if (!raw) return null;
+  const micro = raw.replace(/[µμ]/g, 'u');
+  if (VALID.has(micro)) return micro;
+  return EXPLICIT[micro.toLowerCase()] ?? null;
+}

@@ -1,10 +1,11 @@
+import { SatusehatResourceLink } from '../satusehat/sync/entities/satusehat-resource-link.entity';
 import {
   BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import { ClinicalCatalogService } from '../terminology/clinical-catalog.service';
 import { LabOrder } from './entities/lab-order.entity';
@@ -48,6 +49,8 @@ export class DiagnosticsService {
     @InjectRepository(Encounter)
     private readonly encounterRepo: Repository<Encounter>,
     private readonly catalog: ClinicalCatalogService,
+    @InjectRepository(SatusehatResourceLink)
+    private readonly linkRepo: Repository<SatusehatResourceLink>,
   ) {}
 
   // ── Laboratorium ──────────────────────────────────────────────────────
@@ -125,6 +128,10 @@ export class DiagnosticsService {
     if (order.status === 'cancelled') {
       throw new BadRequestException('Permintaan lab sudah dibatalkan');
     }
+    // Hasil yang sudah ada diperbarui di baris yang sama (ID tetap), supaya
+    // kirim ulang ke SATUSEHAT memperbarui Observation lama, bukan membuat baru.
+    const existing = new Map(order.results.map((r) => [r.code, r]));
+    const seen = new Set<string>();
     const rows = dto.results.map((r) => {
       const test = this.catalog.getLab(r.code);
       if (!(test.use ?? '').toLowerCase().includes('hasil')) {
@@ -147,7 +154,13 @@ export class DiagnosticsService {
         !!r.valueCode ||
         !!r.valueText?.trim();
       if (!hasValue) throw new BadRequestException(`Nilai ${test.name} kosong`);
+      if (seen.has(test.code)) {
+        throw new BadRequestException(`${test.name} diisi lebih dari sekali`);
+      }
+      seen.add(test.code);
+      const prev = existing.get(test.code);
       return this.resultRepo.create({
+        ...(prev ? { id: prev.id, createdBy: prev.createdBy } : {}),
         orderId: order.id,
         code: test.code,
         codeSystem: test.system,
@@ -162,10 +175,12 @@ export class DiagnosticsService {
         refLow: num(r.refLow),
         refHigh: num(r.refHigh),
         interpretation: r.interpretation ?? null,
-        createdBy: userId,
+        ...(prev ? { updatedBy: userId } : { createdBy: userId }),
       });
     });
-    await this.resultRepo.delete({ orderId: order.id });
+    const removed = order.results.filter((r) => !seen.has(r.code));
+    if (removed.length)
+      await this.resultRepo.delete({ id: In(removed.map((r) => r.id)) });
     if (rows.length) await this.resultRepo.save(rows);
     order.status = rows.length ? 'completed' : order.status;
     order.resultedAt = rows.length
@@ -182,6 +197,7 @@ export class DiagnosticsService {
 
   async removeLab(encounterId: number, clinicId: number, id: number) {
     const order = await this.findLab(encounterId, clinicId, id);
+    await this.assertNotSent(clinicId, 'lab_request', order.id);
     await this.labRepo.delete({ id: order.id });
   }
 
@@ -250,6 +266,7 @@ export class DiagnosticsService {
 
   async removeRadiology(encounterId: number, clinicId: number, id: number) {
     const order = await this.findRadiology(encounterId, clinicId, id);
+    await this.assertNotSent(clinicId, 'rad_request', order.id);
     await this.radRepo.delete({ id: order.id });
   }
 
@@ -276,6 +293,22 @@ export class DiagnosticsService {
     if (!order)
       throw new NotFoundException('Permintaan radiologi tidak ditemukan');
     return order;
+  }
+
+  /** Permintaan yang sudah ada di SATUSEHAT dibatalkan, bukan dihapus */
+  private async assertNotSent(
+    clinicId: number,
+    localType: string,
+    localId: number,
+  ) {
+    const sent = await this.linkRepo.exists({
+      where: { clinicId, localType, localId },
+    });
+    if (sent) {
+      throw new BadRequestException(
+        'Permintaan ini sudah terkirim ke SATUSEHAT — gunakan Batalkan, bukan Hapus',
+      );
+    }
   }
 
   private async assertEncounter(encounterId: number, clinicId: number) {
