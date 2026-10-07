@@ -9,6 +9,8 @@ import { SatusehatResourceLink } from '../satusehat/sync/entities/satusehat-reso
 import { PrescriptionsController } from './prescriptions.controller';
 import { PrescriptionsService } from './prescriptions.service';
 import { PrescriptionPdfService } from './prescription-pdf.service';
+import { PharmacyController } from './pharmacy.controller';
+import { PharmacyService } from './pharmacy.service';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 
 @Module({
@@ -23,7 +25,7 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
     ]),
     AuditLogModule,
   ],
-  controllers: [PrescriptionsController],
-  providers: [PrescriptionsService, PrescriptionPdfService],
+  controllers: [PrescriptionsController, PharmacyController],
+  providers: [PrescriptionsService, PrescriptionPdfService, PharmacyService],
 })
 export class PrescriptionsModule {}

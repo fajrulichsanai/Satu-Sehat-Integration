@@ -77,6 +77,7 @@ describe('FeaturesService (kontrol fitur per klinik & user)', () => {
     const res = await service.effectiveFor(nurse);
     expect(res.features.sort()).toEqual(
       [
+        'farmasi',
         'informed-consent',
         'kunjungan',
         'pasien',

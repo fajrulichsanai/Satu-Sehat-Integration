@@ -31,6 +31,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Audit } from '../audit-log/decorators/audit.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
 import { AuditActionType } from '../audit-log/entities/audit-log.entity';
+import { RequireFeature } from '../features/require-feature.decorator';
 
 @ApiTags('encounters')
 @ApiBearerAuth('JWT-auth')
@@ -161,6 +162,7 @@ export class PrescriptionsController {
   }
 
   @Post(':itemId/dispense')
+  @RequireFeature('farmasi')
   @HttpCode(200)
   @Audit('MedicalRecord', AuditActionType.UPDATE)
   @ApiOperation({
@@ -184,6 +186,7 @@ export class PrescriptionsController {
   }
 
   @Delete(':itemId/dispense')
+  @RequireFeature('farmasi')
   @Audit('MedicalRecord', AuditActionType.UPDATE)
   @ApiOperation({ summary: 'Batalkan catatan pengeluaran obat' })
   async undoDispense(
@@ -202,6 +205,7 @@ export class PrescriptionsController {
   }
 
   @Post(':itemId/administer')
+  @RequireFeature('farmasi')
   @HttpCode(200)
   @Audit('MedicalRecord', AuditActionType.UPDATE)
   @ApiOperation({ summary: 'Catat obat diberikan langsung di klinik' })
@@ -223,6 +227,7 @@ export class PrescriptionsController {
   }
 
   @Delete(':itemId/administer')
+  @RequireFeature('farmasi')
   @Audit('MedicalRecord', AuditActionType.UPDATE)
   @ApiOperation({ summary: 'Batalkan catatan pemberian obat' })
   async undoAdminister(
@@ -260,6 +265,7 @@ export class PrescriptionsController {
   }
 
   @Put('review')
+  @RequireFeature('farmasi')
   @Audit('MedicalRecord', AuditActionType.UPDATE)
   @ApiOperation({ summary: 'Simpan pengkajian resep' })
   async saveReview(
