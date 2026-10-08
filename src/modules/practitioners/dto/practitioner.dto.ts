@@ -1,5 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  IsBoolean,
+  IsDateString,
+  IsEmail,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   MaxLength,
@@ -7,33 +11,62 @@ import {
   IsString,
   Length,
   Matches,
+  ValidateIf,
 } from 'class-validator';
 import { Gender } from '../../../enums';
 
-export class CreatePractitionerDto {
-  @ApiProperty({ example: 'Dr. John Doe, Sp.KG' })
-  @IsNotEmpty()
+/** Profesi tenaga kesehatan (UU 36/2014 — kelompok nakes yang umum di klinik). */
+export const PRACTITIONER_PROFESSIONS = [
+  'dokter',
+  'dokter_gigi',
+  'dokter_spesialis',
+  'dokter_gigi_spesialis',
+  'perawat',
+  'perawat_gigi',
+  'bidan',
+  'apoteker',
+  'tenaga_teknis_kefarmasian',
+  'analis_kesehatan',
+  'radiografer',
+  'nutrisionis',
+  'fisioterapis',
+  'lainnya',
+] as const;
+
+/** Field opsional yang sama untuk tambah & revisi. Kosong ('') = hapus nilai. */
+class PractitionerOptionalFields {
+  @ApiProperty({ example: 'dokter_gigi', required: false })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== '' && v !== null)
+  @IsIn(PRACTITIONER_PROFESSIONS, { message: 'Profesi tidak dikenal' })
+  profession?: string;
+
+  @ApiProperty({ example: '1990-06-12', required: false })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== '' && v !== null)
+  @IsDateString()
+  birthDate?: string | null;
+
+  @ApiProperty({ example: 'Bandung', required: false })
+  @IsOptional()
   @MaxLength(100)
-  name: string | undefined;
+  birthPlace?: string;
 
-  @ApiProperty({ example: '3201012312310001', description: '16-digit NIK' })
-  @IsNotEmpty()
-  @Length(16, 16)
-  @Matches(/^\d{16}$/, { message: 'NIK harus 16 digit angka' })
-  nik: string | undefined;
-
-  @ApiProperty({ example: 'male', enum: Gender })
-  @IsEnum(Gender)
-  @IsNotEmpty()
-  gender: Gender | undefined;
+  @ApiProperty({ example: 'Jl. Merdeka No. 1, Bandung', required: false })
+  @IsOptional()
+  @MaxLength(255)
+  address?: string;
 
   @ApiProperty({ example: '081234567890', required: false })
   @IsOptional()
-  @MaxLength(20)
+  @ValidateIf((_, v) => v !== '' && v !== null)
+  @Matches(/^\+?\d{8,15}$/, { message: 'Nomor HP 8–15 digit angka' })
   phone?: string;
 
   @ApiProperty({ example: 'dokter@example.com', required: false })
   @IsOptional()
+  @ValidateIf((_, v) => v !== '' && v !== null)
+  @IsEmail({}, { message: 'Format email tidak valid' })
   @MaxLength(100)
   email?: string;
 
@@ -41,6 +74,12 @@ export class CreatePractitionerDto {
   @IsOptional()
   @MaxLength(50)
   sipNumber?: string;
+
+  @ApiProperty({ example: '2031-06-12', required: false })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== '' && v !== null)
+  @IsDateString()
+  sipExpiredAt?: string | null;
 
   @ApiProperty({
     example: 'STR/123/2026',
@@ -51,6 +90,12 @@ export class CreatePractitionerDto {
   @MaxLength(50)
   strNumber?: string;
 
+  @ApiProperty({ example: '2031-06-12', required: false })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== '' && v !== null)
+  @IsDateString()
+  strExpiredAt?: string | null;
+
   @ApiProperty({ example: 'Spesialis Konservasi Gigi', required: false })
   @IsOptional()
   @MaxLength(100)
@@ -58,7 +103,7 @@ export class CreatePractitionerDto {
 
   @ApiProperty({
     example: 'N10000001',
-    description: 'SATUSEHAT Practitioner ID',
+    description: 'SATUSEHAT Practitioner ID (IHS)',
     required: false,
   })
   @IsOptional()
@@ -66,52 +111,86 @@ export class CreatePractitionerDto {
   satusehatPractitionerId?: string;
 }
 
-export class UpdatePractitionerDto {
-  @ApiProperty({ example: 'Dr. John Doe, Sp.KG', required: false })
+export class CreatePractitionerDto extends PractitionerOptionalFields {
+  @ApiProperty({ example: 'drg. Ratna Sari' })
+  @IsNotEmpty({ message: 'Nama wajib diisi' })
+  @MaxLength(100)
+  name: string | undefined;
+
+  @ApiProperty({ example: '3201012312310001', description: '16-digit NIK' })
+  @IsNotEmpty({ message: 'NIK wajib diisi' })
+  @Length(16, 16)
+  @Matches(/^\d{16}$/, { message: 'NIK harus 16 digit angka' })
+  nik: string | undefined;
+
+  @ApiProperty({ example: 'male', enum: Gender })
+  @IsEnum(Gender, { message: 'Jenis kelamin wajib dipilih' })
+  @IsNotEmpty()
+  gender: Gender | undefined;
+}
+
+export class UpdatePractitionerDto extends PractitionerOptionalFields {
+  @ApiProperty({ example: 'drg. Ratna Sari', required: false })
   @IsOptional()
+  @IsNotEmpty({ message: 'Nama tidak boleh kosong' })
   @MaxLength(100)
   name?: string;
 
-  @ApiProperty({ example: '081234567890', required: false })
+  @ApiProperty({ example: '3201012312310001', required: false })
   @IsOptional()
-  @MaxLength(20)
-  phone?: string;
+  @Matches(/^\d{16}$/, { message: 'NIK harus 16 digit angka' })
+  nik?: string;
 
-  @ApiProperty({ example: 'dokter@example.com', required: false })
+  @ApiProperty({ example: 'female', enum: Gender, required: false })
   @IsOptional()
-  @MaxLength(100)
-  email?: string;
+  @IsEnum(Gender)
+  gender?: Gender;
 
-  @ApiProperty({ example: 'SIP/123/2026', required: false })
+  @ApiProperty({ example: true, required: false })
   @IsOptional()
-  @MaxLength(50)
-  sipNumber?: string;
+  @IsBoolean()
+  isActive?: boolean;
 
-  @ApiProperty({ example: 'STR/123/2026', required: false })
+  @ApiProperty({
+    example: 'Salah ketik nama',
+    required: false,
+    description: 'Alasan revisi — dicatat di riwayat revisi',
+  })
   @IsOptional()
-  @MaxLength(50)
-  strNumber?: string;
-
-  @ApiProperty({ example: 'Spesialis Konservasi Gigi', required: false })
-  @IsOptional()
-  @MaxLength(100)
-  specialization?: string;
-
-  @ApiProperty({ example: 'N10000001', required: false })
-  @IsOptional()
-  @MaxLength(100)
-  satusehatPractitionerId?: string;
+  @IsString()
+  @MaxLength(255)
+  reason?: string;
 }
 
 export class SearchSatusehatPractitionerDto {
   @ApiProperty({
     example: '3201012312310001',
-    description: 'NIK to search in SATUSEHAT',
+    description: 'NIK (16 digit)',
+    required: false,
   })
-  @IsNotEmpty()
-  @Length(16, 16)
+  @IsOptional()
   @Matches(/^\d{16}$/, { message: 'NIK harus 16 digit angka' })
-  nik: string | undefined;
+  nik?: string;
+
+  @ApiProperty({ example: '10009880728', required: false })
+  @IsOptional()
+  @Matches(/^[A-Za-z0-9-]{3,64}$/, { message: 'ID SATUSEHAT tidak valid' })
+  ihsId?: string;
+
+  @ApiProperty({ example: 'Ratna', required: false })
+  @IsOptional()
+  @MaxLength(100)
+  name?: string;
+
+  @ApiProperty({ example: 'female', enum: Gender, required: false })
+  @IsOptional()
+  @IsEnum(Gender)
+  gender?: Gender;
+
+  @ApiProperty({ example: '1990-06-12', required: false })
+  @IsOptional()
+  @IsDateString()
+  birthDate?: string;
 }
 
 export class PractitionerResponseDto {
