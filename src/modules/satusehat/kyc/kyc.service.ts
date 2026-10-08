@@ -69,6 +69,15 @@ function kycRawMessage(status: number, data: any): string {
   );
 }
 
+/** Penolakan karena format/enkripsi pesan (bukan karena data). */
+function isFormatError(status: number, data: any): boolean {
+  if (status >= 500 || status === 401 || status === 403) return false;
+  if (!data || Object.keys(data).length === 0) return true;
+  return /decrypt|encrypt|content.?type|json|format|bad request/i.test(
+    kycRawMessage(status, data),
+  );
+}
+
 /** Pesan galat KYC yang aman ditampilkan. */
 export function kycError(status: number, data: any): string {
   const raw = kycRawMessage(status, data);
@@ -125,20 +134,28 @@ export class KycService {
     }
 
     const { publicKey, privateKey } = generateKycKeyPair();
-    const body = encryptKycMessage(
-      JSON.stringify({
-        agent_name: agentName,
-        agent_nik: agentNik,
-        public_key: publicKey,
-      }),
-      kycPublicKey(),
-    );
-    const { status, text } = await this.client.postKyc(
+    const plain = JSON.stringify({
+      agent_name: agentName,
+      agent_nik: agentNik,
+      public_key: publicKey,
+    });
+    // Juknis: format terenkripsi (text/plain) diutamakan; format JSON tidak
+    // terenkripsi juga diterima — dipakai bila pesan terenkripsi ditolak.
+    let { status, text } = await this.client.postKyc(
       clinicId,
       'generate-url',
-      body,
+      encryptKycMessage(plain, kycPublicKey()),
     );
-    const data = this.parse(text, privateKey);
+    let data = this.parse(text, privateKey);
+    if (!data?.data?.url && isFormatError(status, data)) {
+      ({ status, text } = await this.client.postKyc(
+        clinicId,
+        'generate-url',
+        plain,
+        { 'Content-Type': 'application/json' },
+      ));
+      data = this.parse(text, privateKey);
+    }
     const url = data?.data?.url;
     const frameToken = data?.data?.token;
     if (status >= 300 || typeof url !== 'string' || !url) {
@@ -167,18 +184,21 @@ export class KycService {
     clinicId: number,
     userId: number,
     input: {
-      sessionId: string;
+      sessionId?: string;
       patientId?: number;
       nik?: string;
       name?: string;
     },
   ): Promise<KycChallengeResult> {
-    const session = this.sessions.get(input.sessionId);
+    const session = input.sessionId
+      ? this.sessions.get(input.sessionId)
+      : undefined;
     if (
-      !session ||
-      session.clinicId !== clinicId ||
-      session.userId !== userId ||
-      session.expiresAt < Date.now()
+      input.sessionId &&
+      (!session ||
+        session.clinicId !== clinicId ||
+        session.userId !== userId ||
+        session.expiresAt < Date.now())
     ) {
       throw new BadRequestException(
         'Sesi verifikasi berakhir — klik "Mulai verifikasi" lagi',
@@ -205,26 +225,23 @@ export class KycService {
       metadata: { method: 'request_per_nik' },
       data: { nik, name },
     });
-    // Layanan KYC menerima pesan terenkripsi + X-Frame-Token dari sesi
-    // generate-url; bila ditolak, coba format JSON biasa sesuai Juknis.
-    let res = await this.client.postKyc(
-      clinicId,
-      'challenge-code',
-      encryptKycMessage(plain, kycPublicKey()),
-      session.frameToken ? { 'X-Frame-Token': session.frameToken } : {},
-    );
-    let data = this.parse(res.text, session.privateKey);
-    if (
-      !this.challengeOf(data) &&
-      res.status < 500 &&
-      /decrypt|encrypt|content.?type|json|format/i.test(
-        kycRawMessage(res.status, data),
-      )
-    ) {
-      res = await this.client.postKyc(clinicId, 'challenge-code', plain, {
-        'Content-Type': 'application/json',
-        ...(session.frameToken ? { 'X-Frame-Token': session.frameToken } : {}),
-      });
+    // Juknis: JSON biasa. Bila layanan meminta pesan terenkripsi, ulangi
+    // dengan amplop KYC + X-Frame-Token dari sesi generate-url.
+    const frameHeader: Record<string, string> = session?.frameToken
+      ? { 'X-Frame-Token': session.frameToken }
+      : {};
+    let res = await this.client.postKyc(clinicId, 'challenge-code', plain, {
+      'Content-Type': 'application/json',
+      ...frameHeader,
+    });
+    let data = this.parse(res.text, session?.privateKey);
+    if (!this.challengeOf(data) && session && isFormatError(res.status, data)) {
+      res = await this.client.postKyc(
+        clinicId,
+        'challenge-code',
+        encryptKycMessage(plain, kycPublicKey()),
+        frameHeader,
+      );
       data = this.parse(res.text, session.privateKey);
     }
     const d = this.challengeOf(data);
@@ -254,10 +271,12 @@ export class KycService {
   }
 
   /** Respons KYC bisa terenkripsi atau JSON biasa (galat). */
-  private parse(text: string, privateKey: string): any {
+  private parse(text: string, privateKey?: string): any {
     try {
       const plain = isEncryptedMessage(text)
-        ? decryptKycMessage(text, privateKey)
+        ? privateKey
+          ? decryptKycMessage(text, privateKey)
+          : '{}'
         : text;
       return JSON.parse(plain);
     } catch (err) {

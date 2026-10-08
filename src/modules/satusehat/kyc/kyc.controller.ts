@@ -43,8 +43,9 @@ export class KycUrlDto {
 }
 
 export class KycChallengeDto {
+  @IsOptional()
   @IsUUID()
-  sessionId: string;
+  sessionId?: string;
 
   @IsOptional()
   @IsInt()

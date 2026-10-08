@@ -41,7 +41,11 @@ describe('KycService (Juknis KYC v6.4)', () => {
     client = {
       postKyc: jest.fn(async (_c, endpoint, text: string, headers = {}) => {
         await Promise.resolve();
-        const body = JSON.parse(decryptKycMessage(text, server.privateKey));
+        const body = JSON.parse(
+          headers['Content-Type'] === 'application/json'
+            ? text
+            : decryptKycMessage(text, server.privateKey),
+        );
         requests.push({ endpoint, body, headers });
         if (endpoint === 'generate-url') {
           agentPublicKey = body.public_key;
@@ -115,7 +119,10 @@ describe('KycService (Juknis KYC v6.4)', () => {
       createdAt: '2026-10-08T10:00:00+07:00',
       expiredAt: '2026-10-08T10:05:00+07:00',
     });
-    expect(requests[1].headers).toEqual({ 'X-Frame-Token': 'frame-token-1' });
+    expect(requests[1].headers).toEqual({
+      'Content-Type': 'application/json',
+      'X-Frame-Token': 'frame-token-1',
+    });
     expect(requests[1].body).toEqual({
       metadata: { method: 'request_per_nik' },
       data: { nik: NIK_PATIENT, name: 'Budi Santoso' },
@@ -136,6 +143,55 @@ describe('KycService (Juknis KYC v6.4)', () => {
       service.challengeCode(1, 78, { sessionId, patientId: 9 }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(client.postKyc).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to the unencrypted JSON format when the envelope is rejected', async () => {
+    const impl = client.postKyc.getMockImplementation()!;
+    client.postKyc.mockImplementationOnce(async () => {
+      await Promise.resolve();
+      return {
+        status: 400,
+        text: JSON.stringify({
+          metadata: { code: '400', message: 'Failed to decrypt message' },
+        }),
+      };
+    });
+    client.postKyc.mockImplementation(impl);
+    const r = await service.generateUrl(1, 77, {});
+    expect(r.url).toContain('frame-token-1');
+    expect(client.postKyc).toHaveBeenCalledTimes(2);
+    expect(client.postKyc.mock.calls[1][3]).toEqual({
+      'Content-Type': 'application/json',
+    });
+  });
+
+  it('does not retry when SATUSEHAT rejects the data itself (no double send)', async () => {
+    client.postKyc.mockResolvedValueOnce({
+      status: 401,
+      text: JSON.stringify({ fault: { faultstring: 'Invalid Access Token' } }),
+    });
+    await expect(service.generateUrl(1, 77, {})).rejects.toThrow(
+      /Token SATUSEHAT/,
+    );
+    expect(client.postKyc).toHaveBeenCalledTimes(1);
+  });
+
+  it('challenge-code works without a session using plain JSON (Juknis)', async () => {
+    client.postKyc.mockResolvedValueOnce({
+      status: 200,
+      text: JSON.stringify({
+        metadata: { code: '200', message: 'OK' },
+        data: { name: 'Budi', ihs_number: 'P1', challenge_code: 123456 },
+      }),
+    });
+    const r = await service.challengeCode(1, 77, {
+      nik: NIK_PATIENT,
+      name: 'Budi',
+    });
+    expect(r.challengeCode).toBe('123456');
+    expect(client.postKyc.mock.calls[0][3]).toEqual({
+      'Content-Type': 'application/json',
+    });
   });
 
   it('maps a decrypt failure to a public-key hint', () => {
