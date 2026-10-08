@@ -187,6 +187,183 @@ export class SatusehatOnboardingService {
     };
   }
 
+  // ── Hubungkan sekali klik (onboarding klinik) ─────────────────────────
+
+  /**
+   * Menjalankan seluruh prasyarat SATUSEHAT berurutan dari data Info Klinik:
+   * autentikasi → verifikasi organisasi induk → struktur organisasi contoh →
+   * kirim organisasi → ruang poli → kirim lokasi → cocokkan NIK nakes.
+   * Hanya mengirim yang belum terdaftar (tidak ada kirim ulang yang tidak perlu).
+   * Langkah prasyarat yang gagal menghentikan proses; sisanya dilaporkan per item.
+   */
+  async connect(clinicId: number, userId: number) {
+    type Step = {
+      key: string;
+      label: string;
+      status: 'success' | 'failed' | 'skipped';
+      message?: string;
+    };
+    const steps: Step[] = [];
+    const done = (s: Step) => steps.push(s);
+    const msg = (err: unknown) => (err as Error).message;
+
+    try {
+      await this.testAuth(clinicId);
+      done({ key: 'auth', label: 'Autentikasi', status: 'success' });
+    } catch (err) {
+      done({
+        key: 'auth',
+        label: 'Autentikasi',
+        status: 'failed',
+        message: msg(err),
+      });
+      return { connected: false, steps };
+    }
+    try {
+      const org = await this.verifyOrganization(clinicId);
+      done({
+        key: 'verify',
+        label: 'Organisasi induk',
+        status: 'success',
+        message: org.name ?? org.id,
+      });
+    } catch (err) {
+      done({
+        key: 'verify',
+        label: 'Organisasi induk',
+        status: 'failed',
+        message: msg(err),
+      });
+      return { connected: false, steps };
+    }
+    const clinic = await this.rawClinic(clinicId);
+    const profile = clinic.satusehatProfile;
+    const missing = missingAddressFields(profile);
+    if (!profile?.facilityType || missing.length) {
+      done({
+        key: 'profile',
+        label: 'Info klinik',
+        status: 'failed',
+        message: `Lengkapi di Info Klinik: ${[
+          ...(profile?.facilityType ? [] : ['jenis fasyankes']),
+          ...missing,
+        ].join(', ')}`,
+      });
+      return { connected: false, steps };
+    }
+
+    // Struktur organisasi: pakai contoh sesuai jenis fasyankes bila belum ada
+    let orgs = await this.orgRepo.find({
+      where: { clinicId },
+      order: { id: 'ASC' },
+    });
+    if (!orgs.length) orgs = await this.applyTemplate(clinicId, userId);
+    const orgErrors: string[] = [];
+    // Induk dulu, baru anak (urut kedalaman)
+    const depth = (o: SatusehatOrganization): number => {
+      const parent = orgs.find((x) => x.id === o.parentId);
+      return parent ? depth(parent) + 1 : 0;
+    };
+    for (const o of [...orgs].sort((a, b) => depth(a) - depth(b))) {
+      if (!o.active || o.satusehatId) continue;
+      try {
+        await this.sendOrganization(clinicId, o.id);
+      } catch (err) {
+        orgErrors.push(msg(err));
+      }
+    }
+    orgs = await this.orgRepo.find({
+      where: { clinicId },
+      order: { id: 'ASC' },
+    });
+    done({
+      key: 'organizations',
+      label: 'Struktur organisasi',
+      status: orgErrors.length ? 'failed' : 'success',
+      message: orgErrors.length
+        ? orgErrors.join('; ')
+        : `${orgs.filter((o) => o.satusehatId).length} unit terdaftar`,
+    });
+
+    // Ruang pelayanan: buat "Ruang Poli" bila klinik belum punya lokasi
+    let locations = await this.locationRepo.find({
+      where: { clinicId },
+      order: { id: 'ASC' },
+    });
+    if (!locations.length) {
+      const poli =
+        orgs.find((o) => o.code === 'POLI-GIGI' && o.satusehatId) ??
+        orgs.find((o) => o.code.startsWith('POLI') && o.satusehatId) ??
+        orgs.find((o) => o.satusehatId);
+      const name =
+        profile.facilityType === 'tpmdg' || poli?.code === 'POLI-GIGI'
+          ? 'Ruang Poli Gigi'
+          : 'Ruang Poli Umum';
+      await this.saveLocation(
+        clinicId,
+        null,
+        {
+          name,
+          active: true,
+          code: 'R-POLI-1',
+          physicalType: 'ro',
+          organizationId: poli?.id ?? null,
+        } as SaveLocationDto,
+        userId,
+      );
+      locations = await this.locationRepo.find({
+        where: { clinicId },
+        order: { id: 'ASC' },
+      });
+    }
+    const locErrors: string[] = [];
+    for (const l of locations) {
+      if (!l.isActive || l.satusehatLocationId) continue;
+      try {
+        await this.sendLocation(clinicId, l.id);
+      } catch (err) {
+        locErrors.push(msg(err));
+      }
+    }
+    locations = await this.locationRepo.find({ where: { clinicId } });
+    done({
+      key: 'locations',
+      label: 'Ruang pelayanan',
+      status: locErrors.length ? 'failed' : 'success',
+      message: locErrors.length
+        ? locErrors.join('; ')
+        : `${locations.filter((l) => l.satusehatLocationId).length} ruang terdaftar`,
+    });
+
+    // Tenaga kesehatan: cocokkan NIK yang belum terhubung
+    const pending = await this.practitionerRepo.find({
+      where: { clinicId, satusehatPractitionerId: IsNull() },
+    });
+    const withNik = pending.filter((p) => !!p.nik);
+    const result = await this.each(
+      withNik,
+      (p) => this.orchestrator.practitionerIhsId(clinicId, p),
+      (p) => p.name,
+    );
+    const failedPrac = result.results.filter((r) => r.error);
+    const noNik = pending.filter((p) => !p.nik).map((p) => p.name);
+    done({
+      key: 'practitioners',
+      label: 'Tenaga kesehatan',
+      status: failedPrac.length || noNik.length ? 'failed' : 'success',
+      message:
+        [
+          ...failedPrac.map((r) => `${r.name}: ${r.error}`),
+          ...(noNik.length ? [`NIK belum diisi: ${noNik.join(', ')}`] : []),
+        ].join('; ') || 'Semua tenaga kesehatan terhubung',
+    });
+
+    return {
+      connected: steps.every((s) => s.status === 'success'),
+      steps,
+    };
+  }
+
   // ── 1. Autentikasi ────────────────────────────────────────────────────
 
   async testAuth(clinicId: number) {

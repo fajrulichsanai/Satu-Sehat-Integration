@@ -92,6 +92,21 @@ export class SatusehatController {
     return ApiResponse.success(await this.onboarding.status(clinicId));
   }
 
+  @Post('onboarding/connect')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Hubungkan klinik ke SATUSEHAT sekali klik (autentikasi, organisasi, lokasi, nakes)',
+  })
+  async onboardingConnect(
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: any,
+  ) {
+    return ApiResponse.success(
+      await this.onboarding.connect(clinicId, user.userId),
+    );
+  }
+
   @Post('onboarding/auth')
   @HttpCode(200)
   @ApiOperation({ summary: 'Uji autentikasi (token) dengan Kode Akses API' })

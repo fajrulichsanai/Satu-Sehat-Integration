@@ -349,4 +349,113 @@ describe('SatusehatOnboardingService (onboarding SATUSEHAT)', () => {
       expect(orchestrator.patientIhsId).not.toHaveBeenCalled();
     });
   });
+
+  describe('connect (Hubungkan SATUSEHAT sekali klik)', () => {
+    let locations: any[];
+    let practitioners: any[];
+    beforeEach(() => {
+      client.testConnection.mockResolvedValue({ expiresAt: new Date() });
+      client.getFhir.mockResolvedValue({
+        status: 200,
+        data: {
+          resourceType: 'Organization',
+          id: 'ORG-1',
+          name: 'Klinik Sandbox',
+        },
+      });
+      locations = [];
+      locationRepo.find.mockImplementation(() => Promise.resolve(locations));
+      locationRepo.findOne.mockImplementation(({ where }) =>
+        Promise.resolve(locations.find((l) => l.id === where.id) ?? null),
+      );
+      (locationRepo as any).create = jest.fn((v) => ({ ...v }));
+      (locationRepo as any).save = jest.fn((l) => {
+        if (!l.id) {
+          l.id = locations.length + 1;
+          locations.push(l);
+        }
+        return Promise.resolve(l);
+      });
+      orchestrator.registerLocation.mockImplementation((_c, l) => {
+        l.satusehatLocationId = 'LOC-1';
+        return Promise.resolve('LOC-1');
+      });
+      practitioners = [
+        {
+          id: 1,
+          name: 'drg. A',
+          nik: '3171000000000001',
+          satusehatPractitionerId: null,
+        },
+        { id: 2, name: 'drg. B', nik: null, satusehatPractitionerId: null },
+      ];
+      (service as any).practitionerRepo = {
+        find: jest.fn(() => Promise.resolve(practitioners)),
+      };
+      orchestrator.practitionerIhsId.mockResolvedValue('N1');
+    });
+
+    it('registers organisations, a poli room and practitioners in order (positive)', async () => {
+      const r = await service.connect(1, 9);
+      expect(r.steps.map((s) => [s.key, s.status])).toEqual([
+        ['auth', 'success'],
+        ['verify', 'success'],
+        ['organizations', 'success'],
+        ['locations', 'success'],
+        ['practitioners', 'failed'],
+      ]);
+      // Induk YANKES dikirim lebih dulu dari poli
+      expect(orchestrator.sendPrerequisite.mock.calls[0][2]).toBe(1);
+      expect(orgs.every((o) => o.satusehatId)).toBe(true);
+      expect(locations).toEqual([
+        expect.objectContaining({
+          name: 'Ruang Poli Gigi',
+          ssOrganizationId: 3,
+        }),
+      ]);
+      expect(r.steps[4].message).toMatch(/NIK belum diisi: drg\. B/);
+      expect(r.connected).toBe(false);
+    });
+
+    it('does not resend what is already registered (edge)', async () => {
+      await service.connect(1, 9);
+      orchestrator.sendPrerequisite.mockClear();
+      orchestrator.registerLocation.mockClear();
+      practitioners[1].nik = '3171000000000002';
+      const r = await service.connect(1, 9);
+      expect(orchestrator.sendPrerequisite).not.toHaveBeenCalled();
+      expect(orchestrator.registerLocation).not.toHaveBeenCalled();
+      expect(r.steps.find((s) => s.key === 'practitioners')?.status).toBe(
+        'success',
+      );
+    });
+
+    it('stops early when Info Klinik is incomplete (negative)', async () => {
+      clinicRepo.findOne.mockResolvedValue({
+        ...baseClinic,
+        satusehatProfile: { facilityType: null, line: 'x' },
+      });
+      const r = await service.connect(1, 9);
+      expect(r.connected).toBe(false);
+      expect(r.steps.at(-1)).toMatchObject({
+        key: 'profile',
+        status: 'failed',
+      });
+      expect(r.steps.at(-1)?.message).toMatch(/jenis fasyankes/);
+      expect(orchestrator.sendPrerequisite).not.toHaveBeenCalled();
+    });
+
+    it('stops when authentication fails (negative)', async () => {
+      client.testConnection.mockRejectedValue(new Error('401 Unauthorized'));
+      const r = await service.connect(1, 9);
+      expect(r.steps).toEqual([
+        {
+          key: 'auth',
+          label: 'Autentikasi',
+          status: 'failed',
+          message: '401 Unauthorized',
+        },
+      ]);
+    });
+  });
 });

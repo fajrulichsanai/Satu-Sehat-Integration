@@ -120,6 +120,21 @@ describe('SsrmeService (Juknis SSRME v2.0)', () => {
     );
   });
 
+  it('explains a practitioner without SIP at this organization, without leaking IDs (negative)', async () => {
+    client.postSsrme.mockResolvedValue({
+      status: 400,
+      data: {
+        success: false,
+        code: 400,
+        message:
+          'practitioner dengan ID 13229303626 tidak terdaftar sebagai organization dengan ID e3e5bd43-e838-434f-b43f-e61996d6d331',
+      },
+    });
+    const err = await service.createConsentLink(1, 5, owner).catch((e) => e);
+    expect(err.message).toMatch(/belum tercatat praktik di fasyankes ini/);
+    expect(err.message).not.toMatch(/13229303626|e3e5bd43/);
+  });
+
   it('maps SSRME errors to readable messages without IDs (negative)', async () => {
     client.postSsrme.mockResolvedValue({
       status: 400,

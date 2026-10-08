@@ -57,6 +57,12 @@ function ssrmeError(status: number, data: any): string {
   if (/wrong organization/i.test(raw)) {
     return 'Organization ID tidak sesuai dengan kredensial SATUSEHAT klinik';
   }
+  // Dokter ada di SATUSEHAT tetapi tidak tercatat praktik (SIP) di fasyankes ini
+  if (
+    /tidak terdaftar|not registered|not (a )?member|not associated/i.test(raw)
+  ) {
+    return 'Dokter belum tercatat praktik di fasyankes ini pada SATUSEHAT. SSRME hanya bisa dibuka oleh nakes dengan SIP aktif yang terdaftar untuk Organization ID klinik ini (cek SIP dokter di SISDMK/SATUSEHAT). Di Sandbox, gunakan data dokter uji yang terdaftar pada organisasi sandbox.';
+  }
   if (/patient with id/i.test(raw))
     return 'Pasien tidak ditemukan di SATUSEHAT';
   if (/practitioner with id/i.test(raw)) {
