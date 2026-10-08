@@ -4,6 +4,7 @@ import {
   Post,
   Put,
   Delete,
+  Patch,
   Body,
   Param,
   Req,
@@ -31,6 +32,8 @@ import {
   PractitionerResponseDto,
   PractitionerListResponseDto,
   SatusehatPractitionerSearchResultDto,
+  CreatePractitionerAccountDto,
+  UpdatePractitionerAccountDto,
 } from './dto/practitioner.dto';
 import { Audit } from '../audit-log/decorators/audit.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
@@ -156,6 +159,42 @@ export class PractitionersController {
     @CurrentUser() user: any,
   ) {
     return this.practitionersService.matchSatusehat(id, clinicId, {
+      userId: user.userId,
+      name: user.name,
+    });
+  }
+
+  @Post(':id/account')
+  @Audit('Staff', AuditActionType.UPDATE)
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Buat akun login (email + password) untuk nakes' })
+  async createAccount(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreatePractitionerAccountDto,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.practitionersService.createAccount(
+      id,
+      clinicId,
+      { ...dto, role: dto.role as UserRole | undefined },
+      { userId: user.userId, name: user.name },
+    );
+  }
+
+  @Patch(':id/account')
+  @Audit('Staff', AuditActionType.UPDATE)
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Ubah email / reset password / (non)aktifkan akun nakes',
+  })
+  async updateAccount(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdatePractitionerAccountDto,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.practitionersService.updateAccount(id, clinicId, dto, {
       userId: user.userId,
       name: user.name,
     });

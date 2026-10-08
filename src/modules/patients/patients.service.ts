@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -32,6 +33,10 @@ import { FamilyHistoryService } from './family-history.service';
 import { MedicationHistoryService } from './medication-history.service';
 import { hashNik, maskNik } from '../../common/utils/nik-crypto.util';
 import type { SearchSatusehatPatientDto } from './dto/patient.dto';
+import {
+  ClinicalAccessService,
+  type ClinicalUser,
+} from '../clinical-access/clinical-access.service';
 
 @Injectable()
 export class PatientsService {
@@ -61,11 +66,13 @@ export class PatientsService {
     private readonly treatmentPlansService: TreatmentPlansService,
     private readonly familyHistory: FamilyHistoryService,
     private readonly medicationHistory: MedicationHistoryService,
+    @Optional() private readonly clinicalAccess?: ClinicalAccessService,
   ) {}
 
   async findAll(
     clinicId: number,
     query: PatientQueryDto,
+    user?: ClinicalUser,
   ): Promise<PaginatedResult<Patient>> {
     this.logger.log(
       `[GET-ALL] Mengambil daftar pasien | clinicId=${clinicId}, search=${query.search || '-'}`,
@@ -73,6 +80,8 @@ export class PatientsService {
     const qb = this.patientRepository
       .createQueryBuilder('p')
       .where('p.clinicId = :clinicId', { clinicId });
+    // Dokter/perawat hanya melihat pasien yang pernah/sedang ditanganinya
+    this.clinicalAccess?.scopePatients(qb, user);
 
     if (query.search) {
       qb.andWhere(

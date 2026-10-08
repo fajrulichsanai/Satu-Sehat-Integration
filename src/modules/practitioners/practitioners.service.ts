@@ -7,7 +7,10 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
+import * as bcrypt from 'bcrypt';
+import { User } from '../users/entities/user.entity';
+import { UserRole } from '../../enums/user-role.enum';
 import { Practitioner } from './entities/practitioner.entity';
 import {
   PractitionerChange,
@@ -42,6 +45,18 @@ const REVISABLE: Record<string, string> = {
 };
 
 const DATE_FIELDS = new Set(['birthDate', 'sipExpiredAt', 'strExpiredAt']);
+
+export interface PractitionerAccount {
+  userId: number;
+  email: string;
+  role: string;
+  isActive: boolean;
+  lastLoginAt: Date | null;
+}
+
+const NURSE_PROFESSIONS = new Set(['perawat', 'perawat_gigi', 'bidan']);
+const isNurseProfession = (p?: string | null) =>
+  !!p && NURSE_PROFESSIONS.has(p);
 
 export interface PractitionerActor {
   userId: number;
@@ -114,6 +129,8 @@ export class PractitionersService {
     @InjectRepository(PractitionerRevision)
     private revisionRepository: Repository<PractitionerRevision>,
     private readonly satusehatClient: SatusehatClientService,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
   ) {}
 
   async findAll(clinicId: number) {
@@ -121,14 +138,226 @@ export class PractitionersService {
       where: { clinicId },
       order: { name: 'ASC' },
     });
-    return { success: true, data: practitioners.map(practitionerView) };
+    const accounts = await this.accountsOf(practitioners);
+    return {
+      success: true,
+      data: practitioners.map((p) => ({
+        ...practitionerView(p),
+        account: accounts.get(p.id) ?? null,
+      })),
+    };
   }
 
   async findOne(id: number, clinicId: number) {
+    const p = await this.load(id, clinicId);
+    const accounts = await this.accountsOf([p]);
     return {
       success: true,
-      data: practitionerView(await this.load(id, clinicId)),
+      data: { ...practitionerView(p), account: accounts.get(p.id) ?? null },
     };
+  }
+
+  /** Akun login yang tertaut ke nakes (practitioner.userId). */
+  private async accountsOf(list: Practitioner[]) {
+    const ids = list.map((p) => p.userId).filter((v): v is number => !!v);
+    const map = new Map<number, PractitionerAccount>();
+    if (!ids.length) return map;
+    const users = await this.userRepository.find({
+      where: { id: In(ids) },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        isActive: true,
+        lastLoginAt: true,
+      },
+    });
+    for (const p of list) {
+      const u = users.find((x) => x.id === p.userId);
+      if (u) {
+        map.set(p.id, {
+          userId: u.id,
+          email: u.email,
+          role: u.role,
+          isActive: u.isActive,
+          lastLoginAt: u.lastLoginAt ?? null,
+        });
+      }
+    }
+    return map;
+  }
+
+  /**
+   * Buat akun login untuk nakes ini (dokter/perawat) — satu orang, satu data:
+   * akun langsung tertaut ke data nakes, tidak membuat data dokter ganda.
+   */
+  async createAccount(
+    id: number,
+    clinicId: number,
+    dto: { email: string; password: string; role?: UserRole },
+    actor: PractitionerActor,
+  ) {
+    const practitioner = await this.load(id, clinicId);
+    if (practitioner.userId) {
+      const linked = await this.userRepository.findOne({
+        where: { id: practitioner.userId },
+      });
+      if (linked) {
+        throw new ConflictException({
+          success: false,
+          error: {
+            code: 'ACCOUNT_EXISTS',
+            message: `${practitioner.name} sudah punya akun (${linked.email})`,
+          },
+        });
+      }
+    }
+    const email = dto.email.trim().toLowerCase();
+    const used = await this.userRepository.findOne({ where: { email } });
+    if (used) {
+      throw new ConflictException({
+        success: false,
+        error: {
+          code: 'EMAIL_ALREADY_USED',
+          message: 'Email sudah dipakai akun lain',
+        },
+      });
+    }
+    const role =
+      dto.role ??
+      (isNurseProfession(practitioner.profession)
+        ? UserRole.PERAWAT
+        : UserRole.DOKTER);
+    if (role !== UserRole.DOKTER && role !== UserRole.PERAWAT) {
+      throw new BadRequestException(
+        'Akun nakes hanya untuk peran dokter atau perawat',
+      );
+    }
+    const user = await this.userRepository.save(
+      this.userRepository.create({
+        email,
+        name: practitioner.name,
+        role,
+        clinicId,
+        practitionerId: practitioner.id,
+        passwordHash: await bcrypt.hash(dto.password, 10),
+        isActive: true,
+        emailVerifiedAt: new Date(),
+        createdBy: actor.userId,
+        updatedBy: actor.userId,
+      }),
+    );
+    practitioner.userId = user.id;
+    if (!practitioner.email) practitioner.email = email;
+    practitioner.updatedBy = actor.userId;
+    await this.practitionerRepository.save(practitioner);
+    await this.recordRevision(clinicId, id, actor, 'Akun login dibuat', [
+      {
+        field: 'account',
+        label: 'Akun login',
+        from: null,
+        to: `${email} (${role})`,
+      },
+    ]);
+    this.logger.log(
+      `[ACCOUNT] Akun nakes dibuat | practitionerId=${id}, userId=${user.id}`,
+    );
+    return { success: true, data: (await this.findOne(id, clinicId)).data };
+  }
+
+  /** Ubah email, reset password, atau (non)aktifkan akun login nakes. */
+  async updateAccount(
+    id: number,
+    clinicId: number,
+    dto: { email?: string; password?: string; isActive?: boolean },
+    actor: PractitionerActor,
+  ) {
+    const practitioner = await this.load(id, clinicId);
+    const user = practitioner.userId
+      ? await this.userRepository.findOne({
+          where: { id: practitioner.userId },
+        })
+      : null;
+    if (!user) throw new NotFoundException('Nakes ini belum punya akun login');
+    if (user.id === actor.userId && dto.isActive === false) {
+      throw new BadRequestException(
+        'Tidak bisa menonaktifkan akun Anda sendiri',
+      );
+    }
+    const changes: PractitionerChange[] = [];
+    if (dto.email && dto.email.trim().toLowerCase() !== user.email) {
+      const email = dto.email.trim().toLowerCase();
+      const used = await this.userRepository.findOne({ where: { email } });
+      if (used && used.id !== user.id) {
+        throw new ConflictException({
+          success: false,
+          error: {
+            code: 'EMAIL_ALREADY_USED',
+            message: 'Email sudah dipakai akun lain',
+          },
+        });
+      }
+      changes.push({
+        field: 'accountEmail',
+        label: 'Email login',
+        from: user.email,
+        to: email,
+      });
+      user.email = email;
+    }
+    if (dto.password) {
+      user.passwordHash = await bcrypt.hash(dto.password, 10);
+      // Keluarkan semua sesi lama setelah password direset
+      user.tokenVersion = (user.tokenVersion ?? 0) + 1;
+      user.failedLoginAttempts = 0;
+      user.lockedUntil = null;
+      changes.push({
+        field: 'accountPassword',
+        label: 'Password login',
+        from: null,
+        to: 'direset',
+      });
+    }
+    if (dto.isActive !== undefined && dto.isActive !== user.isActive) {
+      if (!dto.isActive) user.tokenVersion = (user.tokenVersion ?? 0) + 1;
+      changes.push({
+        field: 'accountActive',
+        label: 'Status akun',
+        from: display(user.isActive),
+        to: display(dto.isActive),
+      });
+      user.isActive = dto.isActive;
+    }
+    if (!changes.length) {
+      return {
+        success: true,
+        data: (await this.findOne(id, clinicId)).data,
+        message: 'Tidak ada perubahan',
+      };
+    }
+    user.updatedBy = actor.userId;
+    await this.userRepository.save(user);
+    await this.recordRevision(clinicId, id, actor, null, changes);
+    return { success: true, data: (await this.findOne(id, clinicId)).data };
+  }
+
+  private async recordRevision(
+    clinicId: number,
+    practitionerId: number,
+    actor: PractitionerActor,
+    reason: string | null,
+    changes: PractitionerChange[],
+  ) {
+    await this.revisionRepository.save(
+      this.revisionRepository.create({
+        clinicId,
+        practitionerId,
+        changedBy: actor.userId,
+        changedByName: actor.name?.slice(0, 100) ?? null,
+        reason,
+        changes,
+      }),
+    );
   }
 
   async create(
@@ -251,6 +480,12 @@ export class PractitionersService {
 
     practitioner.updatedBy = by.userId;
     const saved = await this.practitionerRepository.save(practitioner);
+    // Nama di daftar User ikut terkoreksi (satu orang, satu nama)
+    if (practitioner.userId && changes.some((c) => c.field === 'name')) {
+      await this.userRepository.update(practitioner.userId, {
+        name: practitioner.name,
+      });
+    }
     await this.revisionRepository.save(
       this.revisionRepository.create({
         clinicId,

@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { ClinicalAccessService } from '../../clinical-access/clinical-access.service';
 import { SyncOrchestratorService } from '../../satusehat/sync/sync-orchestrator.service';
 import { EncountersService } from '../encounters.service';
 import { Encounter } from '../entities/encounter.entity';
@@ -38,6 +39,7 @@ describe('EncountersService', () => {
   };
   let reservationRepo: { findOne: jest.Mock; update: jest.Mock };
 
+  let clinicalAccess: { assertPatient: jest.Mock };
   const admin = { userId: 1, role: UserRole.ADMIN };
   const dokter = { userId: 2, role: UserRole.DOKTER };
 
@@ -53,6 +55,11 @@ describe('EncountersService', () => {
       query: jest.fn(),
     };
     reservationRepo = { findOne: jest.fn(), update: jest.fn() };
+    clinicalAccess = {
+      assertPatient: jest
+        .fn()
+        .mockRejectedValue(new ForbiddenException('bukan pasien Anda')),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -60,6 +67,7 @@ describe('EncountersService', () => {
         { provide: getRepositoryToken(Encounter), useValue: encounterRepo },
         { provide: getRepositoryToken(Reservation), useValue: reservationRepo },
         { provide: SyncOrchestratorService, useValue: syncOrchestrator },
+        { provide: ClinicalAccessService, useValue: clinicalAccess },
       ],
     }).compile();
 
@@ -163,12 +171,29 @@ describe('EncountersService', () => {
       expect(result.id).toBe(1);
     });
 
-    it('throws ForbiddenException when a DOKTER views another practitioner’s encounter (negative)', async () => {
-      encounterRepo.findOne.mockResolvedValue({ id: 1, practitionerId: 5 });
+    it('throws ForbiddenException when a DOKTER views another practitioner’s encounter of a patient that is not theirs (negative)', async () => {
+      encounterRepo.findOne.mockResolvedValue({
+        id: 1,
+        practitionerId: 5,
+        patientId: 9,
+      });
       encounterRepo.query.mockResolvedValue([]);
       await expect(service.findOne(1, 1, dokter)).rejects.toThrow(
         ForbiddenException,
       );
+      expect(clinicalAccess.assertPatient).toHaveBeenCalledWith(dokter, 9);
+    });
+
+    it('lets a DOKTER read (not edit) another doctor’s encounter of their shared patient', async () => {
+      encounterRepo.findOne.mockResolvedValue({
+        id: 1,
+        practitionerId: 5,
+        patientId: 9,
+      });
+      encounterRepo.query.mockResolvedValue([]);
+      clinicalAccess.assertPatient.mockResolvedValue(undefined);
+      const r = await service.findOne(1, 1, dokter);
+      expect((r as any).canEdit).toBe(false);
     });
   });
 

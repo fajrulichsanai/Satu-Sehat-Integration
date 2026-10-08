@@ -12,6 +12,7 @@ import { Encounter } from './entities/encounter.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { Billing, BillingStatus } from '../billing/entities/billing.entity';
 import { EncounterStatus, ServiceType, isClinician } from '../../enums';
+import { ClinicalAccessService } from '../clinical-access/clinical-access.service';
 import { ReservationStatus } from '../../enums/reservation-status.enum';
 import { UserRole } from '../../enums/user-role.enum';
 import {
@@ -43,6 +44,7 @@ export class EncountersService {
     @InjectRepository(Reservation)
     private readonly reservationRepository: Repository<Reservation>,
     private readonly syncOrchestrator: SyncOrchestratorService,
+    private readonly clinicalAccess: ClinicalAccessService,
   ) {}
 
   async findAll(clinicId: number, query: EncounterListQueryDto, user: any) {
@@ -146,17 +148,17 @@ export class EncountersService {
       throw new NotFoundException(`Encounter dengan ID ${id} tidak ditemukan`);
     }
 
+    // Dokter/perawat: kunjungan sendiri bisa diubah; kunjungan dokter lain
+    // hanya bisa dibaca bila pasiennya juga pasien Anda (riwayat bersama).
+    let canEdit = true;
     if (isClinician(user?.role)) {
-      const isOwn = await this.isDokterOwn(
-        encounter.practitionerId,
-        user.userId,
-      );
-      if (!isOwn) {
-        throw new ForbiddenException('Akses ditolak: bukan kunjungan Anda');
+      canEdit = await this.isDokterOwn(encounter.practitionerId, user.userId);
+      if (!canEdit) {
+        await this.clinicalAccess.assertPatient(user, encounter.patientId);
       }
     }
 
-    return encounter;
+    return Object.assign(encounter, { canEdit });
   }
 
   async create(

@@ -44,8 +44,16 @@ export class PatientsController {
   @Audit('Patient', AuditActionType.VIEW)
   @Get()
   @ApiOperation({ summary: 'List patients with pagination and search' })
-  async findAll(@ClinicId() clinicId: number, @Query() query: PatientQueryDto) {
-    const result = await this.patientsService.findAll(clinicId, query);
+  async findAll(
+    @ClinicId() clinicId: number,
+    @Query() query: PatientQueryDto,
+    @Req() req: { user?: { userId: number; role: string } },
+  ) {
+    const result = await this.patientsService.findAll(
+      clinicId,
+      query,
+      req.user,
+    );
     return { success: true, ...result };
   }
 

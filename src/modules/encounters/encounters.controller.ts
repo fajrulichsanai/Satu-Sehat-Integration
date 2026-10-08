@@ -51,7 +51,9 @@ export class EncountersController {
   @Post()
   @Audit('MedicalRecord', AuditActionType.CREATE)
   @Notify(NotificationType.KUNJUNGAN_NEW, 'Kunjungan baru dibuat')
-  @ApiOperation({ summary: 'Create encounter (from reservation check-in or walk-in)' })
+  @ApiOperation({
+    summary: 'Create encounter (from reservation check-in or walk-in)',
+  })
   async create(
     @ClinicId() clinicId: number,
     @Body() dto: CreateEncounterDto,
@@ -87,7 +89,9 @@ export class EncountersController {
     @CurrentUser() user: any,
     @Req() req: any,
   ) {
-    req.auditBefore = await this.encountersService.findOne(id, clinicId, user).catch(() => null);
+    req.auditBefore = await this.encountersService
+      .findOne(id, clinicId, user)
+      .catch(() => null);
     const encounter = await this.encountersService.update(
       id,
       clinicId,

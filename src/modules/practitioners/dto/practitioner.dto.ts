@@ -255,3 +255,41 @@ export class SatusehatPractitionerSearchResultDto {
   })
   data: any | undefined;
 }
+
+const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d).{8,72}$/;
+const PASSWORD_MESSAGE = 'Password minimal 8 karakter, berisi huruf dan angka';
+
+/** Akun login untuk nakes (dokter/perawat) — tertaut ke data nakes. */
+export class CreatePractitionerAccountDto {
+  @ApiProperty({ example: 'dr.ratna@klinik.id' })
+  @IsEmail({}, { message: 'Format email tidak valid' })
+  @MaxLength(100)
+  email: string;
+
+  @ApiProperty({ example: 'Rahasia123' })
+  @Matches(PASSWORD_RULE, { message: PASSWORD_MESSAGE })
+  password: string;
+
+  @ApiProperty({ enum: ['dokter', 'perawat'], required: false })
+  @IsOptional()
+  @IsIn(['dokter', 'perawat'])
+  role?: 'dokter' | 'perawat';
+}
+
+export class UpdatePractitionerAccountDto {
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsEmail({}, { message: 'Format email tidak valid' })
+  @MaxLength(100)
+  email?: string;
+
+  @ApiProperty({ required: false, description: 'Password baru (reset)' })
+  @IsOptional()
+  @Matches(PASSWORD_RULE, { message: PASSWORD_MESSAGE })
+  password?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}

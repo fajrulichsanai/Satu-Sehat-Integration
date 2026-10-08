@@ -7,6 +7,7 @@ import { SatusehatClientService } from '../../satusehat/satusehat-client.service
 import { PractitionersService } from '../practitioners.service';
 import { Practitioner } from '../entities/practitioner.entity';
 import { PractitionerRevision } from '../entities/practitioner-revision.entity';
+import { User } from '../../users/entities/user.entity';
 
 describe('PractitionersService', () => {
   let satusehatClient: {
@@ -14,6 +15,13 @@ describe('PractitionersService', () => {
     getFhir: jest.Mock;
   };
   let revisions: { find: jest.Mock; create: jest.Mock; save: jest.Mock };
+  let users: {
+    find: jest.Mock;
+    findOne: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    update: jest.Mock;
+  };
   let service: PractitionersService;
   let repo: {
     find: jest.Mock;
@@ -27,6 +35,13 @@ describe('PractitionersService', () => {
     satusehatClient = {
       searchPractitionerByNik: jest.fn(),
       getFhir: jest.fn(),
+    };
+    users = {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn((d) => d),
+      save: jest.fn((d) => Promise.resolve({ id: 77, ...d })),
+      update: jest.fn().mockResolvedValue(undefined),
     };
     revisions = {
       find: jest.fn().mockResolvedValue([]),
@@ -49,6 +64,7 @@ describe('PractitionersService', () => {
           provide: getRepositoryToken(PractitionerRevision),
           useValue: revisions,
         },
+        { provide: getRepositoryToken(User), useValue: users },
         { provide: SatusehatClientService, useValue: satusehatClient },
       ],
     }).compile();
@@ -330,6 +346,108 @@ describe('PractitionersService', () => {
       await expect(service.matchSatusehat(1, 1, { userId: 9 })).rejects.toThrow(
         'Isi NIK',
       );
+    });
+  });
+
+  describe('akun login nakes', () => {
+    it('membuat akun yang tertaut ke data nakes (tanpa data dokter ganda)', async () => {
+      const p = {
+        id: 1,
+        clinicId: 1,
+        name: 'drg. Ratna',
+        profession: 'dokter_gigi',
+      };
+      repo.findOne.mockResolvedValue(p);
+      await service.createAccount(
+        1,
+        1,
+        { email: 'Ratna@Klinik.id', password: 'Rahasia123' },
+        { userId: 9, name: 'Owner' },
+      );
+      const created = users.save.mock.calls[0][0];
+      expect(created).toMatchObject({
+        email: 'ratna@klinik.id',
+        name: 'drg. Ratna',
+        role: 'dokter',
+        clinicId: 1,
+        practitionerId: 1,
+        isActive: true,
+      });
+      expect(created.passwordHash).not.toContain('Rahasia123');
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 1,
+          userId: 77,
+          email: 'ratna@klinik.id',
+        }),
+      );
+    });
+
+    it('profesi perawat/bidan otomatis berperan perawat', async () => {
+      repo.findOne.mockResolvedValue({
+        id: 2,
+        clinicId: 1,
+        name: 'Ns. Rina',
+        profession: 'perawat',
+      });
+      await service.createAccount(
+        2,
+        1,
+        { email: 'rina@k.id', password: 'Rahasia123' },
+        { userId: 9 },
+      );
+      expect(users.save.mock.calls[0][0].role).toBe('perawat');
+    });
+
+    it('menolak email yang sudah dipakai (negative)', async () => {
+      repo.findOne.mockResolvedValue({ id: 1, clinicId: 1, name: 'A' });
+      users.findOne.mockResolvedValue({ id: 5, email: 'x@k.id' });
+      await expect(
+        service.createAccount(
+          1,
+          1,
+          { email: 'x@k.id', password: 'Rahasia123' },
+          { userId: 9 },
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(users.save).not.toHaveBeenCalled();
+    });
+
+    it('reset password mengeluarkan sesi lama', async () => {
+      repo.findOne.mockResolvedValue({
+        id: 1,
+        clinicId: 1,
+        name: 'A',
+        userId: 77,
+      });
+      users.findOne.mockResolvedValue({
+        id: 77,
+        email: 'a@k.id',
+        isActive: true,
+        tokenVersion: 3,
+      });
+      await service.updateAccount(
+        1,
+        1,
+        { password: 'BaruSekali9' },
+        { userId: 9 },
+      );
+      expect(users.save).toHaveBeenCalledWith(
+        expect.objectContaining({ tokenVersion: 4 }),
+      );
+    });
+
+    it('revisi nama ikut memperbarui nama akun login', async () => {
+      repo.findOne.mockResolvedValue({
+        id: 1,
+        clinicId: 1,
+        name: 'drg Ratna Sar',
+        userId: 77,
+      });
+      await service.update(1, { name: 'drg. Ratna Sari' } as any, 1, 9);
+      expect(users.update).toHaveBeenCalledWith(77, {
+        name: 'drg. Ratna Sari',
+      });
     });
   });
 });

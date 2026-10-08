@@ -238,7 +238,11 @@ describe('UsersService', () => {
     it('returns limited roles for non-super-admin (positive)', () => {
       const result = service.getRoles(owner);
       const values = result.data.map((r) => r.value);
-      expect(values).toEqual([UserRole.ADMIN, UserRole.DOKTER, UserRole.PERAWAT]);
+      expect(values).toEqual([
+        UserRole.ADMIN,
+        UserRole.DOKTER,
+        UserRole.PERAWAT,
+      ]);
     });
 
     it('returns full role list for super admin (positive)', () => {
@@ -361,7 +365,11 @@ describe('UsersService', () => {
 
       const result = await service.invite(dto, owner);
 
-      expect(result.data.temporaryPassword).toBe('123asd');
+      // Password sementara acak, bukan nilai tetap
+      expect(result.data.temporaryPassword).toMatch(
+        /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{10}$/,
+      );
+      expect(result.data.temporaryPassword).not.toBe('123asd');
       expect(userRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({ clinicId: 1 }),
       );

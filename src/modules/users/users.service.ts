@@ -7,7 +7,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { User } from './entities/user.entity';
@@ -19,6 +19,21 @@ interface CurrentUserPayload {
   userId: number;
   role: UserRole;
   clinicId: number | null;
+}
+
+/** 10 karakter: huruf + angka, tanpa karakter yang mirip (0/O, 1/l). */
+export function generateTemporaryPassword(): string {
+  const letters = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ';
+  const digits = '23456789';
+  const all = letters + digits;
+  const pick = (set: string) => set[crypto.randomInt(set.length)];
+  const chars = [pick(letters), pick(digits)];
+  while (chars.length < 10) chars.push(pick(all));
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
 }
 
 @Injectable()
@@ -44,6 +59,25 @@ export class UsersService {
     });
     if (existing) {
       await this.linkPractitioner(user, existing.id);
+      return;
+    }
+
+    // Data nakes yang sudah diinput (email sama, belum punya akun) dipakai
+    // ulang — jangan buat data dokter ganda untuk orang yang sama
+    const sameEmail = user.email
+      ? await this.practitionerRepository.findOne({
+          where: {
+            clinicId: user.clinicId,
+            email: user.email,
+            userId: IsNull(),
+          },
+        })
+      : null;
+    if (sameEmail) {
+      await this.practitionerRepository.update(sameEmail.id, {
+        userId: user.id,
+      });
+      await this.linkPractitioner(user, sameEmail.id);
       return;
     }
 
@@ -546,7 +580,8 @@ export class UsersService {
       });
     }
 
-    const temporaryPassword = '123asd';
+    // Password sementara acak per user (bukan nilai tetap yang mudah ditebak)
+    const temporaryPassword = generateTemporaryPassword();
     const passwordHash = await bcrypt.hash(temporaryPassword, 10);
 
     const user = this.userRepository.create({

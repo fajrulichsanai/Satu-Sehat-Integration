@@ -6,6 +6,8 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { FeaturesModule } from './modules/features/features.module';
 import { FeatureAccessGuard } from './modules/features/feature-access.guard';
+import { ClinicalAccessModule } from './modules/clinical-access/clinical-access.module';
+import { ClinicalAccessGuard } from './modules/clinical-access/clinical-access.guard';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './modules/auth/auth.module';
@@ -148,6 +150,7 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     MultiClinicModule,
     OnboardingModule,
     ContentsModule,
+    ClinicalAccessModule,
   ],
   controllers: [AppController],
   providers: [
@@ -173,6 +176,11 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     {
       provide: APP_GUARD,
       useExisting: FeatureAccessGuard,
+    },
+    // Dokter/perawat hanya membuka pasien yang pernah/sedang ditanganinya
+    {
+      provide: APP_GUARD,
+      useExisting: ClinicalAccessGuard,
     },
   ],
 })
