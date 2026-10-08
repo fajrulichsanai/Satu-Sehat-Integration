@@ -156,6 +156,39 @@ export class SatusehatClientService {
     }
   }
 
+  /**
+   * KYC Verifikasi Profil SATUSEHAT Mobile — POST /kyc/v1/{generate-url|challenge-code}.
+   * Body dan respons berupa teks terenkripsi (-----BEGIN ENCRYPTED MESSAGE-----),
+   * jadi dikembalikan apa adanya untuk didekripsi KycService.
+   */
+  async postKyc(
+    clinicId: number,
+    endpoint: 'generate-url' | 'challenge-code',
+    encryptedBody: string,
+    headers: Record<string, string> = {},
+  ): Promise<{ status: number; text: string }> {
+    const clinic = await this.loadConfiguredClinic(clinicId);
+    const token = await this.getAccessToken(clinicId);
+    try {
+      const response = await fetch(
+        `${SATUSEHAT_BASE[clinic.satusehatEnvironment]}/kyc/v1/${endpoint}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'text/plain',
+            ...headers,
+          },
+          body: encryptedBody,
+        },
+      );
+      return { status: response.status, text: await response.text() };
+    } catch (err) {
+      this.logger.error(`KYC ${endpoint} gagal: ${(err as Error).message}`);
+      throw new ServiceUnavailableException('Koneksi ke SATUSEHAT gagal');
+    }
+  }
+
   private async request(
     clinicId: number,
     method: 'GET' | 'POST' | 'PUT',

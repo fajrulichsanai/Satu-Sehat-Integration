@@ -33,6 +33,8 @@ import { SatusehatOrganization } from './onboarding/entities/satusehat-organizat
 import { KfaProductEntity } from './kfa/entities/kfa-product.entity';
 import { SsrmeService } from './ssrme/ssrme.service';
 import { SsrmeController } from './ssrme/ssrme.controller';
+import { KycService } from './kyc/kyc.service';
+import { KycController } from './kyc/kyc.controller';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 import { TerminologyModule } from '../terminology/terminology.module';
 import { LabOrder } from '../diagnostics/entities/lab-order.entity';
@@ -72,7 +74,12 @@ import { Immunization } from '../immunizations/entities/immunization.entity';
       Immunization,
     ]),
   ],
-  controllers: [SatusehatController, SsrmeController, SatusehatAdminController],
+  controllers: [
+    SatusehatController,
+    SsrmeController,
+    KycController,
+    SatusehatAdminController,
+  ],
   providers: [
     SatusehatAdminService,
     SatusehatClientService,
@@ -84,6 +91,7 @@ import { Immunization } from '../immunizations/entities/immunization.entity';
     SatusehatConfigService,
     KfaService,
     SsrmeService,
+    KycService,
     SatusehatOnboardingService,
   ],
   exports: [
