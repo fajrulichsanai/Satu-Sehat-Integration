@@ -13,7 +13,9 @@ describe('PatientImportController', () => {
 
   beforeEach(async () => {
     service = {
-      generateTemplateBuffer: jest.fn().mockReturnValue(Buffer.from('xlsx-bytes')),
+      generateTemplateBuffer: jest
+        .fn()
+        .mockReturnValue(Buffer.from('xlsx-bytes')),
       parseFile: jest.fn(),
       importRows: jest.fn(),
     };
@@ -38,7 +40,9 @@ describe('PatientImportController', () => {
         expect.objectContaining({
           'Content-Type':
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          'Content-Disposition': expect.stringContaining('template-migrasi-pasien.xlsx'),
+          'Content-Disposition': expect.stringContaining(
+            'template-migrasi-pasien.xlsx',
+          ),
         }),
       );
       expect(res.send).toHaveBeenCalledWith(Buffer.from('xlsx-bytes'));
@@ -49,13 +53,22 @@ describe('PatientImportController', () => {
     const file = { buffer: Buffer.from('fake') } as Express.Multer.File;
 
     it('parses the uploaded file and imports it for the given clinicId (positive)', async () => {
-      service.parseFile.mockReturnValue([{ name: 'Budi', gender: 'Laki-laki' }]);
-      service.importRows.mockResolvedValue({ totalRows: 1, created: 1, failed: 0, results: [] });
+      service.parseFile.mockReturnValue([
+        { name: 'Budi', gender: 'Laki-laki' },
+      ]);
+      service.importRows.mockResolvedValue({
+        totalRows: 1,
+        created: 1,
+        failed: 0,
+        results: [],
+      });
 
       const result = await controller.importPatients(file, 7);
 
       expect(service.parseFile).toHaveBeenCalledWith(file.buffer);
-      expect(service.importRows).toHaveBeenCalledWith(7, [{ name: 'Budi', gender: 'Laki-laki' }]);
+      expect(service.importRows).toHaveBeenCalledWith(7, [
+        { name: 'Budi', gender: 'Laki-laki' },
+      ]);
       expect(result).toEqual({
         success: true,
         data: { totalRows: 1, created: 1, failed: 0, results: [] },
@@ -63,14 +76,18 @@ describe('PatientImportController', () => {
     });
 
     it('rejects with no upload attempted when no file is provided (negative)', async () => {
-      await expect(controller.importPatients(undefined as any, 7)).rejects.toThrow(BadRequestException);
+      await expect(
+        controller.importPatients(undefined as any, 7),
+      ).rejects.toThrow(BadRequestException);
       expect(service.parseFile).not.toHaveBeenCalled();
     });
 
     it('rejects without importing when the parsed file has no data rows (negative)', async () => {
       service.parseFile.mockReturnValue([]);
 
-      await expect(controller.importPatients(file, 7)).rejects.toThrow(BadRequestException);
+      await expect(controller.importPatients(file, 7)).rejects.toThrow(
+        BadRequestException,
+      );
       expect(service.importRows).not.toHaveBeenCalled();
     });
   });

@@ -3,7 +3,10 @@ import ExcelJS from 'exceljs';
 import { ConflictException } from '@nestjs/common';
 import { PatientImportService } from '../patient-import.service';
 import { PatientsService } from '../patients.service';
-import { PATIENT_IMPORT_COLUMNS, PatientImportRawRow } from '../patient-import.columns';
+import {
+  PATIENT_IMPORT_COLUMNS,
+  PatientImportRawRow,
+} from '../patient-import.columns';
 import { Gender } from '../../../enums';
 
 async function aoaToXlsx(aoa: unknown[][]): Promise<Buffer> {
@@ -15,7 +18,10 @@ async function aoaToXlsx(aoa: unknown[][]): Promise<Buffer> {
 
 function buildWorkbookBuffer(rows: Record<string, string>[]): Promise<Buffer> {
   const headers = PATIENT_IMPORT_COLUMNS.map((c) => c.header);
-  return aoaToXlsx([headers, ...rows.map((row) => headers.map((h) => row[h] ?? ''))]);
+  return aoaToXlsx([
+    headers,
+    ...rows.map((row) => headers.map((h) => row[h] ?? '')),
+  ]);
 }
 
 describe('PatientImportService', () => {
@@ -45,7 +51,10 @@ describe('PatientImportService', () => {
 
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
-      expect(workbook.worksheets.map((w) => w.name)).toEqual(['Data Pasien', 'Petunjuk']);
+      expect(workbook.worksheets.map((w) => w.name)).toEqual([
+        'Data Pasien',
+        'Petunjuk',
+      ]);
 
       const dataSheet = workbook.getWorksheet('Data Pasien')!;
       const headerValues = (dataSheet.getRow(1).values as unknown[]).slice(1);
@@ -55,7 +64,9 @@ describe('PatientImportService', () => {
     });
 
     it('round-trips through parseFile (positive)', async () => {
-      const rows = await service.parseFile(await service.generateTemplateBuffer());
+      const rows = await service.parseFile(
+        await service.generateTemplateBuffer(),
+      );
       expect(rows).toHaveLength(1);
     });
   });
@@ -67,7 +78,13 @@ describe('PatientImportService', () => {
       const reversed = [...headers].reverse();
       const buffer = await aoaToXlsx([
         reversed,
-        reversed.map((h) => (h === 'Nama Lengkap' ? 'Siti' : h === 'Jenis Kelamin' ? 'Perempuan' : '')),
+        reversed.map((h) =>
+          h === 'Nama Lengkap'
+            ? 'Siti'
+            : h === 'Jenis Kelamin'
+              ? 'Perempuan'
+              : '',
+        ),
       ]);
 
       const rows = await service.parseFile(buffer);
@@ -87,7 +104,9 @@ describe('PatientImportService', () => {
     });
 
     it('returns an empty array for a workbook with no rows (negative/edge)', async () => {
-      const buffer = await aoaToXlsx([PATIENT_IMPORT_COLUMNS.map((c) => c.header)]);
+      const buffer = await aoaToXlsx([
+        PATIENT_IMPORT_COLUMNS.map((c) => c.header),
+      ]);
       expect(await service.parseFile(buffer)).toEqual([]);
     });
 
@@ -113,7 +132,9 @@ describe('PatientImportService', () => {
   });
 
   describe('importRows', () => {
-    function row(overrides: Partial<Record<string, string>> = {}): PatientImportRawRow {
+    function row(
+      overrides: Partial<Record<string, string>> = {},
+    ): PatientImportRawRow {
       return {
         name: 'Budi Santoso',
         gender: 'Laki-laki',
@@ -122,7 +143,11 @@ describe('PatientImportService', () => {
     }
 
     it('creates a patient for a row with only the required fields filled (positive)', async () => {
-      patientsService.create.mockResolvedValue({ id: 1, name: 'Budi Santoso', noRm: '000001' });
+      patientsService.create.mockResolvedValue({
+        id: 1,
+        name: 'Budi Santoso',
+        noRm: '000001',
+      });
 
       const summary = await service.importRows(1, [row()]);
 
@@ -130,7 +155,9 @@ describe('PatientImportService', () => {
         totalRows: 1,
         created: 1,
         failed: 0,
-        results: [{ row: 2, name: 'Budi Santoso', noRm: '000001', status: 'created' }],
+        results: [
+          { row: 2, name: 'Budi Santoso', noRm: '000001', status: 'created' },
+        ],
       });
       expect(patientsService.create).toHaveBeenCalledWith(
         1,
@@ -140,15 +167,27 @@ describe('PatientImportService', () => {
     });
 
     it('passes the spreadsheet noRm through as an override so the clinic keeps its old RM numbers (positive)', async () => {
-      patientsService.create.mockResolvedValue({ id: 1, name: 'Budi', noRm: 'OLD-0042' });
+      patientsService.create.mockResolvedValue({
+        id: 1,
+        name: 'Budi',
+        noRm: 'OLD-0042',
+      });
 
       await service.importRows(1, [row({ noRm: 'OLD-0042' })]);
 
-      expect(patientsService.create).toHaveBeenCalledWith(1, expect.anything(), 'OLD-0042');
+      expect(patientsService.create).toHaveBeenCalledWith(
+        1,
+        expect.anything(),
+        'OLD-0042',
+      );
     });
 
     it('translates every mapped label field to its backend enum/boolean value (positive)', async () => {
-      patientsService.create.mockResolvedValue({ id: 1, name: 'Ani', noRm: '000002' });
+      patientsService.create.mockResolvedValue({
+        id: 1,
+        name: 'Ani',
+        noRm: '000002',
+      });
 
       await service.importRows(1, [
         row({
@@ -202,7 +241,9 @@ describe('PatientImportService', () => {
       const summary = await service.importRows(1, [row({ gender: 'Alien' })]);
 
       expect(patientsService.create).not.toHaveBeenCalled();
-      expect(summary.results[0].message).toContain('Jenis Kelamin tidak valid: "Alien"');
+      expect(summary.results[0].message).toContain(
+        'Jenis Kelamin tidak valid: "Alien"',
+      );
     });
 
     it('fails the row when NIK is not 16 digits, via the same validator the manual form uses (negative)', async () => {
@@ -214,14 +255,20 @@ describe('PatientImportService', () => {
     });
 
     it('fails the row when Punya Alergi has an unrecognized Ya/Tidak value, rather than silently defaulting it (negative)', async () => {
-      const summary = await service.importRows(1, [row({ punyaAlergi: 'kadang' })]);
+      const summary = await service.importRows(1, [
+        row({ punyaAlergi: 'kadang' }),
+      ]);
 
       expect(patientsService.create).not.toHaveBeenCalled();
-      expect(summary.results[0].message).toContain('Punya Alergi tidak valid: "kadang"');
+      expect(summary.results[0].message).toContain(
+        'Punya Alergi tidak valid: "kadang"',
+      );
     });
 
     it('records a row as failed with the service error message, without throwing, when create() rejects (negative)', async () => {
-      patientsService.create.mockRejectedValue(new ConflictException('NIK sudah terdaftar'));
+      patientsService.create.mockRejectedValue(
+        new ConflictException('NIK sudah terdaftar'),
+      );
 
       const summary = await service.importRows(1, [row()]);
 
@@ -234,7 +281,12 @@ describe('PatientImportService', () => {
       const summary = await service.importRows(1, [{}]);
 
       expect(patientsService.create).not.toHaveBeenCalled();
-      expect(summary).toEqual({ totalRows: 0, created: 0, failed: 0, results: [] });
+      expect(summary).toEqual({
+        totalRows: 0,
+        created: 0,
+        failed: 0,
+        results: [],
+      });
     });
 
     it('processes every row independently — one failure does not stop the rest of the batch (positive/negative mix)', async () => {
@@ -254,7 +306,12 @@ describe('PatientImportService', () => {
       expect(summary.totalRows).toBe(4);
       expect(summary.created).toBe(2);
       expect(summary.failed).toBe(2);
-      expect(summary.results.map((r) => r.status)).toEqual(['created', 'failed', 'failed', 'created']);
+      expect(summary.results.map((r) => r.status)).toEqual([
+        'created',
+        'failed',
+        'failed',
+        'created',
+      ]);
     });
   });
 });

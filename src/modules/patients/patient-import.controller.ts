@@ -40,7 +40,10 @@ export class PatientImportController {
   constructor(private readonly patientImportService: PatientImportService) {}
 
   @Get('import-template')
-  @ApiOperation({ summary: 'Download the patient migration spreadsheet template (Super Admin only)' })
+  @ApiOperation({
+    summary:
+      'Download the patient migration spreadsheet template (Super Admin only)',
+  })
   async downloadTemplate(@Res() res: Response) {
     const buffer = await this.patientImportService.generateTemplateBuffer();
     res.set({
@@ -54,7 +57,10 @@ export class PatientImportController {
 
   @Post('import')
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Bulk-import patients from a clinic spreadsheet (Super Admin only)' })
+  @ApiOperation({
+    summary:
+      'Bulk-import patients from a clinic spreadsheet (Super Admin only)',
+  })
   @UseInterceptors(FileInterceptor('file', patientImportUploadOptions))
   async importPatients(
     @UploadedFile() file: Express.Multer.File,

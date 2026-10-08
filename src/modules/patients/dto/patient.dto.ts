@@ -384,3 +384,40 @@ export class PatientResponseDto {
   @ApiProperty() createdAt: Date | undefined;
   @ApiProperty() updatedAt: Date | undefined;
 }
+
+/**
+ * Cari pasien di SATUSEHAT (Master Patient Index). Salah satu:
+ * NIK · nama + tanggal lahir + jenis kelamin · NIK ibu (bayi baru lahir) · ID SATUSEHAT.
+ */
+export class SearchSatusehatPatientDto {
+  @ApiPropertyOptional({ example: '9271060312000001' })
+  @IsOptional()
+  @Matches(/^\d{16}$/, { message: 'NIK harus 16 digit angka' })
+  nik?: string;
+
+  @ApiPropertyOptional({ example: 'Ardianto Putra' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  name?: string;
+
+  @ApiPropertyOptional({ example: '1992-01-09' })
+  @IsOptional()
+  @IsDateString()
+  birthDate?: string;
+
+  @ApiPropertyOptional({ enum: Gender })
+  @IsOptional()
+  @IsEnum(Gender)
+  gender?: Gender;
+
+  @ApiPropertyOptional({ description: 'NIK ibu — pencarian bayi baru lahir' })
+  @IsOptional()
+  @Matches(/^\d{16}$/, { message: 'NIK ibu harus 16 digit angka' })
+  nikIbu?: string;
+
+  @ApiPropertyOptional({ example: 'P02478375538' })
+  @IsOptional()
+  @Matches(/^[A-Za-z0-9-]{3,64}$/, { message: 'ID SATUSEHAT tidak valid' })
+  ihsId?: string;
+}

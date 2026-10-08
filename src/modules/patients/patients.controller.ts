@@ -19,6 +19,7 @@ import { PatientsService } from './patients.service';
 import {
   CreatePatientDto,
   PatientQueryDto,
+  SearchSatusehatPatientDto,
   UpdatePatientDto,
 } from './dto/patient.dto';
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
@@ -50,7 +51,9 @@ export class PatientsController {
 
   @Post()
   @Audit('Patient', AuditActionType.CREATE, { labelField: 'name' })
-  @Notify(NotificationType.PATIENT_NEW, 'Pasien baru terdaftar', { labelField: 'name' })
+  @Notify(NotificationType.PATIENT_NEW, 'Pasien baru terdaftar', {
+    labelField: 'name',
+  })
   @ApiOperation({ summary: 'Register new patient' })
   async create(@ClinicId() clinicId: number, @Body() dto: CreatePatientDto) {
     const patient = await this.patientsService.create(clinicId, dto);
@@ -69,6 +72,22 @@ export class PatientsController {
   ) {
     const data = await this.patientsService.searchSatusehat(nik, clinicId);
     return { success: true, data };
+  }
+
+  @Post('search-satusehat')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Cari pasien di SATUSEHAT: NIK, nama + tgl lahir + JK, NIK ibu (bayi), atau ID SATUSEHAT',
+  })
+  async searchSatusehatPatients(
+    @Body() dto: SearchSatusehatPatientDto,
+    @ClinicId() clinicId: number,
+  ) {
+    return {
+      success: true,
+      data: await this.patientsService.searchSatusehatPatients(dto, clinicId),
+    };
   }
 
   @Get('referral-summary')

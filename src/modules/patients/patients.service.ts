@@ -31,6 +31,7 @@ import { TreatmentPlansService } from '../treatment-plans/treatment-plans.servic
 import { FamilyHistoryService } from './family-history.service';
 import { MedicationHistoryService } from './medication-history.service';
 import { hashNik, maskNik } from '../../common/utils/nik-crypto.util';
+import type { SearchSatusehatPatientDto } from './dto/patient.dto';
 
 @Injectable()
 export class PatientsService {
@@ -206,36 +207,41 @@ export class PatientsService {
     });
     const encounterIds = encounters.map((e) => e.id);
 
-    const [soapNotes, physicalExams, dentalExams, prescriptions, supportingExamImages] =
-      await Promise.all([
-        encounterIds.length
-          ? this.encounterSoapNoteRepository.find({
-              where: { encounterId: In(encounterIds) },
-            })
-          : Promise.resolve([]),
-        encounterIds.length
-          ? this.physicalExaminationRepository.find({
-              where: { encounterId: In(encounterIds) },
-            })
-          : Promise.resolve([]),
-        encounterIds.length
-          ? this.dentalExaminationRepository.find({
-              where: { encounterId: In(encounterIds) },
-            })
-          : Promise.resolve([]),
-        encounterIds.length
-          ? this.prescriptionItemRepository.find({
-              where: { encounterId: In(encounterIds) },
-              order: { sortOrder: 'ASC' },
-            })
-          : Promise.resolve([]),
-        encounterIds.length
-          ? this.supportingExamImageRepository.find({
-              where: { encounterId: In(encounterIds) },
-              order: { createdAt: 'ASC' },
-            })
-          : Promise.resolve([]),
-      ]);
+    const [
+      soapNotes,
+      physicalExams,
+      dentalExams,
+      prescriptions,
+      supportingExamImages,
+    ] = await Promise.all([
+      encounterIds.length
+        ? this.encounterSoapNoteRepository.find({
+            where: { encounterId: In(encounterIds) },
+          })
+        : Promise.resolve([]),
+      encounterIds.length
+        ? this.physicalExaminationRepository.find({
+            where: { encounterId: In(encounterIds) },
+          })
+        : Promise.resolve([]),
+      encounterIds.length
+        ? this.dentalExaminationRepository.find({
+            where: { encounterId: In(encounterIds) },
+          })
+        : Promise.resolve([]),
+      encounterIds.length
+        ? this.prescriptionItemRepository.find({
+            where: { encounterId: In(encounterIds) },
+            order: { sortOrder: 'ASC' },
+          })
+        : Promise.resolve([]),
+      encounterIds.length
+        ? this.supportingExamImageRepository.find({
+            where: { encounterId: In(encounterIds) },
+            order: { createdAt: 'ASC' },
+          })
+        : Promise.resolve([]),
+    ]);
 
     const soapByEncounter = new Map(soapNotes.map((s) => [s.encounterId, s]));
     const examByEncounter = new Map(
@@ -252,7 +258,12 @@ export class PatientsService {
     }
     const imagesByEncounter = new Map<
       number,
-      { id: number; fileUrl: string; imageType: string; category: string | null }[]
+      {
+        id: number;
+        fileUrl: string;
+        imageType: string;
+        category: string | null;
+      }[]
     >();
     for (const img of supportingExamImages) {
       const list = imagesByEncounter.get(img.encounterId) ?? [];
@@ -515,7 +526,8 @@ export class PatientsService {
         // generateNoRm's own scan already excludes non-numeric/legacy-style
         // no_rm values for exactly this reason, so the two schemes coexist
         // without colliding on the sequence.
-        const noRm = noRmOverride || (await this.generateNoRm(manager, clinicId));
+        const noRm =
+          noRmOverride || (await this.generateNoRm(manager, clinicId));
         const patient = manager.create(Patient, {
           clinicId,
           noRm,
@@ -764,6 +776,105 @@ export class PatientsService {
       throw new BadRequestException('NIK diperlukan untuk pencarian SATUSEHAT');
     }
     return this.satusehatClient.searchPatientByNik(clinicId, nik);
+  }
+
+  /**
+   * Cari pasien di SATUSEHAT (MPI) dan ringkas hasilnya untuk mengisi form
+   * pasien baru. NIK hasil SATUSEHAT selalu tersamar; pasien yang sudah ada di
+   * klinik (NIK/ID SATUSEHAT sama) ditandai agar tidak terdaftar ganda.
+   */
+  async searchSatusehatPatients(
+    dto: SearchSatusehatPatientDto,
+    clinicId: number,
+  ) {
+    const NIK_SYSTEM = 'https://fhir.kemkes.go.id/id/nik';
+    let resources: any[] = [];
+    let path: string | null = null;
+    if (dto.nik) {
+      resources = (
+        (await this.satusehatClient.searchPatientByNik(clinicId, dto.nik))
+          ?.entry ?? []
+      ).map((e: any) => e.resource);
+    } else if (dto.ihsId) {
+      const { status, data } = await this.satusehatClient.getFhir(
+        clinicId,
+        `Patient/${encodeURIComponent(dto.ihsId)}`,
+      );
+      if (status < 300 && data?.resourceType === 'Patient') resources = [data];
+    } else if (dto.nikIbu) {
+      path = `Patient?identifier=${encodeURIComponent(`https://fhir.kemkes.go.id/id/nik-ibu|${dto.nikIbu}`)}`;
+    } else if (dto.name?.trim() && dto.birthDate && dto.gender) {
+      path = `Patient?${new URLSearchParams({
+        name: dto.name.trim(),
+        birthdate: dto.birthDate.slice(0, 10),
+        gender: dto.gender,
+      }).toString()}`;
+    } else {
+      throw new BadRequestException(
+        'Isi NIK, atau nama + tanggal lahir + jenis kelamin, atau NIK ibu, atau ID SATUSEHAT',
+      );
+    }
+    if (path) {
+      const { data } = await this.satusehatClient.getFhir(clinicId, path);
+      resources = (data?.entry ?? []).map((e: any) => e.resource);
+    }
+
+    const ihsIds = resources.map((r) => r?.id).filter(Boolean) as string[];
+    const nikHash = dto.nik ? hashNik(dto.nik) : null;
+    const ours =
+      ihsIds.length || nikHash
+        ? await this.patientRepository.find({
+            where: [
+              ...(ihsIds.length
+                ? [{ clinicId, satusehatPatientId: In(ihsIds) }]
+                : []),
+              ...(nikHash ? [{ clinicId, nikHash }] : []),
+            ],
+            select: {
+              id: true,
+              name: true,
+              noRm: true,
+              satusehatPatientId: true,
+              nikHash: true,
+            },
+          })
+        : [];
+
+    const results = resources
+      .filter((r) => r?.id)
+      .slice(0, 20)
+      .map((r) => {
+        const nik = (r.identifier ?? []).find(
+          (i: any) => i.system === NIK_SYSTEM,
+        )?.value as string | undefined;
+        const match = ours.find(
+          (p) =>
+            p.satusehatPatientId === r.id ||
+            (!!nikHash && p.nikHash === nikHash),
+        );
+        const addr = r.address?.[0];
+        return {
+          id: String(r.id),
+          name: (r.name?.[0]?.text as string | undefined) ?? null,
+          gender: (r.gender as string | undefined) ?? null,
+          birthDate: (r.birthDate as string | undefined) ?? null,
+          nikMasked: nik ? maskNik(nik) : null,
+          address: (addr?.line?.[0] as string | undefined) ?? null,
+          city: (addr?.city as string | undefined) ?? null,
+          phone:
+            ((r.telecom ?? []).find((t: any) => t.system === 'phone')?.value as
+              | string
+              | undefined) ?? null,
+          deceased: r.deceasedBoolean === true || !!r.deceasedDateTime,
+          inClinic: match
+            ? { id: match.id, name: match.name, noRm: match.noRm }
+            : null,
+        };
+      });
+    this.logger.log(
+      `[SEARCH-SS] Cari pasien SATUSEHAT | clinicId=${clinicId}, mode=${dto.nik ? 'nik' : dto.ihsId ? 'id' : dto.nikIbu ? 'nik-ibu' : 'nama'}, hasil=${results.length}`,
+    );
+    return { found: results.length > 0, results };
   }
 
   private async generateNoRm(
