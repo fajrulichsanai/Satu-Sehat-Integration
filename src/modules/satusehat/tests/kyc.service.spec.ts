@@ -199,4 +199,39 @@ describe('KycService (Juknis KYC v6.4)', () => {
       kycError(400, { metadata: { message: 'Failed to decrypt message' } }),
     ).toMatch(/public key KYC/);
   });
+
+  it('reads an encrypted reply wrapped as a JSON string (challenge-code)', async () => {
+    const { sessionId } = await service.generateUrl(1, 77, {});
+    client.postKyc.mockImplementationOnce(async () => {
+      await Promise.resolve();
+      return {
+        status: 200,
+        text: JSON.stringify(
+          encryptKycMessage(
+            JSON.stringify({
+              metadata: { code: '200' },
+              data: { challengeCode: '112233', ihs_number: 'P1' },
+            }),
+            agentPublicKey,
+          ),
+        ),
+      };
+    });
+    const r = await service.challengeCode(1, 77, { sessionId, patientId: 9 });
+    expect(r.challengeCode).toBe('112233');
+  });
+
+  it('explains a 2xx reply without recognisable data (shape only, no values)', async () => {
+    const { sessionId } = await service.generateUrl(1, 77, {});
+    client.postKyc.mockResolvedValue({
+      status: 200,
+      text: JSON.stringify({
+        metadata: { code: '200' },
+        data: { foo: 'SECRET' },
+      }),
+    });
+    await expect(
+      service.challengeCode(1, 77, { sessionId, patientId: 9 }),
+    ).rejects.toThrow(/JSON \{metadata, data\} data \{foo\}/);
+  });
 });

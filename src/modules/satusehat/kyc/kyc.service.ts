@@ -69,10 +69,20 @@ function kycRawMessage(status: number, data: any): string {
   );
 }
 
+/** Ringkasan bentuk respons tanpa isi (aman dicatat). */
+function describeShape(text: string | undefined): string {
+  const t = (text ?? '').trim();
+  if (!t) return 'kosong';
+  if (isEncryptedMessage(t)) return `terenkripsi ${t.length} karakter`;
+  if (t.startsWith('"')) return `string JSON ${t.length} karakter`;
+  if (t.startsWith('{')) return `JSON ${t.length} karakter`;
+  return `teks ${t.length} karakter`;
+}
+
 /** Penolakan karena format/enkripsi pesan (bukan karena data). */
 function isFormatError(status: number, data: any): boolean {
   if (status >= 500 || status === 401 || status === 403) return false;
-  if (!data || Object.keys(data).length === 0) return true;
+  if (!data || Object.keys(data).length === 0 || data.__unreadable) return true;
   return /decrypt|encrypt|content.?type|json|format|bad request/i.test(
     kycRawMessage(status, data),
   );
@@ -263,30 +273,73 @@ export class KycService {
     }
   }
 
+  /** Data kode verifikasi di `data`, `data.data`, atau level atas. */
   private challengeOf(data: any) {
-    const d = data?.data;
-    return d && d.challenge_code !== undefined && d.challenge_code !== null
-      ? d
-      : null;
+    for (const d of [data?.data, data?.data?.data, data]) {
+      if (!d || typeof d !== 'object') continue;
+      const code = d.challenge_code ?? d.challengeCode;
+      if (code !== undefined && code !== null && code !== '') {
+        return {
+          ...d,
+          challenge_code: code,
+          ihs_number: d.ihs_number ?? d.ihsNumber,
+          created_timestamp: d.created_timestamp ?? d.createdTimestamp,
+          expired_timestamp: d.expired_timestamp ?? d.expiredTimestamp,
+        };
+      }
+    }
+    return null;
   }
 
-  /** Respons KYC bisa terenkripsi atau JSON biasa (galat). */
+  /**
+   * Respons KYC: JSON biasa, teks terenkripsi, JSON string berisi teks
+   * terenkripsi, atau objek yang `data`-nya terenkripsi — semua dibuka di sini.
+   */
   private parse(text: string, privateKey?: string): any {
+    const open = (msg: string) => {
+      if (!privateKey) throw new Error('respons terenkripsi tanpa kunci sesi');
+      return JSON.parse(decryptKycMessage(msg, privateKey));
+    };
     try {
-      const plain = isEncryptedMessage(text)
-        ? privateKey
-          ? decryptKycMessage(text, privateKey)
-          : '{}'
-        : text;
-      return JSON.parse(plain);
+      const trimmed = (text ?? '').trim();
+      if (!trimmed) return {};
+      if (isEncryptedMessage(trimmed)) return open(trimmed);
+      let parsed: any = JSON.parse(trimmed);
+      if (typeof parsed === 'string' && isEncryptedMessage(parsed)) {
+        parsed = open(parsed);
+      }
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        typeof parsed.data === 'string' &&
+        isEncryptedMessage(parsed.data)
+      ) {
+        const inner = open(parsed.data);
+        parsed = { ...parsed, data: inner?.data ?? inner };
+      }
+      return parsed;
     } catch (err) {
-      this.logger.warn(`Respons KYC tidak terbaca: ${(err as Error).message}`);
-      return {};
+      this.logger.warn(
+        `Respons KYC tidak terbaca (${describeShape(text)}): ${(err as Error).message}`,
+      );
+      return { __unreadable: describeShape(text) };
     }
   }
 
   private failure(status: number, data: any) {
-    const message = kycError(status, data);
+    let message = kycError(status, data);
+    if (status < 300) {
+      // 2xx tanpa data yang dikenali — sertakan bentuk respons (tanpa isi)
+      const shape =
+        data?.__unreadable ??
+        `JSON {${Object.keys(data ?? {}).join(', ')}}${
+          data?.data && typeof data.data === 'object'
+            ? ` data {${Object.keys(data.data).join(', ')}}`
+            : ''
+        }`;
+      this.logger.warn(`KYC 2xx tanpa data dikenali: ${shape}`);
+      message = `SATUSEHAT membalas tanpa data yang dikenali (${shape}). Coba "Sesi baru" lalu ulangi; bila tetap, kirim pesan ini ke admin.`;
+    }
     return status >= 500 || status === 0
       ? new BadGatewayException(message)
       : new BadRequestException(message);
