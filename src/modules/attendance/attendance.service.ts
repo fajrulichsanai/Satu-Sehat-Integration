@@ -46,6 +46,7 @@ interface ClockSideView {
   distanceM: number | null;
   accuracyM: number | null;
   deviceStatus: string | null;
+  deviceId: number | null;
   deviceName: string | null;
 }
 
@@ -337,13 +338,14 @@ export class AttendanceService {
   async recap(clinicId: number, month?: string) {
     const target = month ?? wibDate(new Date()).slice(0, 7);
     const { from, to } = monthRange(target);
-    const [staff, settings, book, records] = await Promise.all([
+    const [staff, settings, book, records, clinicStart] = await Promise.all([
       this.config.staff(clinicId),
       this.config.settings(clinicId),
       this.config.scheduleBook(clinicId),
       this.recordRepo.find({
         where: { clinicId, workDate: Between(from, to) },
       }),
+      this.clinicStart(clinicId),
     ]);
     const byUser = new Map<number, Map<string, AttendanceRecord>>();
     for (const r of records) {
@@ -354,7 +356,7 @@ export class AttendanceService {
 
     const rows: RecapRow[] = [];
     for (const u of staff) {
-      const dates = this.datesFor(u, from, to);
+      const dates = this.datesFor(u, from, to, clinicStart);
       const days = await this.buildDays(
         clinicId,
         u.id,
@@ -373,11 +375,14 @@ export class AttendanceService {
     const user = await this.config.assertStaff(clinicId, userId);
     const target = month ?? wibDate(new Date()).slice(0, 7);
     const { from, to } = monthRange(target);
-    const settings = await this.config.settings(clinicId);
+    const [settings, clinicStart] = await Promise.all([
+      this.config.settings(clinicId),
+      this.clinicStart(clinicId),
+    ]);
     const days = await this.buildDays(
       clinicId,
       userId,
-      this.datesFor(user, from, to),
+      this.datesFor(user, from, to, clinicStart),
       settings,
     );
     return {
@@ -460,13 +465,34 @@ export class AttendanceService {
 
   // ── Bantuan ───────────────────────────────────────────────────────────
 
-  /** Tanggal yang dihitung: sejak akun dibuat, sampai hari ini */
-  private datesFor(user: User, from: string, to: string): string[] {
+  /**
+   * Tanggal yang dihitung: sejak klinik mulai memakai absensi (absen
+   * pertama) dan sejak akun pegawai dibuat, sampai hari ini. Tanpa batas
+   * ini, klinik yang baru menyalakan absensi di tengah bulan akan melihat
+   * semua pegawainya "tidak hadir" di hari-hari sebelumnya.
+   */
+  private datesFor(
+    user: User,
+    from: string,
+    to: string,
+    clinicStart: string | null,
+  ): string[] {
+    if (!clinicStart) return [];
     const today = wibDate(new Date());
     const joined = user.createdAt ? wibDate(new Date(user.createdAt)) : from;
-    const start = joined > from ? joined : from;
+    const start = [from, joined, clinicStart].sort().at(-1) as string;
     const end = to < today ? to : today;
     return start <= end ? datesBetween(start, end) : [];
+  }
+
+  /** Tanggal absen pertama di klinik ini (null = belum pernah dipakai) */
+  private async clinicStart(clinicId: number): Promise<string | null> {
+    const first = await this.recordRepo.findOne({
+      where: { clinicId },
+      order: { workDate: 'ASC' },
+      select: { id: true, workDate: true },
+    });
+    return first?.workDate ?? null;
   }
 
   private async buildDays(
@@ -542,6 +568,7 @@ export class AttendanceService {
             kind === 'in'
               ? record.clockInDeviceStatus
               : record.clockOutDeviceStatus,
+          deviceId,
           deviceName: deviceId ? (deviceNames.get(deviceId) ?? null) : null,
         };
       };

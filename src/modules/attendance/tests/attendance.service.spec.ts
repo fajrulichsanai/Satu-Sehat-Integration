@@ -353,6 +353,19 @@ describe('AttendanceService', () => {
     expect(days.every((d) => d.date <= wibDate(new Date()))).toBe(true);
   });
 
+  it('does not count days before the clinic started using attendance as absent (edge)', async () => {
+    // Belum ada yang absen: rekap kosong, bukan "tidak hadir" sebulan penuh
+    const before = await service.recap(CLINIC);
+    expect(
+      before.rows.every((r) => r.workDays === 0 && r.absentDays === 0),
+    ).toBe(true);
+
+    await clockIn();
+    // Admin tanpa createdAt: dihitung sejak absen pertama klinik (hari ini) saja
+    const days = (await service.userMonth(CLINIC, 2)).days;
+    expect(days.map((d) => d.date)).toEqual([wibDate(new Date())]);
+  });
+
   it("uses a staff member's own schedule over the clinic default (positive)", async () => {
     const flexibleWeek = Array.from({ length: 7 }, () => ({
       mode: 'flexible' as const,
