@@ -4,6 +4,7 @@ import {
   withEffectiveCredentials,
 } from './satusehat-credentials';
 import {
+  ForbiddenException,
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -13,6 +14,7 @@ import { Repository } from 'typeorm';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { SatusehatEnvironment } from '../../enums/satusehat-environment.enum';
 import { decrypt, encrypt } from '../../common/utils/crypto.util';
+import { FeaturesService } from '../features/features.service';
 
 const SATUSEHAT_BASE: Record<SatusehatEnvironment, string> = {
   [SatusehatEnvironment.SANDBOX]: 'https://api-satusehat-stg.dto.kemkes.go.id',
@@ -55,7 +57,16 @@ export class SatusehatClientService {
   constructor(
     @InjectRepository(Clinic)
     private readonly clinicRepository: Repository<Clinic>,
+    private readonly features: FeaturesService,
   ) {}
+
+  /**
+   * SATUSEHAT menyala untuk klinik ini (saklar global platform + saklar
+   * klinik). Pengiriman di latar belakang memeriksa ini sebelum mulai.
+   */
+  isActiveFor(clinicId: number): Promise<boolean> {
+    return this.features.isSatusehatActive(clinicId);
+  }
 
   async getAccessToken(clinicId: number): Promise<string> {
     const clinic = await this.loadConfiguredClinic(clinicId);
@@ -223,6 +234,17 @@ export class SatusehatClientService {
   }
 
   private async loadConfiguredClinic(clinicId: number): Promise<Clinic> {
+    // Semua permintaan ke SATUSEHAT lewat sini: saat saklar mati, tidak ada
+    // satu pun data klinik yang keluar.
+    if (!(await this.isActiveFor(clinicId))) {
+      throw new ForbiddenException({
+        success: false,
+        error: {
+          code: 'SATUSEHAT_DISABLED',
+          message: 'SATUSEHAT tidak aktif untuk klinik ini',
+        },
+      });
+    }
     const clinic = withEffectiveCredentials(
       await this.clinicRepository.findOne({
         where: { id: clinicId },

@@ -36,6 +36,7 @@ import { SsrmeController } from './ssrme/ssrme.controller';
 import { KycService } from './kyc/kyc.service';
 import { KycController } from './kyc/kyc.controller';
 import { AuditLogModule } from '../audit-log/audit-log.module';
+import { FeaturesModule } from '../features/features.module';
 import { TerminologyModule } from '../terminology/terminology.module';
 import { LabOrder } from '../diagnostics/entities/lab-order.entity';
 import { PrescriptionReview } from '../prescriptions/entities/prescription-review.entity';
@@ -47,6 +48,7 @@ import { Immunization } from '../immunizations/entities/immunization.entity';
   imports: [
     ConfigModule,
     AuditLogModule,
+    FeaturesModule,
     TerminologyModule,
     TypeOrmModule.forFeature([
       Encounter,

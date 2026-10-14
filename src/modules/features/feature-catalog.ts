@@ -57,9 +57,11 @@ export const STANDARD_FEATURE_KEYS: string[] = STANDARD_FEATURES.map(
  */
 export const OPT_IN_FEATURES = new Set<string>(['imunisasi']);
 
-/** Fitur custom dikenali dari awalan kunci */
-export const CUSTOM_PREFIX = 'custom:';
-export const isCustomFeature = (key: string) => key.startsWith(CUSTOM_PREFIX);
+/**
+ * SATUSEHAT: selain saklar per klinik, butuh saklar global platform
+ * (lihat PlatformSettingsService). Owner klinik boleh mematikannya sendiri.
+ */
+export const SATUSEHAT_FEATURE = 'satusehat';
 
 const FULL_ACCESS: string[] = [
   'dashboard',

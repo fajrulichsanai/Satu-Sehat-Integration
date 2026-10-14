@@ -1,4 +1,7 @@
-import { ServiceUnavailableException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import {
   SatusehatClientService,
   encryptClientSecret,
@@ -11,6 +14,7 @@ describe('SatusehatClientService', () => {
   let clinic: Partial<Clinic>;
   let repo: { findOne: jest.Mock; update: jest.Mock };
   let fetchMock: jest.Mock;
+  let features: { isSatusehatActive: jest.Mock };
   let service: SatusehatClientService;
   const originalKey = process.env.PATIENT_DATA_ENCRYPTION_KEY;
 
@@ -38,7 +42,8 @@ describe('SatusehatClientService', () => {
     };
     fetchMock = jest.fn();
     global.fetch = fetchMock;
-    service = new SatusehatClientService(repo as any);
+    features = { isSatusehatActive: jest.fn().mockResolvedValue(true) };
+    service = new SatusehatClientService(repo as any, features as any);
   });
 
   afterAll(() => {
@@ -73,6 +78,15 @@ describe('SatusehatClientService', () => {
       json(200, { access_token: 'new', expires_in: '3599' }),
     );
     await expect(service.getAccessToken(1)).resolves.toBe('new');
+  });
+
+  it('sends nothing to SATUSEHAT while it is switched off for the clinic (negative)', async () => {
+    features.isSatusehatActive.mockResolvedValue(false);
+    await expect(service.getAccessToken(1)).rejects.toThrow(ForbiddenException);
+    await expect(service.searchPatientByNik(1, '3171')).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('rejects when the clinic has no SATUSEHAT configuration (negative)', async () => {

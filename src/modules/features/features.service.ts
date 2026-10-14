@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -11,18 +10,16 @@ import { ROLE_LEVEL, UserRole } from '../../enums/user-role.enum';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { User } from '../users/entities/user.entity';
 import { ClinicFeature } from './entities/clinic-feature.entity';
-import { CustomFeature } from './entities/custom-feature.entity';
 import { UserFeature } from './entities/user-feature.entity';
 import {
   CLINIC_ROLES,
-  CUSTOM_PREFIX,
   ROLE_DEFAULT_FEATURES,
+  SATUSEHAT_FEATURE,
   STANDARD_FEATURES,
   TOGGLEABLE_FEATURES,
-  isCustomFeature,
   OPT_IN_FEATURES,
 } from './feature-catalog';
-import { CreateCustomFeatureDto } from './dto/features.dto';
+import { PlatformSettingsService } from './platform-settings.service';
 
 export interface FeatureActor {
   userId: number;
@@ -35,11 +32,11 @@ const CACHE_MS = 30_000;
 
 /**
  * Kontrol fitur:
- *  - super admin menyalakan/mematikan fitur per klinik (termasuk fitur custom)
+ *  - super admin menyalakan/mematikan fitur per klinik
  *  - owner menyalakan/mematikan fitur per user, terbatas pada fitur yang tersedia di klinik
  * Fitur efektif user = bawaan role, dikurangi yang dimatikan klinik, lalu
- * pengaturan per user. Fitur custom mati secara bawaan (kecuali untuk owner
- * bila kliniknya menyalakan) dan hanya muncul untuk user yang dinyalakan.
+ * pengaturan per user. SATUSEHAT juga harus dinyalakan di tingkat platform
+ * (saklar global super admin) — selama mati, fitur itu tidak ada untuk siapa pun.
  */
 @Injectable()
 export class FeaturesService {
@@ -49,14 +46,13 @@ export class FeaturesService {
   >();
 
   constructor(
-    @InjectRepository(CustomFeature)
-    private readonly customRepo: Repository<CustomFeature>,
     @InjectRepository(ClinicFeature)
     private readonly clinicFeatureRepo: Repository<ClinicFeature>,
     @InjectRepository(UserFeature)
     private readonly userFeatureRepo: Repository<UserFeature>,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
     @InjectRepository(Clinic) private readonly clinicRepo: Repository<Clinic>,
+    private readonly platform: PlatformSettingsService,
   ) {}
 
   // ── Fitur efektif ─────────────────────────────────────────────────────
@@ -64,15 +60,12 @@ export class FeaturesService {
   async effectiveFor(actor: FeatureActor) {
     const roleDefaults = ROLE_DEFAULT_FEATURES[actor.role] ?? [];
     if (!actor.clinicId || !CLINIC_ROLES.includes(actor.role)) {
-      return {
-        features: [...roleDefaults],
-        custom: [] as { key: string; name: string }[],
-      };
+      return { features: [...roleDefaults] };
     }
-    const [clinic, user, customs] = await Promise.all([
+    const [clinic, user, satusehatOn] = await Promise.all([
       this.clinicSettings(actor.clinicId),
       this.userSettings(actor.userId, actor.clinicId),
-      this.customRepo.find({ order: { name: 'ASC' } }),
+      this.platform.isSatusehatEnabled(),
     ]);
     const features = new Set<string>();
     for (const f of STANDARD_FEATURES) {
@@ -81,64 +74,80 @@ export class FeaturesService {
         if (def) features.add(f.key);
         continue;
       }
+      if (f.key === SATUSEHAT_FEATURE && !satusehatOn) continue;
       if (clinic.get(f.key) === false) continue;
       if (OPT_IN_FEATURES.has(f.key) && clinic.get(f.key) !== true) continue;
       if (user.get(f.key) ?? def) features.add(f.key);
     }
-    const custom: { key: string; name: string }[] = [];
-    for (const c of customs) {
-      if (clinic.get(c.key) !== true) continue;
-      if (user.get(c.key) ?? actor.role === UserRole.OWNER) {
-        features.add(c.key);
-        custom.push({ key: c.key, name: c.name });
-      }
-    }
-    return { features: [...features], custom };
+    return { features: [...features] };
   }
 
   /**
-   * Untuk guard backend: hanya fitur yang *sengaja dimatikan* (klinik / user)
-   * yang ditolak. Bawaan role tidak ditegakkan di sini — sudah oleh @Roles.
+   * Untuk guard backend: hanya fitur yang *sengaja dimatikan* (platform /
+   * klinik / user) yang ditolak. Bawaan role tidak ditegakkan di sini — sudah
+   * oleh @Roles.
    */
   async isExplicitlyDisabled(
     actor: FeatureActor,
     key: string,
   ): Promise<boolean> {
-    if (!actor.clinicId || !CLINIC_ROLES.includes(actor.role)) return false;
-    const clinic = await this.clinicSettings(actor.clinicId);
-    if (isCustomFeature(key)) {
-      if (clinic.get(key) !== true) return true;
-      const user = await this.userSettings(actor.userId, actor.clinicId);
-      return !(user.get(key) ?? actor.role === UserRole.OWNER);
+    if (
+      key === SATUSEHAT_FEATURE &&
+      !(await this.platform.isSatusehatEnabled())
+    ) {
+      return true;
     }
+    if (!actor.clinicId || !CLINIC_ROLES.includes(actor.role)) return false;
     if (!TOGGLEABLE_FEATURES.includes(key)) return false;
+    const clinic = await this.clinicSettings(actor.clinicId);
     if (clinic.get(key) === false) return true;
     if (OPT_IN_FEATURES.has(key) && clinic.get(key) !== true) return true;
     const user = await this.userSettings(actor.userId, actor.clinicId);
     return user.get(key) === false;
   }
 
-  // ── Super admin: fitur klinik & fitur custom ──────────────────────────
+  /**
+   * SATUSEHAT berjalan untuk klinik ini: saklar global menyala dan klinik
+   * tidak mematikannya. Dipakai semua jalur yang mengirim/mengambil data
+   * SATUSEHAT, termasuk pengiriman otomatis di latar belakang.
+   */
+  async isSatusehatActive(clinicId: number): Promise<boolean> {
+    if (!(await this.platform.isSatusehatEnabled())) return false;
+    const clinic = await this.clinicSettings(clinicId);
+    return clinic.get(SATUSEHAT_FEATURE) !== false;
+  }
+
+  // ── Owner klinik: saklar SATUSEHAT kliniknya ──────────────────────────
+
+  async clinicSatusehat(clinicId: number) {
+    const [globalEnabled, clinic] = await Promise.all([
+      this.platform.isSatusehatEnabled(),
+      this.clinicSettings(clinicId, true),
+    ]);
+    const enabled = clinic.get(SATUSEHAT_FEATURE) !== false;
+    return { globalEnabled, enabled, active: globalEnabled && enabled };
+  }
+
+  async setClinicSatusehat(clinicId: number, enabled: boolean, by: number) {
+    await this.saveClinicSetting(clinicId, SATUSEHAT_FEATURE, enabled, by);
+    return this.clinicSatusehat(clinicId);
+  }
+
+  // ── Super admin: fitur klinik ─────────────────────────────────────────
 
   async clinicFeatures(clinicId: number) {
     await this.assertClinic(clinicId);
-    const [settings, customs] = await Promise.all([
+    const [settings, satusehatGlobalEnabled] = await Promise.all([
       this.clinicSettings(clinicId, true),
-      this.customRepo.find({ order: { name: 'ASC' } }),
+      this.platform.isSatusehatEnabled(),
     ]);
     return {
+      satusehatGlobalEnabled,
       standard: STANDARD_FEATURES.filter((f) => f.toggleable).map((f) => ({
         key: f.key,
         label: f.label,
         enabled: settings.get(f.key) ?? !OPT_IN_FEATURES.has(f.key),
         isDefault: !settings.has(f.key),
-      })),
-      custom: customs.map((c) => ({
-        key: c.key,
-        label: c.name,
-        description: c.description,
-        enabled: settings.get(c.key) ?? false,
-        isDefault: !settings.has(c.key),
       })),
     };
   }
@@ -150,55 +159,9 @@ export class FeaturesService {
     by: number,
   ) {
     await this.assertClinic(clinicId);
-    await this.assertKnownKey(key);
-    if (enabled === null) {
-      await this.clinicFeatureRepo.delete({ clinicId, featureKey: key });
-    } else {
-      const row =
-        (await this.clinicFeatureRepo.findOne({
-          where: { clinicId, featureKey: key },
-        })) ??
-        this.clinicFeatureRepo.create({
-          clinicId,
-          featureKey: key,
-          createdBy: by,
-        });
-      Object.assign(row, { enabled, updatedBy: by });
-      await this.clinicFeatureRepo.save(row);
-    }
-    this.invalidate(`c:${clinicId}`);
+    this.assertKnownKey(key);
+    await this.saveClinicSetting(clinicId, key, enabled, by);
     return this.clinicFeatures(clinicId);
-  }
-
-  listCustom() {
-    return this.customRepo.find({ order: { name: 'ASC' } });
-  }
-
-  async createCustom(dto: CreateCustomFeatureDto, by: number) {
-    const key = `${CUSTOM_PREFIX}${dto.key}`;
-    if (await this.customRepo.exists({ where: { key } })) {
-      throw new ConflictException(`Fitur ${key} sudah ada`);
-    }
-    return this.customRepo.save(
-      this.customRepo.create({
-        key,
-        name: dto.name.trim(),
-        description: dto.description?.trim() || null,
-        createdBy: by,
-        updatedBy: by,
-      }),
-    );
-  }
-
-  async deleteCustom(id: number) {
-    const feature = await this.customRepo.findOne({ where: { id } });
-    if (!feature) throw new NotFoundException('Fitur custom tidak ditemukan');
-    await Promise.all([
-      this.clinicFeatureRepo.delete({ featureKey: feature.key }),
-      this.userFeatureRepo.delete({ featureKey: feature.key }),
-    ]);
-    await this.customRepo.delete({ id });
-    this.cache.clear();
   }
 
   // ── Owner: fitur per user ─────────────────────────────────────────────
@@ -208,15 +171,16 @@ export class FeaturesService {
       actor,
       targetUserId,
     );
-    const [clinic, settings, customs] = await Promise.all([
+    const [clinic, settings, satusehatOn] = await Promise.all([
       this.clinicSettings(clinicId),
       this.userSettings(target.id, clinicId, true),
-      this.customRepo.find({ order: { name: 'ASC' } }),
+      this.platform.isSatusehatEnabled(),
     ]);
     const roleDefaults = ROLE_DEFAULT_FEATURES[target.role] ?? [];
     const standard = STANDARD_FEATURES.filter(
       (f) =>
         f.toggleable &&
+        (f.key !== SATUSEHAT_FEATURE || satusehatOn) &&
         clinic.get(f.key) !== false &&
         (!OPT_IN_FEATURES.has(f.key) || clinic.get(f.key) === true),
     ).map((f) => {
@@ -229,16 +193,6 @@ export class FeaturesService {
         isDefault: !settings.has(f.key),
       };
     });
-    const custom = customs
-      .filter((c) => clinic.get(c.key) === true)
-      .map((c) => ({
-        key: c.key,
-        label: c.name,
-        description: c.description,
-        roleDefault: target.role === UserRole.OWNER,
-        enabled: settings.get(c.key) ?? target.role === UserRole.OWNER,
-        isDefault: !settings.has(c.key),
-      }));
     return {
       user: {
         id: target.id,
@@ -247,7 +201,6 @@ export class FeaturesService {
         role: target.role,
       },
       standard,
-      custom,
     };
   }
 
@@ -261,12 +214,9 @@ export class FeaturesService {
       actor,
       targetUserId,
     );
-    await this.assertKnownKey(key);
+    this.assertKnownKey(key);
     const clinic = await this.clinicSettings(clinicId);
-    const availableInClinic = isCustomFeature(key)
-      ? clinic.get(key) === true
-      : clinic.get(key) !== false;
-    if (!availableInClinic) {
+    if (clinic.get(key) === false) {
       throw new BadRequestException(
         'Fitur ini tidak tersedia untuk klinik Anda',
       );
@@ -297,6 +247,30 @@ export class FeaturesService {
 
   // ── Bantuan ───────────────────────────────────────────────────────────
 
+  private async saveClinicSetting(
+    clinicId: number,
+    key: string,
+    enabled: boolean | null,
+    by: number,
+  ) {
+    if (enabled === null) {
+      await this.clinicFeatureRepo.delete({ clinicId, featureKey: key });
+    } else {
+      const row =
+        (await this.clinicFeatureRepo.findOne({
+          where: { clinicId, featureKey: key },
+        })) ??
+        this.clinicFeatureRepo.create({
+          clinicId,
+          featureKey: key,
+          createdBy: by,
+        });
+      Object.assign(row, { enabled, updatedBy: by });
+      await this.clinicFeatureRepo.save(row);
+    }
+    this.invalidate(`c:${clinicId}`);
+  }
+
   private async assertCanManageUser(actor: FeatureActor, targetUserId: number) {
     const target = await this.userRepo.findOne({ where: { id: targetUserId } });
     if (!target) throw new NotFoundException('User tidak ditemukan');
@@ -325,13 +299,7 @@ export class FeaturesService {
     }
   }
 
-  private async assertKnownKey(key: string) {
-    if (isCustomFeature(key)) {
-      if (!(await this.customRepo.exists({ where: { key } }))) {
-        throw new BadRequestException(`Fitur ${key} tidak dikenal`);
-      }
-      return;
-    }
+  private assertKnownKey(key: string) {
     if (!TOGGLEABLE_FEATURES.includes(key)) {
       throw new BadRequestException(`Fitur ${key} tidak bisa diatur`);
     }

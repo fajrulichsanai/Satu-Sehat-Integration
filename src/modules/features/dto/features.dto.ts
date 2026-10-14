@@ -1,13 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsBoolean,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  Matches,
-  MaxLength,
-  ValidateIf,
-} from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsBoolean, IsString, MaxLength, ValidateIf } from 'class-validator';
 
 export class SetFeatureDto {
   @ApiProperty({ example: 'gudang' })
@@ -24,25 +16,8 @@ export class SetFeatureDto {
   enabled: boolean | null;
 }
 
-export class CreateCustomFeatureDto {
-  @ApiProperty({
-    example: 'laporan-bpjs',
-    description: 'Huruf kecil, angka, tanda hubung',
-  })
-  @Matches(/^[a-z0-9][a-z0-9-]{1,48}$/, {
-    message: 'Kunci hanya huruf kecil, angka, dan tanda hubung (2–49 karakter)',
-  })
-  key: string;
-
-  @ApiProperty({ example: 'Laporan BPJS' })
-  @IsNotEmpty()
-  @IsString()
-  @MaxLength(120)
-  name: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  description?: string;
+export class SetEnabledDto {
+  @ApiProperty({ example: true })
+  @IsBoolean()
+  enabled: boolean;
 }

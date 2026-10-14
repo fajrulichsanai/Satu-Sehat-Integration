@@ -69,6 +69,9 @@ export interface SyncResult {
 
 class StepError extends Error {}
 
+const SATUSEHAT_INACTIVE =
+  'SATUSEHAT tidak aktif untuk klinik ini (dimatikan klinik atau belum dibuka di platform)';
+
 /** localType link untuk satu diagnosis SOAP (unik per kode di satu catatan) */
 const diagnosisLinkType = (dx: SoapDiagnosis) =>
   `soap_dx:${dx.system}:${dx.code}`.slice(0, 50);
@@ -159,6 +162,7 @@ export class SyncOrchestratorService {
     clinicId: number,
   ): Promise<void> {
     try {
+      if (!(await this.satusehatClient.isActiveFor(clinicId))) return;
       const clinic = withEffectiveCredentials(
         await this.clinicRepo.findOne({ where: { id: clinicId } }),
       );
@@ -206,6 +210,18 @@ export class SyncOrchestratorService {
     clinicId: number,
   ): Promise<{ success: boolean; steps: SyncStep[] }> {
     const steps: SyncStep[] = [];
+    if (!(await this.satusehatClient.isActiveFor(clinicId))) {
+      steps.push(
+        this.fail(
+          '00. Konfigurasi',
+          'Organization',
+          'clinic',
+          clinicId,
+          SATUSEHAT_INACTIVE,
+        ),
+      );
+      return { success: false, steps };
+    }
     const clinic = withEffectiveCredentials(
       await this.clinicRepo.findOne({ where: { id: clinicId } }),
     );
@@ -721,6 +737,9 @@ export class SyncOrchestratorService {
     localId: number,
     clinicId: number,
   ): Promise<SyncResult> {
+    if (!(await this.satusehatClient.isActiveFor(clinicId))) {
+      return { success: false, error: SATUSEHAT_INACTIVE };
+    }
     const clinic = withEffectiveCredentials(
       await this.clinicRepo.findOne({ where: { id: clinicId } }),
     );

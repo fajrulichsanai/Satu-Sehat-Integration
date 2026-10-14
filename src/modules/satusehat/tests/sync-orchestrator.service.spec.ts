@@ -13,18 +13,20 @@ describe('SyncOrchestratorService', () => {
   });
   let clinicRepo: ReturnType<typeof repo>;
   let encounterRepo: ReturnType<typeof repo>;
+  let client: { isActiveFor: jest.Mock };
   let service: SyncOrchestratorService;
 
   beforeEach(() => {
     clinicRepo = repo();
     encounterRepo = repo();
     const others = Array.from({ length: 11 }, repo);
+    client = { isActiveFor: jest.fn().mockResolvedValue(true) };
     service = new (SyncOrchestratorService as any)(
       encounterRepo,
       others[0], // patient
       clinicRepo,
       ...others.slice(1),
-      {} as any, // SatusehatClientService
+      client, // SatusehatClientService
       {} as any, // KfaService
       repo(), // ToothCondition
       repo(), // DentalBridge
@@ -73,6 +75,21 @@ describe('SyncOrchestratorService', () => {
   it('background auto-sync does nothing for an unconfigured clinic (negative)', async () => {
     clinicRepo.findOne.mockResolvedValue({ id: 1 });
     await service.syncEncounterInBackground(5, 1);
+    expect(encounterRepo.findOne).not.toHaveBeenCalled();
+  });
+
+  it('sends nothing while SATUSEHAT is switched off for the clinic (negative)', async () => {
+    client.isActiveFor.mockResolvedValue(false);
+    clinicRepo.findOne.mockResolvedValue({
+      id: 1,
+      satusehatOrgId: '100',
+      satusehatClientId: 'c',
+      satusehatClientSecret: 's',
+    });
+    await service.syncEncounterInBackground(5, 1);
+    const result = await service.syncEncounterFull(5, 1);
+    expect(result.success).toBe(false);
+    expect(result.steps[0].message).toContain('tidak aktif');
     expect(encounterRepo.findOne).not.toHaveBeenCalled();
   });
 });

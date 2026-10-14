@@ -41,20 +41,13 @@ function memRepo(rows: Row[] = []) {
 describe('FeaturesService (kontrol fitur per klinik & user)', () => {
   const owner = { userId: 1, role: UserRole.OWNER, clinicId: 10 };
   const nurse = { userId: 3, role: UserRole.PERAWAT, clinicId: 10 };
-  let custom: ReturnType<typeof memRepo>;
+  let satusehatOn: boolean;
   let clinicF: ReturnType<typeof memRepo>;
   let userF: ReturnType<typeof memRepo>;
   let service: FeaturesService;
 
   beforeEach(() => {
-    custom = memRepo([
-      {
-        id: 1,
-        key: 'custom:laporan-bpjs',
-        name: 'Laporan BPJS',
-        description: null,
-      },
-    ]);
+    satusehatOn = false;
     clinicF = memRepo();
     userF = memRepo();
     const users = memRepo([
@@ -64,12 +57,15 @@ describe('FeaturesService (kontrol fitur per klinik & user)', () => {
       { id: 9, clinicId: 99, role: UserRole.DOKTER, name: 'Klinik lain' },
     ]);
     const clinics = memRepo([{ id: 10 }, { id: 99 }]);
+    const platform = {
+      isSatusehatEnabled: jest.fn(() => Promise.resolve(satusehatOn)),
+    };
     service = new FeaturesService(
-      custom as any,
       clinicF as any,
       userF as any,
       users as any,
       clinics as any,
+      platform as any,
     );
   });
 
@@ -86,7 +82,6 @@ describe('FeaturesService (kontrol fitur per klinik & user)', () => {
         'tampilan',
       ].sort(),
     );
-    expect(res.custom).toEqual([]);
   });
 
   it('opt-in features (imunisasi) stay off until the clinic enables them (edge)', async () => {
@@ -99,9 +94,7 @@ describe('FeaturesService (kontrol fitur per klinik & user)', () => {
       false,
     );
     await service.setClinicFeature(10, 'imunisasi', true, 0);
-    expect((await service.effectiveFor(nurse)).features).toContain(
-      'imunisasi',
-    );
+    expect((await service.effectiveFor(nurse)).features).toContain('imunisasi');
     expect(await service.isExplicitlyDisabled(nurse, 'imunisasi')).toBe(false);
   });
 
@@ -134,25 +127,43 @@ describe('FeaturesService (kontrol fitur per klinik & user)', () => {
     expect((await service.effectiveFor(nurse)).features).toContain('reservasi');
   });
 
-  it('custom feature appears only where the clinic enables it and only for chosen users (edge)', async () => {
-    expect((await service.effectiveFor(owner)).custom).toEqual([]); // klinik belum menyalakan
-    await service.setClinicFeature(10, 'custom:laporan-bpjs', true, 0);
-    expect((await service.effectiveFor(owner)).features).toContain(
-      'custom:laporan-bpjs',
+  it('SATUSEHAT stays off everywhere until the platform switch is on (negative)', async () => {
+    expect((await service.effectiveFor(owner)).features).not.toContain(
+      'satusehat',
     );
-    expect((await service.effectiveFor(nurse)).features).not.toContain(
-      'custom:laporan-bpjs',
-    );
-    await service.setUserFeature(owner, 3, 'custom:laporan-bpjs', true);
-    expect((await service.effectiveFor(nurse)).custom).toEqual([
-      { key: 'custom:laporan-bpjs', name: 'Laporan BPJS' },
-    ]);
+    expect(await service.isExplicitlyDisabled(owner, 'satusehat')).toBe(true);
+    expect(await service.isSatusehatActive(10)).toBe(false);
+    // juga untuk akun tanpa klinik (multi-klinik owner)
     expect(
       await service.isExplicitlyDisabled(
-        { userId: 2, role: UserRole.DOKTER, clinicId: 10 },
-        'custom:laporan-bpjs',
+        { userId: 7, role: UserRole.MULTI_CLINIC_OWNER },
+        'satusehat',
       ),
     ).toBe(true);
+    expect(await service.clinicSatusehat(10)).toEqual({
+      globalEnabled: false,
+      enabled: true,
+      active: false,
+    });
+  });
+
+  it('with the platform switch on, the clinic owner can turn SATUSEHAT off and back on (positive)', async () => {
+    satusehatOn = true;
+    expect((await service.effectiveFor(owner)).features).toContain('satusehat');
+    expect(await service.isSatusehatActive(10)).toBe(true);
+
+    await service.setClinicSatusehat(10, false, 1);
+    expect(await service.isSatusehatActive(10)).toBe(false);
+    expect(await service.isExplicitlyDisabled(owner, 'satusehat')).toBe(true);
+    expect((await service.effectiveFor(owner)).features).not.toContain(
+      'satusehat',
+    );
+    // klinik lain tidak terpengaruh
+    expect(await service.isSatusehatActive(99)).toBe(true);
+
+    const back = await service.setClinicSatusehat(10, true, 1);
+    expect(back).toEqual({ globalEnabled: true, enabled: true, active: true });
+    expect(await service.isSatusehatActive(10)).toBe(true);
   });
 
   it('owner cannot manage themselves, other clinics, or locked features (negative)', async () => {
@@ -166,8 +177,8 @@ describe('FeaturesService (kontrol fitur per klinik & user)', () => {
       service.setUserFeature(owner, 2, 'user-management', false),
     ).rejects.toThrow('tidak bisa diatur');
     await expect(
-      service.setClinicFeature(10, 'custom:tidak-ada', true, 0),
-    ).rejects.toThrow('tidak dikenal');
+      service.setClinicFeature(10, 'custom:laporan-bpjs', true, 0),
+    ).rejects.toThrow('tidak bisa diatur');
   });
 
   it('guard blocks only explicitly disabled features (positive/negative)', async () => {
