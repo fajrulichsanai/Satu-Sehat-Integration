@@ -80,6 +80,7 @@ describe('FeaturesService (kontrol fitur per klinik & user)', () => {
         'reservasi',
         'share-fee-saya',
         'tampilan',
+        'absensi',
       ].sort(),
     );
   });

@@ -33,6 +33,7 @@ export const STANDARD_FEATURES = [
   { key: 'konten', label: 'Konten', toggleable: true },
   { key: 'satusehat', label: 'SATUSEHAT', toggleable: true },
   { key: 'imunisasi', label: 'Imunisasi / Vaksin', toggleable: true },
+  { key: 'absensi', label: 'Absensi Pegawai', toggleable: true },
   { key: 'info-klinik', label: 'Info Klinik', toggleable: false },
   { key: 'user-management', label: 'Manajemen User', toggleable: false },
   { key: 'langganan', label: 'Langganan', toggleable: false },
@@ -89,6 +90,7 @@ const FULL_ACCESS: string[] = [
   'konten',
   'satusehat',
   'imunisasi',
+  'absensi',
 ];
 
 const CLINICIAN = [
@@ -100,6 +102,7 @@ const CLINICIAN = [
   'share-fee-saya',
   'tampilan',
   'imunisasi',
+  'absensi',
 ];
 
 /** Fitur bawaan tiap role (cerminan lib/permissions.ts di frontend) */
@@ -125,6 +128,7 @@ export const ROLE_DEFAULT_FEATURES: Record<UserRole, string[]> = {
     'konten',
     'tampilan',
     'satusehat',
+    'absensi',
   ],
   [UserRole.DOKTER]: CLINICIAN,
   [UserRole.PERAWAT]: CLINICIAN,

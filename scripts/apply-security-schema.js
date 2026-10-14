@@ -33,6 +33,7 @@ const MIGRATIONS = [
   '1790110000000-DataNakes',
   '1790120000000-SambungAkunNakes',
   '1790130000000-HapusFiturCustomPengaturanPlatform',
+  '1790140000000-AbsensiPegawai',
 ];
 
 async function main() {

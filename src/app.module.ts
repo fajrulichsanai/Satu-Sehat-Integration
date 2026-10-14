@@ -5,6 +5,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { FeaturesModule } from './modules/features/features.module';
+import { AttendanceModule } from './modules/attendance/attendance.module';
 import { FeatureAccessGuard } from './modules/features/feature-access.guard';
 import { ClinicalAccessModule } from './modules/clinical-access/clinical-access.module';
 import { ClinicalAccessGuard } from './modules/clinical-access/clinical-access.guard';
@@ -145,6 +146,7 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     GudangModule,
     SubscriptionsModule,
     FeaturesModule,
+    AttendanceModule,
     RecallsModule,
     ConsentsModule,
     MultiClinicModule,
