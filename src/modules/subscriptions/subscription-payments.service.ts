@@ -31,6 +31,11 @@ import {
   OwnerClinicLinkStatus,
 } from '../multi-clinic/entities/owner-clinic-link.entity';
 import { SubscriptionNotificationsService } from './subscription-notifications.service';
+import { StorageQuotaService } from '../storage-quota/storage-quota.service';
+import {
+  cycleMultiplier,
+  STORAGE_ADDON_PRICE_PER_GB,
+} from './limits/plan-limits';
 
 function toApiUrl(payment: SubscriptionPayment): SubscriptionPayment {
   if (!payment.proofUrl) return payment;
@@ -56,7 +61,14 @@ export class SubscriptionPaymentsService {
     private readonly linkRepository?: Repository<OwnerClinicLink>,
     @Optional()
     private readonly notifications?: SubscriptionNotificationsService,
+    @Optional() private readonly storageQuota?: StorageQuotaService,
   ) {}
+
+  /** Storage tambahan × Rp10.000/GB/bulan × siklus paket (tahunan = 10×). */
+  private storageCharge(extraGb: number, billingCycle: string | null) {
+    const gb = Math.max(0, extraGb);
+    return { extraStorageGb: gb, storageAmount: gb * STORAGE_ADDON_PRICE_PER_GB * cycleMultiplier(billingCycle) };
+  }
 
   /**
    * A branch linked to a Multi-Klinik Owner that pays for itself (PRD:
@@ -91,9 +103,16 @@ export class SubscriptionPaymentsService {
         ? Math.max(1, dto.quantity ?? 1)
         : 1;
     const ownerFee = selfPayingBranch ? 0 : Number(plan.ownerFee ?? 0);
-    const amount = Number(plan.price) * quantity + ownerFee;
+    // One bill per period: plan + storage tambahan (PRD Super Admin BL-06).
+    const storage = this.storageCharge(
+      (await this.storageQuota?.extraGbToBillForClinic(clinicId)) ?? 0,
+      plan.billingCycle,
+    );
+    const amount =
+      Number(plan.price) * quantity + ownerFee + storage.storageAmount;
     const payment = this.paymentRepository.create({
       clinicId,
+      ...storage,
       planId: dto.planId,
       quantity,
       amount,
@@ -140,9 +159,18 @@ export class SubscriptionPaymentsService {
       });
     }
     const quantity = linkedClinicIds.length;
-    const amount = Number(plan.price) * quantity + Number(plan.ownerFee ?? 0);
+    // Storage tambahan jatah bersama ikut tagihan owner.
+    const storage = this.storageCharge(
+      (await this.storageQuota?.extraGb({ ownerId })) ?? 0,
+      plan.billingCycle,
+    );
+    const amount =
+      Number(plan.price) * quantity +
+      Number(plan.ownerFee ?? 0) +
+      storage.storageAmount;
     const payment = this.paymentRepository.create({
       clinicId: null,
+      ...storage,
       ownerId,
       planId: dto.planId,
       quantity,

@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { StorageQuotaService, formatBytes } from '../storage-quota.service';
 import { StorageReconcileService } from '../storage-reconcile.service';
 import { StorageKind } from '../storage-usage.entity';
@@ -48,7 +48,7 @@ describe('StorageQuotaService', () => {
     service = new StorageQuotaService(repo as any, ds as any);
   });
 
-  it('uses the plan tier default for a single clinic (Starter 1 GB, Pro 5 GB) (positive)', async () => {
+  it('uses the plan tier default for a single clinic (Starter 1 GB, Pro 5 GB, trial 5 GB) (positive)', async () => {
     answer({ tier: 'basic', clinicUsed: 100 });
     expect(await service.quotaForClinic(1)).toMatchObject({
       scope: 'clinic',
@@ -64,6 +64,8 @@ describe('StorageQuotaService', () => {
     expect((await service.quotaForClinic(1)).limitBytes).toBe(20 * GB);
     answer({});
     expect((await service.quotaForClinic(1)).limitBytes).toBe(GB);
+    answer({ tier: 'trial' });
+    expect((await service.quotaForClinic(1)).limitBytes).toBe(5 * GB);
   });
 
   it('a multiklinik branch shares 5 GB × active branches with its siblings (positive)', async () => {
@@ -74,6 +76,9 @@ describe('StorageQuotaService', () => {
       usedBytes: 2 * GB,
       clinicUsedBytes: 300,
       activeBranches: 3,
+      includedGb: 15,
+      extraGb: 0,
+      pricePerGb: 10000,
     });
   });
 
@@ -102,6 +107,78 @@ describe('StorageQuotaService', () => {
   it('formats sizes for messages (edge)', () => {
     expect(formatBytes(1.5 * GB)).toBe('1,5 GB');
     expect(formatBytes(5 * 1024 ** 2)).toBe('5 MB');
+  });
+});
+
+describe('StorageQuotaService — storage tambahan (BL-05)', () => {
+  let ds: { query: jest.Mock };
+  let addons: { create: jest.Mock; save: jest.Mock };
+  let audit: { record: jest.Mock };
+  let service: StorageQuotaService;
+  let extra = { clinic: 0, owner: 0 };
+  let linkedTo: number | null = null;
+
+  beforeEach(() => {
+    extra = { clinic: 0, owner: 0 };
+    linkedTo = null;
+    ds = {
+      query: jest.fn((sql: string) => {
+        if (sql.includes('FROM owner_clinic_links') && sql.includes('LIMIT 1'))
+          return Promise.resolve(linkedTo ? [{ ownerId: linkedTo }] : []);
+        if (sql.includes('FROM storage_addons WHERE owner_id')) return Promise.resolve([{ gb: extra.owner }]);
+        if (sql.includes('FROM storage_addons WHERE clinic_id')) return Promise.resolve([{ gb: extra.clinic }]);
+        if (sql.includes('AS branches')) return Promise.resolve([{ branches: 2, used: 0 }]);
+        if (sql.includes('FROM clinic_subscriptions')) return Promise.resolve([{ tier: 'basic', storageGb: null }]);
+        return Promise.resolve([{ used: 0 }]);
+      }),
+    };
+    addons = { create: jest.fn((x) => x), save: jest.fn((x) => { if (x.ownerId) extra.owner += x.gb; else extra.clinic += x.gb; return Promise.resolve(x); }) };
+    audit = { record: jest.fn() };
+    service = new StorageQuotaService({} as any, ds as any, addons as any, audit as any);
+  });
+
+  const owner = { userId: 1, role: 'owner', clinicId: 9 };
+
+  it('a clinic owner buys storage for their clinic; the limit grows at once (positive)', async () => {
+    const q = await service.purchase(owner, 3);
+    expect(addons.save).toHaveBeenCalledWith(expect.objectContaining({ clinicId: 9, ownerId: null, gb: 3, source: 'purchase' }));
+    expect(q).toMatchObject({ scope: 'clinic', includedGb: 1, extraGb: 3, limitBytes: 4 * GB });
+    expect(audit.record).toHaveBeenCalled();
+  });
+
+  it('rejects an invalid amount (negative)', async () => {
+    for (const gb of [0, -1, 1.5, 101]) {
+      await expect(service.purchase(owner, gb)).rejects.toThrow(BadRequestException);
+    }
+  });
+
+  it('a branch owner/manager cannot buy for the shared pool; the multiklinik owner can (security)', async () => {
+    linkedTo = 5;
+    await expect(service.purchase(owner, 2)).rejects.toThrow(ForbiddenException);
+    const q = await service.purchase({ userId: 5, role: 'owner', clinicId: 9, branchMode: true }, 2);
+    expect(addons.save).toHaveBeenCalledWith(expect.objectContaining({ ownerId: 5, clinicId: null }));
+    expect(q).toMatchObject({ scope: 'multiklinik', includedGb: 10, extraGb: 2 });
+    const q2 = await service.purchase({ userId: 5, role: 'multi_clinic_owner' }, 1);
+    expect(q2.extraGb).toBe(3);
+  });
+
+  it('only the clinic, not the branch, is billed for its own add-ons (positive)', async () => {
+    extra.clinic = 4;
+    expect(await service.extraGbToBillForClinic(9)).toBe(4);
+    linkedTo = 5;
+    expect(await service.extraGbToBillForClinic(9)).toBe(0);
+  });
+
+  it('Super Admin adds and removes storage, never below zero (positive/negative)', async () => {
+    const sa = { userId: 99, role: 'super_admin' };
+    await service.adminAdjust(sa, { clinicId: 9 }, 5, 'kompensasi');
+    expect(addons.save).toHaveBeenCalledWith(expect.objectContaining({ source: 'admin', gb: 5, note: 'kompensasi' }));
+    await service.adminAdjust(sa, { clinicId: 9 }, -2);
+    expect(extra.clinic).toBe(3);
+    await expect(service.adminAdjust(sa, { clinicId: 9 }, -4)).rejects.toThrow(BadRequestException);
+    await expect(service.adminAdjust(sa, {}, 1)).rejects.toThrow(BadRequestException);
+    await expect(service.adminAdjust(sa, { clinicId: 9, ownerId: 5 }, 1)).rejects.toThrow(BadRequestException);
+    await expect(service.adminAdjust(sa, { clinicId: 9 }, 0)).rejects.toThrow(BadRequestException);
   });
 });
 

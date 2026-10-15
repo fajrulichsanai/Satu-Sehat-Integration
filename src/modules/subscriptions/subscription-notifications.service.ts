@@ -361,6 +361,7 @@ export class SubscriptionNotificationsService {
             <tr><td>No. kuitansi</td><td><strong>${number}</strong></td></tr>
             <tr><td>Tanggal</td><td>${paidAt}</td></tr>
             <tr><td>Paket</td><td>${planName}${payment.quantity > 1 ? ` × ${payment.quantity} klinik` : ''}</td></tr>
+            ${Number(payment.extraStorageGb) > 0 ? `<tr><td>Storage tambahan</td><td>${payment.extraStorageGb} GB · ${rupiah(payment.storageAmount)}</td></tr>` : ''}
             <tr><td>Jumlah</td><td><strong>${rupiah(payment.amount)}</strong></td></tr>
           </table>
           ${clinicList ? `<p>Langganan diperpanjang untuk:</p><ul>${clinicList}</ul>` : ''}

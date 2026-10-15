@@ -69,6 +69,13 @@ export class UsersController {
     return result;
   }
 
+  @Get('quota')
+  @Roles(UserRole.OWNER, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Akun aktif terhadap batas paket (atau jatah bersama multiklinik)' })
+  getQuota(@CurrentUser() user: any) {
+    return this.usersService.getAccountQuota(user);
+  }
+
   @Get('roles')
   @Roles(UserRole.OWNER, UserRole.SUPER_ADMIN)
   @ApiOperation({

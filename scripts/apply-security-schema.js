@@ -36,6 +36,7 @@ const MIGRATIONS = [
   '1790140000000-AbsensiPegawai',
   '1790150000000-MultiKlinikPersetujuan',
   '1790160000000-ManajerCabangPasswordStorage',
+  '1790170000000-BatasAkunStorageTambahan',
 ];
 
 async function main() {

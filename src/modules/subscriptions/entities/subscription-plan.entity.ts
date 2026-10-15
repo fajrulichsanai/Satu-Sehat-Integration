@@ -60,4 +60,9 @@ export class SubscriptionPlan extends BaseEntity {
   // StorageQuotaService. For MULTI_KLINIK it is per branch, shared.
   @Column({ name: 'storage_gb', type: 'int', nullable: true })
   storageGb: number | null;
+
+  // Batas akun aktif per klinik. Null = bawaan tier (Starter 5, Pro & masa
+  // coba 25). For MULTI_KLINIK it is per branch, shared.
+  @Column({ name: 'max_users', type: 'int', nullable: true })
+  maxUsers: number | null;
 }

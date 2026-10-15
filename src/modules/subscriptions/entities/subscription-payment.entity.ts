@@ -54,6 +54,19 @@ export class SubscriptionPayment extends BaseEntity {
   @Column({ name: 'covered_clinic_ids', type: 'json', nullable: true })
   coveredClinicIds: number[] | null;
 
+  // Storage tambahan yang ikut ditagih (PRD Super Admin BL-06): snapshot
+  // saat klaim, sudah termasuk dalam `amount`.
+  @Column({ name: 'extra_storage_gb', type: 'int', default: 0 })
+  extraStorageGb: number;
+
+  @Column('decimal', {
+    name: 'storage_amount',
+    precision: 12,
+    scale: 2,
+    default: 0,
+  })
+  storageAmount: number;
+
   @Column('decimal', { precision: 12, scale: 2 })
   amount: number;
 

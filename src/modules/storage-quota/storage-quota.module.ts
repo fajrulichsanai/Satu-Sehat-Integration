@@ -1,6 +1,8 @@
 import { Global, Module, OnApplicationBootstrap } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { StorageUsage } from './storage-usage.entity';
+import { StorageAddon } from './storage-addon.entity';
+import { AuditLogModule } from '../audit-log/audit-log.module';
 import { StorageQuotaService } from './storage-quota.service';
 import { StorageReconcileService } from './storage-reconcile.service';
 import { StorageQuotaController } from './storage-quota.controller';
@@ -11,7 +13,7 @@ import { StorageQuotaController } from './storage-quota.controller';
  */
 @Global()
 @Module({
-  imports: [TypeOrmModule.forFeature([StorageUsage])],
+  imports: [TypeOrmModule.forFeature([StorageUsage, StorageAddon]), AuditLogModule],
   controllers: [StorageQuotaController],
   providers: [StorageQuotaService, StorageReconcileService],
   exports: [StorageQuotaService],

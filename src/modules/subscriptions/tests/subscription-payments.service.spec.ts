@@ -20,6 +20,7 @@ import { ClinicSubscriptionsService } from '../clinic-subscriptions.service';
 import { SubscriptionPlanTier } from '../entities/subscription-plan.entity';
 import { OwnerClinicLink } from '../../multi-clinic/entities/owner-clinic-link.entity';
 import { SubscriptionNotificationsService } from '../subscription-notifications.service';
+import { StorageQuotaService } from '../../storage-quota/storage-quota.service';
 
 function buildQb(result: [any[], number] = [[], 0]) {
   return {
@@ -47,6 +48,7 @@ describe('SubscriptionPaymentsService', () => {
   let clinicSubsService: { extendSubscription: jest.Mock };
   let linkRepo: { findOne: jest.Mock };
   let notifications: { sendPaymentReceipt: jest.Mock };
+  let storageQuota: { extraGbToBillForClinic: jest.Mock; extraGb: jest.Mock };
 
   beforeEach(async () => {
     paymentRepo = {
@@ -61,6 +63,10 @@ describe('SubscriptionPaymentsService', () => {
     clinicSubsService = { extendSubscription: jest.fn() };
     linkRepo = { findOne: jest.fn().mockResolvedValue(null) };
     notifications = { sendPaymentReceipt: jest.fn().mockResolvedValue(true) };
+    storageQuota = {
+      extraGbToBillForClinic: jest.fn().mockResolvedValue(0),
+      extraGb: jest.fn().mockResolvedValue(0),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -75,6 +81,7 @@ describe('SubscriptionPaymentsService', () => {
         { provide: ClinicSubscriptionsService, useValue: clinicSubsService },
         { provide: getRepositoryToken(OwnerClinicLink), useValue: linkRepo },
         { provide: SubscriptionNotificationsService, useValue: notifications },
+        { provide: StorageQuotaService, useValue: storageQuota },
       ],
     }).compile();
 
@@ -86,6 +93,25 @@ describe('SubscriptionPaymentsService', () => {
   it('should be defined', () => expect(service).toBeDefined());
 
   describe('claim', () => {
+    it('adds storage tambahan to the same bill: Rp10.000/GB/bulan, 10× for yearly (positive)', async () => {
+      storageQuota.extraGbToBillForClinic.mockResolvedValue(3);
+      plansService.findOne.mockResolvedValue({ id: 1, tier: SubscriptionPlanTier.BASIC, price: 99000, ownerFee: 0, billingCycle: 'monthly' });
+      let result = await service.claim(1, { planId: 1 }, 9);
+      expect(result).toMatchObject({ extraStorageGb: 3, storageAmount: 30000, amount: 129000 });
+
+      plansService.findOne.mockResolvedValue({ id: 2, tier: SubscriptionPlanTier.BASIC, price: 990000, ownerFee: 0, billingCycle: 'yearly' });
+      result = await service.claim(1, { planId: 2 }, 9);
+      expect(result).toMatchObject({ extraStorageGb: 3, storageAmount: 300000, amount: 1290000 });
+    });
+
+    it('bills the multiklinik pool add-ons to the owner (positive)', async () => {
+      storageQuota.extraGb.mockResolvedValue(2);
+      plansService.findOne.mockResolvedValue({ id: 3, tier: SubscriptionPlanTier.MULTI_KLINIK, price: 124000, ownerFee: 50000, billingCycle: 'monthly' });
+      const result = await service.claimForOwner(5, [10, 11], { planId: 3 } as any, 5);
+      expect(storageQuota.extraGb).toHaveBeenCalledWith({ ownerId: 5 });
+      expect(result).toMatchObject({ quantity: 2, extraStorageGb: 2, storageAmount: 20000, amount: 318000 });
+    });
+
     it('charges a self-paying multiklinik branch one branch, no owner fee (positive)', async () => {
       plansService.findOne.mockResolvedValue({
         id: 2,

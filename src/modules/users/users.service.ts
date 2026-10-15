@@ -15,7 +15,10 @@ import { User } from './entities/user.entity';
 import { Practitioner } from '../practitioners/entities/practitioner.entity';
 import { UserRole, ROLE_LEVEL, isClinician } from '../../enums';
 import { InviteUserDto, UpdateUserDto } from './dto/user.dto';
-import { assertAccountPoolHasRoom } from '../multi-clinic/account-pool';
+import {
+  accountQuotaForClinic,
+  assertAccountRoom,
+} from '../multi-clinic/account-pool';
 import { UsersMailService } from './users-mail.service';
 
 interface CurrentUserPayload {
@@ -417,6 +420,18 @@ export class UsersService {
     };
   }
 
+  /** Akun aktif vs batas paket / jatah bersama, untuk User Management. */
+  async getAccountQuota(currentUser: CurrentUserPayload) {
+    if (!currentUser.clinicId) {
+      return { success: true, data: null };
+    }
+    const data = await accountQuotaForClinic(
+      this.userRepository.manager,
+      currentUser.clinicId,
+    );
+    return { success: true, data };
+  }
+
   async getRoles(currentUser: CurrentUserPayload) {
     this.logger.log('[GET-ROLES] Mengambil daftar role yang tersedia');
 
@@ -593,13 +608,14 @@ export class UsersService {
       await this.assertCanAppointManager(user.clinicId, user.id);
     }
 
-    // A pending/inactive account becoming active takes a seat from the
-    // multiklinik account pool (PRD MK-07).
-    if (user.role === UserRole.PENDING || !user.isActive) {
-      await assertAccountPoolHasRoom(
-        this.userRepository.manager,
-        user.clinicId,
-      );
+    // A pending/inactive account becoming active takes a seat: from the
+    // plan's account limit, or the multiklinik pool (PRD Super Admin BL-02).
+    // Super Admin may go over a plan's limit on purpose (support cases).
+    if (
+      (user.role === UserRole.PENDING || !user.isActive) &&
+      !this.isSuperAdmin(currentUser)
+    ) {
+      await assertAccountRoom(this.userRepository.manager, user.clinicId);
     }
 
     user.role = newRole;
@@ -670,7 +686,9 @@ export class UsersService {
       });
     }
 
-    await assertAccountPoolHasRoom(this.userRepository.manager, clinicId);
+    if (!this.isSuperAdmin(currentUser)) {
+      await assertAccountRoom(this.userRepository.manager, clinicId);
+    }
     if (dto.role === UserRole.MANAJER_CABANG) {
       await this.assertCanAppointManager(clinicId);
     }

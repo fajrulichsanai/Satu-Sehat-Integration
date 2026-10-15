@@ -56,6 +56,15 @@ export class CreateSubscriptionPlanDto {
   @IsNumber()
   @Min(0)
   storageGb?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Batas akun aktif per klinik. Kosong = bawaan tier (Starter 5, Pro 25, Multi Klinik 25 per cabang)',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  maxUsers?: number;
 }
 
 export class UpdateSubscriptionPlanDto extends PartialType(
