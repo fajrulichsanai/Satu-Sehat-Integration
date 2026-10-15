@@ -34,6 +34,8 @@ export const STANDARD_FEATURES = [
   { key: 'satusehat', label: 'SATUSEHAT', toggleable: true },
   { key: 'imunisasi', label: 'Imunisasi / Vaksin', toggleable: true },
   { key: 'absensi', label: 'Absensi Pegawai', toggleable: true },
+  { key: 'payroll', label: 'Penggajian', toggleable: true },
+  { key: 'ulang-tahun', label: 'Promo Ulang Tahun', toggleable: true },
   { key: 'info-klinik', label: 'Info Klinik', toggleable: false },
   { key: 'user-management', label: 'Manajemen User', toggleable: false },
   { key: 'langganan', label: 'Langganan', toggleable: false },
@@ -91,6 +93,8 @@ const FULL_ACCESS: string[] = [
   'satusehat',
   'imunisasi',
   'absensi',
+  'payroll',
+  'ulang-tahun',
 ];
 
 const CLINICIAN = [
@@ -126,6 +130,7 @@ export const ROLE_DEFAULT_FEATURES: Record<UserRole, string[]> = {
     'info-klinik',
     'tarif',
     'referral',
+    'ulang-tahun',
     'langganan',
     'konten',
     'tampilan',

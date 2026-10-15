@@ -37,6 +37,7 @@ import { ContentsModule } from './modules/contents/contents.module';
 import { TerminologyModule } from './modules/terminology/terminology.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { OperationalRecordsModule } from './modules/operational-records/operational-records.module';
+import { PayrollModule } from './modules/payroll/payroll.module';
 import { DoctorFeeModule } from './modules/doctor-fee/doctor-fee.module';
 import { EncounterSoapNotesModule } from './modules/encounter-soap-notes/encounter-soap-notes.module';
 import { PhysicalExaminationModule } from './modules/physical-examination/physical-examination.module';
@@ -136,6 +137,7 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     TerminologyModule,
     DashboardModule,
     OperationalRecordsModule,
+    PayrollModule,
     DoctorFeeModule,
     EncounterSoapNotesModule,
     PhysicalExaminationModule,

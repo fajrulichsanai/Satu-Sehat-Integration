@@ -70,6 +70,12 @@ export class BiayaLabPayrollTemplateOpname1790220000000 implements MigrationInte
           CONSTRAINT \`FK_payroll_run_clinic\` FOREIGN KEY (\`clinic_id\`) REFERENCES \`clinics\` (\`id\`) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
     }
+    if (!(await q.hasColumn('payroll_runs', 'operational_record_id'))) {
+      // Catatan pengeluaran "gaji" yang dibuat saat payroll ditandai dibayar
+      await q.query(
+        'ALTER TABLE `payroll_runs` ADD `operational_record_id` INT NULL',
+      );
+    }
     if (!(await q.hasTable('payroll_items'))) {
       await q.query(`
         CREATE TABLE \`payroll_items\` (

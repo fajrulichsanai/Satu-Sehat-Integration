@@ -25,5 +25,6 @@ import { WorkSchedule } from './entities/work-schedule.entity';
   ],
   controllers: [AttendanceController],
   providers: [AttendanceService, AttendanceConfigService],
+  exports: [AttendanceService],
 })
 export class AttendanceModule {}

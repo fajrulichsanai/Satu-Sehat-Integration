@@ -40,5 +40,6 @@ import { FinancialReportPdfService } from './financial-report-pdf.service';
     InvestorReportPdfService,
     FinancialReportPdfService,
   ],
+  exports: [ReportsService],
 })
 export class ReportsModule {}
