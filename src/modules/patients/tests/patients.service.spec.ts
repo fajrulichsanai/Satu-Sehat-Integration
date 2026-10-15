@@ -188,6 +188,120 @@ describe('PatientsService', () => {
     });
   });
 
+  describe('findAll kategori', () => {
+    it('filters babies only when kategori=bayi (positive)', async () => {
+      const qb = buildQb();
+      patientRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll(clinicId, {
+        page: 1,
+        limit: 20,
+        kategori: 'bayi',
+      } as any);
+
+      const clauses = qb.andWhere.mock.calls.map((c: unknown[]) => c[0]);
+      expect(clauses).toContainEqual(
+        expect.stringMatching(/^\(\(p\.nik IS NULL/),
+      );
+    });
+
+    it('excludes babies when kategori=umum and keeps gender filter (positive)', async () => {
+      const qb = buildQb();
+      patientRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll(clinicId, {
+        page: 1,
+        limit: 20,
+        gender: 'male',
+        kategori: 'umum',
+      } as any);
+
+      const clauses = qb.andWhere.mock.calls.map((c: unknown[]) => c[0]);
+      expect(clauses).toContain('p.gender = :gender');
+      expect(clauses).toContainEqual(
+        expect.stringMatching(/^NOT \(\(p\.nik IS NULL/),
+      );
+    });
+
+    it('adds no category clause when kategori is omitted (edge)', async () => {
+      const qb = buildQb();
+      patientRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll(clinicId, { page: 1, limit: 20 } as any);
+
+      expect(qb.andWhere).not.toHaveBeenCalled();
+      expect(qb.skip).toHaveBeenCalledWith(0);
+      expect(qb.take).toHaveBeenCalledWith(20);
+    });
+
+    it('ignores a whitespace-only search (edge)', async () => {
+      const qb = buildQb();
+      patientRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll(clinicId, {
+        page: 1,
+        limit: 20,
+        search: '   ',
+      } as any);
+
+      expect(qb.andWhere).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getStats', () => {
+    it('returns numeric counts from the aggregate row (positive)', async () => {
+      const qb = buildQb({
+        getRawOne: jest.fn().mockResolvedValue({
+          total: '250',
+          male: '120',
+          female: '110',
+          baby: '20',
+        }),
+      });
+      patientRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const result = await service.getStats(clinicId, undefined);
+
+      expect(result).toEqual({ total: 250, male: 120, female: 110, baby: 20 });
+      expect(qb.where).toHaveBeenCalledWith('p.clinicId = :clinicId', {
+        clinicId,
+      });
+    });
+
+    it('returns zeros for an empty clinic (SUM is NULL) (edge)', async () => {
+      const qb = buildQb({
+        getRawOne: jest.fn().mockResolvedValue({
+          total: '0',
+          male: null,
+          female: null,
+          baby: null,
+        }),
+      });
+      patientRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await expect(service.getStats(clinicId, undefined)).resolves.toEqual({
+        total: 0,
+        male: 0,
+        female: 0,
+        baby: 0,
+      });
+    });
+
+    it('applies the same search filter as the list (positive)', async () => {
+      const qb = buildQb({
+        getRawOne: jest.fn().mockResolvedValue({ total: '1' }),
+      });
+      patientRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.getStats(clinicId, ' Budi ');
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('p.name LIKE'),
+        { search: '%Budi%', nikHash: hashNik('Budi') },
+      );
+    });
+  });
+
   describe('findOne', () => {
     it('returns the patient when found (positive)', async () => {
       patientRepo.findOne.mockResolvedValue({ id: 1, clinicId });
@@ -318,7 +432,7 @@ describe('PatientsService', () => {
       const qb = buildQb({ getOne: jest.fn().mockResolvedValue(null) });
       patientRepo.createQueryBuilder.mockReturnValue(qb);
 
-      const result = await service.update(1, clinicId, { name: 'B' } as any);
+      const result = await service.update(1, clinicId, { name: 'B' });
 
       expect(result.name).toBe('B');
       expect(patientRepo.createQueryBuilder).not.toHaveBeenCalled();
@@ -422,7 +536,7 @@ describe('PatientsService', () => {
         },
       ]);
       const r = await service.searchSatusehatPatients(
-        { nik: '9271060312000001' } as any,
+        { nik: '9271060312000001' },
         clinicId,
       );
       expect(r.results[0]).toMatchObject({

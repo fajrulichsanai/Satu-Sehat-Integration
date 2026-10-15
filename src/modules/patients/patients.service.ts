@@ -23,6 +23,7 @@ import {
 import { PatientRecall } from '../recalls/entities/patient-recall.entity';
 import {
   CreatePatientDto,
+  PatientCategory,
   PatientQueryDto,
   UpdatePatientDto,
 } from './dto/patient.dto';
@@ -37,6 +38,11 @@ import {
   ClinicalAccessService,
   type ClinicalUser,
 } from '../clinical-access/clinical-access.service';
+
+// Bayi = belum punya NIK sendiri dan didaftarkan memakai NIK ibu. Harus sama
+// dengan aturan di frontend (list-pasien) agar filter & statistik konsisten.
+const BABY_CONDITION =
+  "((p.nik IS NULL OR p.nik = '') AND p.nikIbu IS NOT NULL AND p.nikIbu <> '')";
 
 @Injectable()
 export class PatientsService {
@@ -77,21 +83,16 @@ export class PatientsService {
     this.logger.log(
       `[GET-ALL] Mengambil daftar pasien | clinicId=${clinicId}, search=${query.search || '-'}`,
     );
-    const qb = this.patientRepository
-      .createQueryBuilder('p')
-      .where('p.clinicId = :clinicId', { clinicId });
-    // Dokter/perawat hanya melihat pasien yang pernah/sedang ditanganinya
-    this.clinicalAccess?.scopePatients(qb, user);
-
-    if (query.search) {
-      qb.andWhere(
-        '(p.name LIKE :search OR p.noRm LIKE :search OR p.nikHash = :nikHash)',
-        { search: `%${query.search}%`, nikHash: hashNik(query.search) },
-      );
-    }
+    const qb = this.scopedPatientQuery(clinicId, query.search, user);
 
     if (query.gender) {
       qb.andWhere('p.gender = :gender', { gender: query.gender });
+    }
+
+    if (query.kategori === PatientCategory.BAYI) {
+      qb.andWhere(BABY_CONDITION);
+    } else if (query.kategori === PatientCategory.UMUM) {
+      qb.andWhere(`NOT ${BABY_CONDITION}`);
     }
 
     const sortBy = query.sortBy || 'p.createdAt';
@@ -102,6 +103,58 @@ export class PatientsService {
     qb.orderBy(finalSort, query.sortOrder);
 
     return paginate(qb, query);
+  }
+
+  /**
+   * Ringkasan jumlah pasien untuk kartu statistik di daftar pasien. Dihitung
+   * di server agar angka tetap benar meskipun daftar dimuat per halaman.
+   * Laki-laki/perempuan tidak termasuk bayi (sama seperti pengelompokan UI).
+   */
+  async getStats(
+    clinicId: number,
+    search: string | undefined,
+    user?: ClinicalUser,
+  ): Promise<{ total: number; male: number; female: number; baby: number }> {
+    const raw = await this.scopedPatientQuery(clinicId, search, user)
+      .select('COUNT(*)', 'total')
+      .addSelect(`SUM(CASE WHEN ${BABY_CONDITION} THEN 1 ELSE 0 END)`, 'baby')
+      .addSelect(
+        `SUM(CASE WHEN NOT ${BABY_CONDITION} AND p.gender = 'male' THEN 1 ELSE 0 END)`,
+        'male',
+      )
+      .addSelect(
+        `SUM(CASE WHEN NOT ${BABY_CONDITION} AND p.gender = 'female' THEN 1 ELSE 0 END)`,
+        'female',
+      )
+      .getRawOne<Record<string, string | number | null>>();
+    const num = (v: string | number | null | undefined) => Number(v ?? 0) || 0;
+    return {
+      total: num(raw?.total),
+      male: num(raw?.male),
+      female: num(raw?.female),
+      baby: num(raw?.baby),
+    };
+  }
+
+  private scopedPatientQuery(
+    clinicId: number,
+    search: string | undefined,
+    user?: ClinicalUser,
+  ) {
+    const qb = this.patientRepository
+      .createQueryBuilder('p')
+      .where('p.clinicId = :clinicId', { clinicId });
+    // Dokter/perawat hanya melihat pasien yang pernah/sedang ditanganinya
+    this.clinicalAccess?.scopePatients(qb, user);
+
+    const term = search?.trim();
+    if (term) {
+      qb.andWhere(
+        '(p.name LIKE :search OR p.noRm LIKE :search OR p.nikHash = :nikHash)',
+        { search: `%${term}%`, nikHash: hashNik(term) },
+      );
+    }
+    return qb;
   }
 
   async getReferralSummary(clinicId: number) {

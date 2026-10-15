@@ -351,6 +351,11 @@ export class CreatePatientDto {
 
 export class UpdatePatientDto extends PartialType(CreatePatientDto) {}
 
+export enum PatientCategory {
+  BAYI = 'bayi',
+  UMUM = 'umum',
+}
+
 export class PatientQueryDto extends PaginationDto {
   @ApiPropertyOptional({ description: 'Search by name, NIK, or No. RM' })
   @IsOptional()
@@ -361,6 +366,22 @@ export class PatientQueryDto extends PaginationDto {
   @IsOptional()
   @IsEnum(Gender)
   gender?: Gender;
+
+  @ApiPropertyOptional({
+    enum: PatientCategory,
+    description:
+      'bayi = belum punya NIK sendiri (terdaftar via NIK ibu); umum = selain bayi',
+  })
+  @IsOptional()
+  @IsEnum(PatientCategory)
+  kategori?: PatientCategory;
+}
+
+export class PatientStatsQueryDto {
+  @ApiPropertyOptional({ description: 'Search by name, NIK, or No. RM' })
+  @IsOptional()
+  @IsString()
+  search?: string;
 }
 
 export class PatientResponseDto {

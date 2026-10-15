@@ -19,6 +19,7 @@ import { PatientsService } from './patients.service';
 import {
   CreatePatientDto,
   PatientQueryDto,
+  PatientStatsQueryDto,
   SearchSatusehatPatientDto,
   UpdatePatientDto,
 } from './dto/patient.dto';
@@ -70,6 +71,21 @@ export class PatientsController {
       message: 'Pasien berhasil didaftarkan',
       data: patient,
     };
+  }
+
+  @Get('stats')
+  @ApiOperation({ summary: 'Patient counts (total, male, female, baby)' })
+  async stats(
+    @ClinicId() clinicId: number,
+    @Query() query: PatientStatsQueryDto,
+    @Req() req: { user?: { userId: number; role: string } },
+  ) {
+    const data = await this.patientsService.getStats(
+      clinicId,
+      query.search,
+      req.user,
+    );
+    return { success: true, data };
   }
 
   @Get('search-satusehat')
