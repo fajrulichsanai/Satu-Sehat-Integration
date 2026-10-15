@@ -176,7 +176,11 @@ export class SubscriptionNotificationsService {
     const [clinic, owners] = await Promise.all([
       this.clinicRepository.findOne({ where: { id: sub.clinicId } }),
       this.userRepository.find({
-        where: { clinicId: sub.clinicId, role: UserRole.OWNER, isActive: true },
+        where: {
+          clinicId: sub.clinicId,
+          role: In([UserRole.OWNER, UserRole.MANAJER_CABANG]),
+          isActive: true,
+        },
       }),
     ]);
 
@@ -244,7 +248,11 @@ export class SubscriptionNotificationsService {
     const [clinic, owners, billingOwner] = await Promise.all([
       this.clinicRepository.findOne({ where: { id: sub.clinicId } }),
       this.userRepository.find({
-        where: { clinicId: sub.clinicId, role: UserRole.OWNER, isActive: true },
+        where: {
+          clinicId: sub.clinicId,
+          role: In([UserRole.OWNER, UserRole.MANAJER_CABANG]),
+          isActive: true,
+        },
       }),
       this.billingOwnerFor(sub.clinicId),
     ]);

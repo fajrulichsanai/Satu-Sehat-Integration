@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -11,6 +12,8 @@ import { SupportingExamImage } from './entities/supporting-exam-image.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import { CreateSupportingExamImageDto } from './dto/supporting-exam-image.dto';
 import { supportingExamFileToUrl } from './upload/supporting-exam-image.storage';
+import { StorageQuotaService } from '../storage-quota/storage-quota.service';
+import { StorageKind } from '../storage-quota/storage-usage.entity';
 
 function toApiUrl(
   encounterId: number,
@@ -30,6 +33,7 @@ export class SupportingExamService {
     private readonly imageRepository: Repository<SupportingExamImage>,
     @InjectRepository(Encounter)
     private readonly encounterRepository: Repository<Encounter>,
+    @Optional() private readonly storageQuota?: StorageQuotaService,
   ) {}
 
   async listByEncounter(
@@ -56,6 +60,13 @@ export class SupportingExamService {
     if (!fileUrl) {
       throw new BadRequestException('Gambar wajib diunggah');
     }
+    // Multer has already written the file: over quota, drop it again.
+    try {
+      await this.storageQuota?.assertRoom(clinicId, file?.size ?? 0);
+    } catch (error) {
+      this.deleteFile(fileUrl);
+      throw error;
+    }
     const image = this.imageRepository.create({
       encounterId,
       imageType: dto.imageType,
@@ -66,6 +77,12 @@ export class SupportingExamService {
       createdBy: userId,
     });
     const saved = await this.imageRepository.save(image);
+    await this.storageQuota?.record(
+      clinicId,
+      StorageKind.SUPPORTING_EXAM,
+      fileUrl,
+      file?.size ?? 0,
+    );
     return toApiUrl(encounterId, saved);
   }
 
@@ -84,7 +101,12 @@ export class SupportingExamService {
       );
     }
     await this.imageRepository.delete({ id: imageId });
-    const filePath = join(process.cwd(), image.fileUrl.replace(/^\//, ''));
+    this.deleteFile(image.fileUrl);
+    await this.storageQuota?.forget(StorageKind.SUPPORTING_EXAM, image.fileUrl);
+  }
+
+  private deleteFile(fileUrl: string) {
+    const filePath = join(process.cwd(), fileUrl.replace(/^\//, ''));
     if (existsSync(filePath)) {
       unlinkSync(filePath);
     }

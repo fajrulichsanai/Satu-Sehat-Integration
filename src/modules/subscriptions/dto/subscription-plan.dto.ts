@@ -47,6 +47,15 @@ export class CreateSubscriptionPlanDto {
   @IsNumber()
   @Min(0)
   ownerFee?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Jatah storage file layanan (GB). Kosong = bawaan tier (Starter 1, Pro 5, Multi Klinik 5 per cabang)',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  storageGb?: number;
 }
 
 export class UpdateSubscriptionPlanDto extends PartialType(

@@ -35,6 +35,7 @@ const MIGRATIONS = [
   '1790130000000-HapusFiturCustomPengaturanPlatform',
   '1790140000000-AbsensiPegawai',
   '1790150000000-MultiKlinikPersetujuan',
+  '1790160000000-ManajerCabangPasswordStorage',
 ];
 
 async function main() {

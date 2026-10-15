@@ -110,6 +110,8 @@ export const ROLE_DEFAULT_FEATURES: Record<UserRole, string[]> = {
   [UserRole.SUPER_ADMIN]: ['api', 'user-management', 'tampilan'],
   [UserRole.MULTI_CLINIC_OWNER]: ['tampilan'],
   [UserRole.OWNER]: [...FULL_ACCESS, 'onboarding', 'data-privasi'],
+  // Manajer Cabang acts with the owner's rights (see JwtStrategy).
+  [UserRole.MANAJER_CABANG]: [...FULL_ACCESS, 'onboarding', 'data-privasi'],
   [UserRole.ADMIN]: [
     'pasien',
     'reservasi',

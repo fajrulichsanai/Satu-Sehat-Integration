@@ -7,6 +7,7 @@ import {
   ConflictException,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { AuthService, LEGAL_TERMS_VERSION } from '../auth.service';
@@ -454,6 +455,51 @@ describe('AuthService', () => {
       const result = await service.forgotPassword('nobody@x.com');
       expect(result.success).toBe(true);
       expect(userRepo.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('changePassword', () => {
+    const claims = { sub: 1, jti: 'j1', exp: Math.floor(Date.now() / 1000) + 600, at: 1000 } as any;
+
+    beforeEach(() => {
+      userRepo.findOne.mockResolvedValue({
+        id: 1,
+        email: 'a@x.id',
+        role: UserRole.ADMIN,
+        passwordHash: 'old-hash',
+        tokenVersion: 2,
+        mustChangePassword: true,
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+    });
+
+    it('changes the password, clears the flag, ends other sessions and returns a fresh token (positive)', async () => {
+      const res = await service.changePassword(claims, 'Lama1234', 'Baru12345');
+      expect(userRepo.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ mustChangePassword: false, tokenVersion: 3, passwordHash: 'hashed-value' }),
+      );
+      expect(revokedRepo.upsert).toHaveBeenCalledWith(expect.objectContaining({ jti: 'j1' }), ['jti']);
+      expect(res.data.accessToken).toBe('signed.jwt.token');
+      expect(jwtService.sign).toHaveBeenCalledWith(expect.objectContaining({ tv: 3, at: 1000 }));
+    });
+
+    it('rejects a wrong current password (negative)', async () => {
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+      await expect(service.changePassword(claims, 'salah', 'Baru12345')).rejects.toThrow(BadRequestException);
+      expect(userRepo.update).not.toHaveBeenCalledWith(1, expect.objectContaining({ passwordHash: expect.anything() }));
+    });
+
+    it('rejects a weak or unchanged password (negative)', async () => {
+      await expect(service.changePassword(claims, 'Lama1234', 'Lama1234')).rejects.toThrow(BadRequestException);
+      await expect(service.changePassword(claims, 'Lama1234', 'abcdefgh')).rejects.toThrow(BadRequestException);
+      await expect(service.changePassword(claims, 'Lama1234', 'Ab1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('refuses while impersonating (security)', async () => {
+      await expect(
+        service.changePassword({ ...claims, imp: true }, 'Lama1234', 'Baru12345'),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 

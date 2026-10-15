@@ -81,8 +81,34 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       tokenClaims: payload,
     };
 
+    // A temporary password must be replaced before anything else is used
+    // (PRD Multi-Klinik alur A). /auth/* stays open so the user can see who
+    // they are, change the password and log out. Super Admin impersonation
+    // is exempt — it never knows the user's password.
+    if (
+      user.mustChangePassword &&
+      !payload.imp &&
+      req?.path &&
+      !req.path.startsWith('/auth/')
+    ) {
+      throw new ForbiddenException({
+        success: false,
+        error: {
+          code: 'PASSWORD_CHANGE_REQUIRED',
+          message: 'Ganti password sementara Anda terlebih dahulu.',
+        },
+      });
+    }
+
     if (user.role === UserRole.MULTI_CLINIC_OWNER) {
       return this.withBranch(base, req);
+    }
+    if (user.role === UserRole.MANAJER_CABANG) {
+      // Manajer Cabang = owner rights for their own clinic (PRD MC-01), so
+      // every @Roles(OWNER) endpoint serves them unchanged. The real role
+      // stays in actorRole for the audit log and for the few owner-only
+      // limits (no managing peers, see UsersService).
+      return { ...base, role: UserRole.OWNER, actorRole: UserRole.MANAJER_CABANG };
     }
     return base;
   }

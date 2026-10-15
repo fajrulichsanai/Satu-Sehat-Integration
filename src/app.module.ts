@@ -7,6 +7,7 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { BranchAuditInterceptor } from './modules/audit-log/interceptors/branch-audit.interceptor';
 import { FeaturesModule } from './modules/features/features.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
+import { StorageQuotaModule } from './modules/storage-quota/storage-quota.module';
 import { FeatureAccessGuard } from './modules/features/feature-access.guard';
 import { ClinicalAccessModule } from './modules/clinical-access/clinical-access.module';
 import { ClinicalAccessGuard } from './modules/clinical-access/clinical-access.guard';
@@ -151,6 +152,7 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     RecallsModule,
     ConsentsModule,
     MultiClinicModule,
+    StorageQuotaModule,
     OnboardingModule,
     ContentsModule,
     ClinicalAccessModule,

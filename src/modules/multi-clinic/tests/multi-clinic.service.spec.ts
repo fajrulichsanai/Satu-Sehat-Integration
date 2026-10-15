@@ -373,6 +373,8 @@ describe('MultiClinicService', () => {
         accountsLimit: 50,
         activeBranches: 2,
         storageGbLimit: 10,
+        storageUsedBytes: 0,
+        storageLimitBytes: 0,
       });
     });
 

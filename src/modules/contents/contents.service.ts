@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -16,6 +17,8 @@ import {
   CreateContentDto,
   UpdateContentDto,
 } from './dto/content.dto';
+import { StorageQuotaService } from '../storage-quota/storage-quota.service';
+import { StorageKind } from '../storage-quota/storage-usage.entity';
 
 export type ContentPhoto = 'before' | 'after' | 'rendered';
 
@@ -38,6 +41,7 @@ export class ContentsService {
     private readonly clinicRepo: Repository<Clinic>,
     private readonly storage: S3StorageService,
     private readonly templates: ContentTemplatesService,
+    @Optional() private readonly storageQuota?: StorageQuotaService,
   ) {}
 
   list(clinicId: number, query: ContentQueryDto) {
@@ -56,12 +60,14 @@ export class ContentsService {
   /** Stores a photo for a story; the returned URL goes into create/update. */
   async uploadImage(clinicId: number, file?: Express.Multer.File) {
     if (!file) throw new BadRequestException('Pilih file gambar');
+    await this.storageQuota?.assertRoom(clinicId, file.size);
     const ext = extname(file.originalname).toLowerCase();
     const url = await this.storage.uploadBuffer(
       `${keyPrefix(clinicId)}${randomUUID()}${ext}`,
       file.buffer,
       MIME[ext] ?? file.mimetype,
     );
+    await this.storageQuota?.record(clinicId, StorageKind.CONTENT, url, file.size);
     return { url };
   }
 

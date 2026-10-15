@@ -46,6 +46,14 @@ export class User extends BaseEntity {
   @Column({ name: 'is_active', default: false })
   isActive: boolean;
 
+  /**
+   * Set when the account was given a temporary password (invited by an
+   * owner or created by Super Admin). Until the user picks their own, every
+   * API call except /auth/* is refused with PASSWORD_CHANGE_REQUIRED.
+   */
+  @Column({ name: 'must_change_password', default: false })
+  mustChangePassword: boolean;
+
   @Column({ name: 'email_verified_at', nullable: true })
   emailVerifiedAt: Date;
 

@@ -39,6 +39,13 @@ export class ClinicLinksController {
     return { success: true, data };
   }
 
+  @Get('current')
+  @ApiOperation({ summary: 'Owner multiklinik yang menaungi klinik ini, bila ada' })
+  async current(@ClinicId() clinicId: number) {
+    const data = await this.multiClinicService.currentLinkForClinic(clinicId);
+    return { success: true, data };
+  }
+
   @Post('requests/:id/respond')
   @ApiOperation({
     summary: 'Setujui atau tolak permintaan hubungan multiklinik',

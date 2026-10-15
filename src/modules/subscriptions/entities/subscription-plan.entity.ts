@@ -55,4 +55,9 @@ export class SubscriptionPlan extends BaseEntity {
     default: 0,
   })
   ownerFee: number | null;
+
+  // Jatah storage file layanan per klinik (GB). Null = bawaan tier — see
+  // StorageQuotaService. For MULTI_KLINIK it is per branch, shared.
+  @Column({ name: 'storage_gb', type: 'int', nullable: true })
+  storageGb: number | null;
 }

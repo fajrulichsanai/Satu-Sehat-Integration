@@ -58,6 +58,17 @@ export class LoginDto {
   password: string | undefined;
 }
 
+export class ChangePasswordDto {
+  @ApiProperty({ example: 'PasswordLama1' })
+  @IsNotEmpty()
+  currentPassword: string | undefined;
+
+  @ApiProperty({ example: 'PasswordBaru123!' })
+  @IsNotEmpty()
+  @MinLength(8)
+  newPassword: string | undefined;
+}
+
 export class LoginResponseDto {
   @ApiProperty({ example: true })
   success: boolean | undefined;

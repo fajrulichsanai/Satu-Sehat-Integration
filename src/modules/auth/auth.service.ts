@@ -4,6 +4,7 @@ import {
   ConflictException,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import * as crypto from 'crypto';
@@ -348,8 +349,76 @@ export class AuthService {
           clinicId: user.clinicId,
           practitionerId: user.practitionerId,
           isActive: user.isActive,
+          mustChangePassword: !!user.mustChangePassword,
         },
       },
+    };
+  }
+
+  /**
+   * Ganti password oleh pemiliknya sendiri. Wajib untuk akun berpassword
+   * sementara (mustChangePassword). Every other session is ended (token
+   * version bump) and this one gets a fresh token, so the user stays signed
+   * in here without a second login.
+   */
+  async changePassword(
+    claims: AccessTokenClaims,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    if (claims.imp) {
+      throw new ForbiddenException({
+        success: false,
+        error: {
+          code: 'IMPERSONATION_FORBIDDEN',
+          message: 'Password tidak bisa diganti saat masuk sebagai pengguna lain',
+        },
+      });
+    }
+    const user = await this.userRepository.findOne({ where: { id: claims.sub } });
+    if (!user || !(await comparePassword(currentPassword, user.passwordHash))) {
+      throw new BadRequestException({
+        success: false,
+        error: { code: 'WRONG_PASSWORD', message: 'Password saat ini salah' },
+      });
+    }
+    if (currentPassword === newPassword) {
+      throw new BadRequestException({
+        success: false,
+        error: {
+          code: 'SAME_PASSWORD',
+          message: 'Password baru harus berbeda dari password saat ini',
+        },
+      });
+    }
+    if (
+      newPassword.length < 8 ||
+      !/[A-Za-z]/.test(newPassword) ||
+      !/\d/.test(newPassword)
+    ) {
+      throw new BadRequestException({
+        success: false,
+        error: {
+          code: 'WEAK_PASSWORD',
+          message: 'Password baru minimal 8 karakter dan memuat huruf serta angka',
+        },
+      });
+    }
+
+    user.passwordHash = await hashPassword(newPassword);
+    user.tokenVersion = (user.tokenVersion ?? 0) + 1;
+    user.mustChangePassword = false;
+    await this.userRepository.update(user.id, {
+      passwordHash: user.passwordHash,
+      tokenVersion: user.tokenVersion,
+      mustChangePassword: false,
+    });
+    await this.revokeToken(claims);
+    const accessToken = this.signAccessToken(user, { authTime: claims.at });
+    Logger.log(`[CHANGE-PASSWORD] Password diganti | userId=${user.id}`);
+    return {
+      success: true,
+      data: { accessToken, message: 'Password berhasil diganti' },
     };
   }
 
@@ -444,6 +513,7 @@ export class AuthService {
         isActive: user.isActive,
         emailVerifiedAt: user.emailVerifiedAt,
         lastLoginAt: user.lastLoginAt,
+        mustChangePassword: !!user.mustChangePassword,
       },
     };
   }

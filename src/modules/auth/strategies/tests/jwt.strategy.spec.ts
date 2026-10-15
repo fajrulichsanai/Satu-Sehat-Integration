@@ -132,4 +132,25 @@ describe('JwtStrategy.validate', () => {
       expect(links.findOne).not.toHaveBeenCalled();
     });
   });
+  describe('Manajer Cabang & password sementara', () => {
+    const req = (path: string) => ({ headers: {}, path }) as any;
+
+    it('a Manajer Cabang acts as owner of their own clinic (positive)', async () => {
+      authService.validateUser.mockResolvedValue({ ...row, role: UserRole.MANAJER_CABANG });
+      const user = await strategy.validate(req('/settings/tarifs'), { sub: 1, tv: 2 });
+      expect(user).toMatchObject({ role: UserRole.OWNER, clinicId: 7, actorRole: UserRole.MANAJER_CABANG });
+    });
+
+    it('blocks everything but /auth/* until a temporary password is changed (positive/negative)', async () => {
+      authService.validateUser.mockResolvedValue({ ...row, mustChangePassword: true });
+      await expect(strategy.validate(req('/patients'), { sub: 1, tv: 2 })).rejects.toThrow(ForbiddenException);
+      await expect(strategy.validate(req('/auth/change-password'), { sub: 1, tv: 2 })).resolves.toBeDefined();
+      await expect(strategy.validate(req('/auth/me'), { sub: 1, tv: 2 })).resolves.toBeDefined();
+    });
+
+    it('does not block Super Admin impersonation (edge)', async () => {
+      authService.validateUser.mockResolvedValue({ ...row, mustChangePassword: true });
+      await expect(strategy.validate(req('/patients'), { sub: 1, tv: 2, imp: true })).resolves.toBeDefined();
+    });
+  });
 });

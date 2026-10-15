@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   ConflictException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
@@ -15,11 +16,14 @@ import { Practitioner } from '../practitioners/entities/practitioner.entity';
 import { UserRole, ROLE_LEVEL, isClinician } from '../../enums';
 import { InviteUserDto, UpdateUserDto } from './dto/user.dto';
 import { assertAccountPoolHasRoom } from '../multi-clinic/account-pool';
+import { UsersMailService } from './users-mail.service';
 
 interface CurrentUserPayload {
   userId: number;
   role: UserRole;
   clinicId: number | null;
+  /** Real role when the token acts as another (Manajer Cabang, Multi-Klinik Owner in a branch). */
+  actorRole?: string;
 }
 
 /** 10 karakter: huruf + angka, tanpa karakter yang mirip (0/O, 1/l). */
@@ -46,7 +50,56 @@ export class UsersService {
     private userRepository: Repository<User>,
     @InjectRepository(Practitioner)
     private practitionerRepository: Repository<Practitioner>,
+    @Optional() private readonly mail?: UsersMailService,
   ) {}
+
+  /** A Manajer Cabang acts with owner rights but may not manage peers. */
+  private isBranchManager(currentUser: CurrentUserPayload): boolean {
+    return currentUser.actorRole === UserRole.MANAJER_CABANG;
+  }
+
+  /**
+   * Manajer Cabang hanya untuk cabang yang terhubung (disetujui) ke owner
+   * multiklinik, dan satu cabang paling banyak satu manajer aktif (PRD MC-01).
+   */
+  private async assertCanAppointManager(
+    clinicId: number | null,
+    exceptUserId?: number,
+  ) {
+    const manager = this.userRepository.manager;
+    if (!clinicId) {
+      throw new BadRequestException({
+        success: false,
+        error: { code: 'CLINIC_ID_REQUIRED', message: 'Manajer Cabang harus terikat ke satu cabang' },
+      });
+    }
+    const [link] = await manager.query(
+      "SELECT id FROM owner_clinic_links WHERE clinic_id = ? AND status = 'approved' LIMIT 1",
+      [clinicId],
+    );
+    if (!link) {
+      throw new BadRequestException({
+        success: false,
+        error: {
+          code: 'NOT_A_BRANCH',
+          message: 'Manajer Cabang hanya untuk klinik yang terhubung ke owner multiklinik',
+        },
+      });
+    }
+    const [existing] = await manager.query(
+      "SELECT id FROM users WHERE clinic_id = ? AND role = 'manajer_cabang' AND is_active = 1 AND id <> ? LIMIT 1",
+      [clinicId, exceptUserId ?? 0],
+    );
+    if (existing) {
+      throw new ConflictException({
+        success: false,
+        error: {
+          code: 'BRANCH_MANAGER_EXISTS',
+          message: 'Cabang ini sudah punya Manajer Cabang. Nonaktifkan yang lama dulu.',
+        },
+      });
+    }
+  }
 
   /**
    * Memastikan user dengan role dokter memiliki baris practitioners terkait,
@@ -132,7 +185,11 @@ export class UsersService {
       });
     }
 
-    if (ROLE_LEVEL[targetUser.role] <= ROLE_LEVEL[currentUser.role]) {
+    if (
+      ROLE_LEVEL[targetUser.role] <= ROLE_LEVEL[currentUser.role] ||
+      (this.isBranchManager(currentUser) &&
+        targetUser.role === UserRole.MANAJER_CABANG)
+    ) {
       throw new ForbiddenException({
         success: false,
         error: {
@@ -153,7 +210,10 @@ export class UsersService {
       return;
     }
 
-    if (ROLE_LEVEL[newRole] <= ROLE_LEVEL[currentUser.role]) {
+    if (
+      ROLE_LEVEL[newRole] <= ROLE_LEVEL[currentUser.role] ||
+      (this.isBranchManager(currentUser) && newRole === UserRole.MANAJER_CABANG)
+    ) {
       throw new ForbiddenException({
         success: false,
         error: {
@@ -357,7 +417,7 @@ export class UsersService {
     };
   }
 
-  getRoles(currentUser: CurrentUserPayload) {
+  async getRoles(currentUser: CurrentUserPayload) {
     this.logger.log('[GET-ROLES] Mengambil daftar role yang tersedia');
 
     const roles = this.isSuperAdmin(currentUser)
@@ -374,6 +434,21 @@ export class UsersService {
           { value: UserRole.DOKTER, label: 'Dokter' },
           { value: UserRole.PERAWAT, label: 'Perawat' },
         ];
+
+    // The owner of a multiklinik branch (or the Multi-Klinik Owner inside
+    // it) may appoint one Manajer Cabang.
+    if (
+      !this.isSuperAdmin(currentUser) &&
+      currentUser.role === UserRole.OWNER &&
+      !this.isBranchManager(currentUser) &&
+      currentUser.clinicId
+    ) {
+      const [link] = await this.userRepository.manager.query(
+        "SELECT id FROM owner_clinic_links WHERE clinic_id = ? AND status = 'approved' LIMIT 1",
+        [currentUser.clinicId],
+      );
+      if (link) roles.unshift({ value: UserRole.MANAJER_CABANG, label: 'Manajer Cabang' });
+    }
 
     return { success: true, data: roles };
   }
@@ -501,6 +576,7 @@ export class UsersService {
         UserRole.DOKTER,
         UserRole.PERAWAT,
         UserRole.OWNER,
+        UserRole.MANAJER_CABANG,
       ].includes(newRole)
     ) {
       throw new BadRequestException({
@@ -511,6 +587,10 @@ export class UsersService {
             'Role hanya bisa diubah ke admin, dokter, perawat, atau owner',
         },
       });
+    }
+
+    if (newRole === UserRole.MANAJER_CABANG) {
+      await this.assertCanAppointManager(user.clinicId, user.id);
     }
 
     // A pending/inactive account becoming active takes a seat from the
@@ -591,6 +671,9 @@ export class UsersService {
     }
 
     await assertAccountPoolHasRoom(this.userRepository.manager, clinicId);
+    if (dto.role === UserRole.MANAJER_CABANG) {
+      await this.assertCanAppointManager(clinicId);
+    }
 
     // Password sementara acak per user (bukan nilai tetap yang mudah ditebak)
     const temporaryPassword = generateTemporaryPassword();
@@ -603,6 +686,8 @@ export class UsersService {
       clinicId,
       passwordHash,
       isActive: true,
+      // Temporary password: replaced on first login (PRD Multi-Klinik alur A).
+      mustChangePassword: true,
       emailVerifiedAt: new Date(),
       createdBy: currentUser.userId,
       updatedBy: currentUser.userId,
@@ -614,6 +699,14 @@ export class UsersService {
       await this.ensurePractitionerForUser(user);
     }
 
+    const emailSent =
+      (await this.mail?.sendWelcome({
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        temporaryPassword,
+      })) ?? false;
+
     this.logger.log(
       `[INVITE] User baru berhasil dibuat | userId=${user.id}, email=${user.email}`,
     );
@@ -623,6 +716,7 @@ export class UsersService {
       data: {
         ...this.sanitizeUser(user),
         temporaryPassword,
+        emailSent,
         message:
           'User berhasil dibuat. Bagikan password sementara ini kepada user.',
       },
@@ -673,8 +767,22 @@ export class UsersService {
     };
   }
 
+  /**
+   * Strips every credential before a user row leaves the API: an owner (or a
+   * Multi-Klinik Owner inside a branch) lists staff, and must never receive
+   * their MFA secret, backup codes or single-use reset/verification tokens.
+   */
   private sanitizeUser(user: User) {
-    const { passwordHash, ...sanitized } = user;
+    const {
+      passwordHash: _passwordHash,
+      mfaSecret: _mfaSecret,
+      mfaBackupCodes: _mfaBackupCodes,
+      verificationToken: _verificationToken,
+      resetPasswordToken: _resetPasswordToken,
+      resetPasswordExpiresAt: _resetPasswordExpiresAt,
+      tokenVersion: _tokenVersion,
+      ...sanitized
+    } = user;
     return sanitized;
   }
 }

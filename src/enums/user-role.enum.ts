@@ -2,6 +2,12 @@ export enum UserRole {
   SUPER_ADMIN = 'super_admin',
   MULTI_CLINIC_OWNER = 'multi_clinic_owner',
   OWNER = 'owner',
+  /**
+   * Manajer Cabang (PRD Multi-Klinik MC-01): mengurus satu cabang yang
+   * terhubung ke owner multiklinik dengan hak owner klinik, tapi tidak bisa
+   * mengelola owner klinik atau manajer lain.
+   */
+  MANAJER_CABANG = 'manajer_cabang',
   ADMIN = 'admin',
   DOKTER = 'dokter',
   PERAWAT = 'perawat',
@@ -13,6 +19,8 @@ export const ROLE_LEVEL: Record<UserRole, number> = {
   [UserRole.SUPER_ADMIN]: 0,
   [UserRole.MULTI_CLINIC_OWNER]: 1,
   [UserRole.OWNER]: 1,
+  // Under the owner (who may appoint/manage them), above admin.
+  [UserRole.MANAJER_CABANG]: 1.5,
   [UserRole.ADMIN]: 2,
   [UserRole.DOKTER]: 3,
   [UserRole.PERAWAT]: 3,

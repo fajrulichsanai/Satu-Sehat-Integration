@@ -25,6 +25,7 @@ import {
   ActivationStatusResponseDto,
   ForgotPasswordDto,
   ResetPasswordDto,
+  ChangePasswordDto,
 } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -188,6 +189,41 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Invalid or expired token' })
   async resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto.token!, dto.password!);
+  }
+
+  @Post('change-password')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  // Changing one's own password must work even when billing has lapsed.
+  @SkipSubscriptionCheck()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary:
+      'Ganti password sendiri (wajib untuk password sementara); mengembalikan token baru',
+  })
+  async changePassword(
+    @CurrentUser() user: any,
+    @Body() dto: ChangePasswordDto,
+    @Req() req: any,
+  ) {
+    const result = await this.authService.changePassword(
+      user.tokenClaims,
+      dto.currentPassword!,
+      dto.newPassword!,
+    );
+    void this.auditLogService.record({
+      clinicId: user?.clinicId ?? null,
+      actorId: user?.userId ?? null,
+      actorName: user?.name ?? 'Unknown',
+      actorRole: user?.actorRole ?? user?.role ?? 'unknown',
+      actionType: AuditActionType.UPDATE,
+      entityType: 'Auth',
+      entityLabel: 'Ganti password',
+      status: AuditStatus.SUCCESS,
+      ipAddress: req.ip,
+      userAgent: req.headers?.['user-agent'],
+    });
+    return result;
   }
 
   @Post('impersonate/:userId')

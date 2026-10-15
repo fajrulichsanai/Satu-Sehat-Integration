@@ -28,6 +28,7 @@ import {
 import { MultiClinicMailService } from './multi-clinic-mail.service';
 import { accountPoolForOwner } from './account-pool';
 import { STORAGE_GB_PER_BRANCH } from './multi-clinic.constants';
+import { StorageQuotaService } from '../storage-quota/storage-quota.service';
 import type { MultiClinicReportQueryDto } from './dto/owner-clinic-link.dto';
 
 /** Who is acting — enough for the audit log. */
@@ -86,6 +87,7 @@ export class MultiClinicService {
     private readonly clinicSubscriptions: ClinicSubscriptionsService,
     private readonly auditLog: AuditLogService,
     @Optional() private readonly mail?: MultiClinicMailService,
+    @Optional() private readonly storageQuota?: StorageQuotaService,
   ) {}
 
   private audit(
@@ -118,7 +120,12 @@ export class MultiClinicService {
 
   private async clinicOwnerEmails(clinicId: number): Promise<string[]> {
     const owners = await this.userRepository.find({
-      where: { clinicId, role: UserRole.OWNER, isActive: true },
+      // Owner klinik dan Manajer Cabang sama-sama boleh menjawab (PRD alur B).
+      where: {
+        clinicId,
+        role: In([UserRole.OWNER, UserRole.MANAJER_CABANG]),
+        isActive: true,
+      },
     });
     return owners.map((o) => o.email).filter(Boolean);
   }
@@ -323,6 +330,20 @@ export class MultiClinicService {
             : null,
       },
     ];
+  }
+
+  /** Penanda di Info Klinik (P1): klinik ini cabang dari akun multiklinik siapa. */
+  async currentLinkForClinic(clinicId: number) {
+    const link = await this.linkRepository.findOne({
+      where: { clinicId, status: OwnerClinicLinkStatus.APPROVED },
+      relations: { owner: true },
+    });
+    if (!link) return null;
+    return {
+      ownerName: link.owner?.name ?? null,
+      linkedSince: link.respondedAt ?? link.requestedAt ?? link.createdAt,
+      billingMode: link.billingMode,
+    };
   }
 
   /**
@@ -560,9 +581,10 @@ export class MultiClinicService {
       },
     );
 
-    const [pool, pending] = await Promise.all([
+    const [pool, pending, storage] = await Promise.all([
       accountPoolForOwner(this.dataSource.manager, ownerId),
       this.getPendingForOwner(ownerId),
+      this.storageQuota?.quotaForOwner(ownerId),
     ]);
 
     return {
@@ -578,6 +600,8 @@ export class MultiClinicService {
         accountsLimit: pool.limit,
         activeBranches: pool.activeBranches,
         storageGbLimit: pool.activeBranches * STORAGE_GB_PER_BRANCH,
+        storageUsedBytes: storage?.usedBytes ?? 0,
+        storageLimitBytes: storage?.limitBytes ?? 0,
       },
     };
   }
