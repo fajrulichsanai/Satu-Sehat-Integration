@@ -90,10 +90,19 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
         const nodeEnv = configService.get<string>('NODE_ENV', 'development');
+        // Schema is managed by the explicit, idempotent migrations in
+        // scripts/apply-security-schema.js — TypeORM's synchronize() must
+        // never run against a shared database (staging/production/anywhere
+        // else), only local development, because it can try to alter/drop
+        // columns and indexes on its own and crash-loop or corrupt schema
+        // drift when it conflicts with a foreign key (as it did on staging:
+        // NODE_ENV there isn't the literal string 'production', so the old
+        // `nodeEnv !== 'production'` default silently turned sync on).
+        // DB_SYNCHRONIZE=true remains an explicit opt-in for any env.
         const synchronize =
           configService.get<string>(
             'DB_SYNCHRONIZE',
-            nodeEnv !== 'production' ? 'true' : 'false',
+            nodeEnv === 'development' ? 'true' : 'false',
           ) === 'true';
         return {
           type: 'mysql',
