@@ -295,8 +295,8 @@ export class UsersService {
         )
       : [];
     const clinicName = new Map(clinics.map((c) => [Number(c.id), c.name]));
+    // Paginated shape { data, meta } (no `success`) so the frontend keeps meta.
     return {
-      success: true,
       data: users.map((user) => ({
         ...this.sanitizeUser(user),
         clinicName: user.clinicId
