@@ -10,7 +10,11 @@ describe('MultiClinicController', () => {
   let multiClinicService: {
     assertOwnsClinic: jest.Mock;
     getMyClinics: jest.Mock;
+    getOwnerBilledClinicIds: jest.Mock;
     getDashboard: jest.Mock;
+    getReport: jest.Mock;
+    setBillingMode: jest.Mock;
+    requestLink: jest.Mock;
     listOwners: jest.Mock;
     linkClinic: jest.Mock;
     unlinkClinic: jest.Mock;
@@ -31,7 +35,11 @@ describe('MultiClinicController', () => {
     multiClinicService = {
       assertOwnsClinic: jest.fn().mockResolvedValue(undefined),
       getMyClinics: jest.fn(),
+      getOwnerBilledClinicIds: jest.fn(),
       getDashboard: jest.fn(),
+      getReport: jest.fn(),
+      setBillingMode: jest.fn(),
+      requestLink: jest.fn(),
       listOwners: jest.fn(),
       linkClinic: jest.fn(),
       unlinkClinic: jest.fn(),
@@ -113,7 +121,9 @@ describe('MultiClinicController', () => {
     const file = { buffer: Buffer.from('img') } as Express.Multer.File;
 
     it('uploads the logo after confirming ownership (positive)', async () => {
-      clinicsService.uploadLogo.mockResolvedValue({ logoUrl: 'https://x/logo.png' });
+      clinicsService.uploadLogo.mockResolvedValue({
+        logoUrl: 'https://x/logo.png',
+      });
 
       const result = await controller.uploadClinicLogo(10, file, user);
 
@@ -135,18 +145,17 @@ describe('MultiClinicController', () => {
   });
 
   describe('claimPayment', () => {
-    it('claims for the owner using their own currently-linked clinic ids (positive)', async () => {
-      multiClinicService.getMyClinics.mockResolvedValue([
-        { id: 10 },
-        { id: 11 },
-      ]);
+    it('claims only for the branches the owner pays for (positive)', async () => {
+      multiClinicService.getOwnerBilledClinicIds.mockResolvedValue([10, 11]);
       const dto = { planId: 2 } as any;
       const proof = { filename: 'proof.jpg' } as Express.Multer.File;
       subscriptionPaymentsService.claimForOwner.mockResolvedValue({ id: 1 });
 
       const result = await controller.claimPayment(dto, user, proof);
 
-      expect(multiClinicService.getMyClinics).toHaveBeenCalledWith(5);
+      expect(multiClinicService.getOwnerBilledClinicIds).toHaveBeenCalledWith(
+        5,
+      );
       expect(subscriptionPaymentsService.claimForOwner).toHaveBeenCalledWith(
         5,
         [10, 11],
@@ -158,7 +167,7 @@ describe('MultiClinicController', () => {
     });
 
     it('propagates BadRequestException from the service without ever resolving to undefined (negative)', async () => {
-      multiClinicService.getMyClinics.mockResolvedValue([]);
+      multiClinicService.getOwnerBilledClinicIds.mockResolvedValue([]);
       subscriptionPaymentsService.claimForOwner.mockRejectedValue(
         new BadRequestException(),
       );
@@ -177,7 +186,7 @@ describe('MultiClinicController', () => {
   });
 
   describe('listMyPayments', () => {
-    it('lists the calling owner\'s own payment history (positive)', async () => {
+    it("lists the calling owner's own payment history (positive)", async () => {
       const query = { status: 'pending' } as any;
       subscriptionPaymentsService.listMineForOwner.mockResolvedValue({
         data: [],
@@ -191,6 +200,61 @@ describe('MultiClinicController', () => {
         query,
       );
       expect(result.data).toEqual([]);
+    });
+  });
+  describe('Super Admin link requests', () => {
+    it('asks for approval by default and links directly only when asked (positive)', async () => {
+      const admin = { userId: 1, role: 'super_admin' };
+      await controller.linkClinic(7, { clinicId: 10 }, admin);
+      await controller.linkClinic(7, { clinicId: 11, direct: true }, admin);
+      expect(multiClinicService.requestLink).toHaveBeenNthCalledWith(
+        1,
+        7,
+        10,
+        admin,
+        { direct: false },
+      );
+      expect(multiClinicService.requestLink).toHaveBeenNthCalledWith(
+        2,
+        7,
+        11,
+        admin,
+        { direct: true },
+      );
+    });
+  });
+
+  describe('dashboard, reports, billing mode', () => {
+    it('passes the clinic filter through (positive)', async () => {
+      multiClinicService.getDashboard.mockResolvedValue({ totals: {} });
+      multiClinicService.getReport.mockResolvedValue({ totals: {} });
+      await controller.dashboard(user, { clinicId: 10 });
+      const q = {
+        dateFrom: '2026-10-01',
+        dateTo: '2026-10-31',
+        clinicId: 10,
+      } as any;
+      await controller.report(user, q);
+      expect(multiClinicService.getDashboard).toHaveBeenCalledWith(5, 10);
+      expect(multiClinicService.getReport).toHaveBeenCalledWith(5, q);
+    });
+
+    it('sets a branch billing mode for the calling owner (positive)', async () => {
+      multiClinicService.setBillingMode.mockResolvedValue({
+        billingMode: 'self',
+      });
+      const res = await controller.setBillingMode(
+        10,
+        { billingMode: 'self' } as any,
+        user,
+      );
+      expect(multiClinicService.setBillingMode).toHaveBeenCalledWith(
+        5,
+        10,
+        'self',
+        user,
+      );
+      expect(res.data).toEqual({ billingMode: 'self' });
     });
   });
 });

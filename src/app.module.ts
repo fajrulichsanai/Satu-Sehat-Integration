@@ -3,7 +3,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { BranchAuditInterceptor } from './modules/audit-log/interceptors/branch-audit.interceptor';
 import { FeaturesModule } from './modules/features/features.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { FeatureAccessGuard } from './modules/features/feature-access.guard';
@@ -183,6 +184,11 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     {
       provide: APP_GUARD,
       useExisting: ClinicalAccessGuard,
+    },
+    // Multi-Klinik Owner di mode Cabang aktif: setiap perubahan tercatat
+    {
+      provide: APP_INTERCEPTOR,
+      useExisting: BranchAuditInterceptor,
     },
   ],
 })

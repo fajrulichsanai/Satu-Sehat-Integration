@@ -5,6 +5,7 @@ import { ClinicSubscription } from './entities/clinic-subscription.entity';
 import { SubscriptionPayment } from './entities/subscription-payment.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { User } from '../users/entities/user.entity';
+import { OwnerClinicLink } from '../multi-clinic/entities/owner-clinic-link.entity';
 import { SubscriptionPlansService } from './subscription-plans.service';
 import { ClinicSubscriptionsService } from './clinic-subscriptions.service';
 import { SubscriptionPaymentsService } from './subscription-payments.service';
@@ -26,6 +27,7 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
       SubscriptionPayment,
       Clinic,
       User,
+      OwnerClinicLink,
     ]),
     AuditLogModule,
   ],

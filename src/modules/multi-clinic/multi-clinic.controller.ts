@@ -8,14 +8,26 @@ import {
   Post,
   Put,
   Query,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { MultiClinicService } from './multi-clinic.service';
-import { LinkClinicDto } from './dto/owner-clinic-link.dto';
+import {
+  LinkClinicDto,
+  MultiClinicDashboardQueryDto,
+  MultiClinicReportQueryDto,
+  SetBillingModeDto,
+} from './dto/owner-clinic-link.dto';
 import { ClinicsService } from '../clinics/clinics.service';
 import { UpdateClinicDto } from '../clinics/dto/clinic.dto';
 import { clinicLogoUploadOptions } from '../clinics/upload/clinic-logo.upload';
@@ -54,8 +66,56 @@ export class MultiClinicController {
   @ApiOperation({
     summary: 'Dashboard ringkasan gabungan lintas klinik milik owner ini',
   })
-  async dashboard(@CurrentUser() user: any) {
-    const data = await this.multiClinicService.getDashboard(user.userId);
+  async dashboard(
+    @CurrentUser() user: any,
+    @Query() query: MultiClinicDashboardQueryDto,
+  ) {
+    const data = await this.multiClinicService.getDashboard(
+      user.userId,
+      query.clinicId,
+    );
+    return { success: true, data };
+  }
+
+  @Get('reports')
+  @Roles(UserRole.MULTI_CLINIC_OWNER)
+  @ApiOperation({
+    summary:
+      'Laporan kunjungan & keuangan semua cabang, bisa difilter satu cabang',
+  })
+  async report(
+    @CurrentUser() user: any,
+    @Query() query: MultiClinicReportQueryDto,
+  ) {
+    const data = await this.multiClinicService.getReport(user.userId, query);
+    return { success: true, data };
+  }
+
+  @Get('pending')
+  @Roles(UserRole.MULTI_CLINIC_OWNER)
+  @ApiOperation({ summary: 'Permintaan hubungan yang menunggu persetujuan' })
+  async pending(@CurrentUser() user: any) {
+    const data = await this.multiClinicService.getPendingForOwner(user.userId);
+    return { success: true, data };
+  }
+
+  @Put('clinics/:clinicId/billing-mode')
+  @Roles(UserRole.MULTI_CLINIC_OWNER)
+  @ApiOperation({
+    summary:
+      'Atur cara bayar cabang (ditanggung owner / bayar sendiri / berhenti), berlaku periode berikutnya',
+  })
+  async setBillingMode(
+    @Param('clinicId', ParseIntPipe) clinicId: number,
+    @Body() dto: SetBillingModeDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.multiClinicService.setBillingMode(
+      user.userId,
+      clinicId,
+      dto.billingMode,
+      user,
+    );
     return { success: true, data };
   }
 
@@ -73,17 +133,19 @@ export class MultiClinicController {
   @Post('owners/:ownerId/clinics')
   @Roles(UserRole.SUPER_ADMIN)
   @ApiOperation({
-    summary: 'Hubungkan klinik ke akun multi-klinik owner (Super Admin)',
+    summary:
+      'Ajukan hubungan klinik ke owner multiklinik (menunggu persetujuan owner klinik), atau hubungkan langsung untuk cabang baru (Super Admin)',
   })
   async linkClinic(
     @Param('ownerId', ParseIntPipe) ownerId: number,
     @Body() dto: LinkClinicDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.multiClinicService.linkClinic(
+    const data = await this.multiClinicService.requestLink(
       ownerId,
       dto.clinicId,
-      user.userId,
+      user,
+      { direct: dto.direct === true },
     );
     return { success: true, data };
   }
@@ -97,8 +159,9 @@ export class MultiClinicController {
   async unlinkClinic(
     @Param('ownerId', ParseIntPipe) ownerId: number,
     @Param('clinicId', ParseIntPipe) clinicId: number,
+    @CurrentUser() user: any,
   ) {
-    await this.multiClinicService.unlinkClinic(ownerId, clinicId);
+    await this.multiClinicService.unlinkClinic(ownerId, clinicId, user);
     return { success: true };
   }
 
@@ -158,14 +221,34 @@ export class MultiClinicController {
     @CurrentUser() user: any,
     @UploadedFile() proof?: Express.Multer.File,
   ) {
-    const clinics = await this.multiClinicService.getMyClinics(user.userId);
+    // Hanya cabang yang ditanggung owner (bukan "bayar sendiri"/"berhenti").
+    const clinicIds = await this.multiClinicService.getOwnerBilledClinicIds(
+      user.userId,
+    );
     return this.subscriptionPaymentsService.claimForOwner(
       user.userId,
-      clinics.map((c) => c.id),
+      clinicIds,
       dto,
       user.userId,
       proof,
     );
+  }
+
+  @Get('payments/:id/proof-file')
+  @Roles(UserRole.MULTI_CLINIC_OWNER)
+  @ApiOperation({
+    summary: 'Bukti transfer pembayaran gabungan milik akun ini',
+  })
+  async getProofFile(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: any,
+    @Res() res: Response,
+  ) {
+    const path = await this.subscriptionPaymentsService.getOwnerProofFilePath(
+      id,
+      user.userId,
+    );
+    res.sendFile(path);
   }
 
   @Get('payments/mine')

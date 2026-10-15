@@ -14,6 +14,7 @@ import { User } from './entities/user.entity';
 import { Practitioner } from '../practitioners/entities/practitioner.entity';
 import { UserRole, ROLE_LEVEL, isClinician } from '../../enums';
 import { InviteUserDto, UpdateUserDto } from './dto/user.dto';
+import { assertAccountPoolHasRoom } from '../multi-clinic/account-pool';
 
 interface CurrentUserPayload {
   userId: number;
@@ -512,6 +513,15 @@ export class UsersService {
       });
     }
 
+    // A pending/inactive account becoming active takes a seat from the
+    // multiklinik account pool (PRD MK-07).
+    if (user.role === UserRole.PENDING || !user.isActive) {
+      await assertAccountPoolHasRoom(
+        this.userRepository.manager,
+        user.clinicId,
+      );
+    }
+
     user.role = newRole;
     user.isActive = true;
     user.updatedBy = currentUser.userId;
@@ -579,6 +589,8 @@ export class UsersService {
         error: { code: 'EMAIL_ALREADY_USED', message: 'Email sudah digunakan' },
       });
     }
+
+    await assertAccountPoolHasRoom(this.userRepository.manager, clinicId);
 
     // Password sementara acak per user (bukan nilai tetap yang mudah ditebak)
     const temporaryPassword = generateTemporaryPassword();

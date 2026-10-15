@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Resend } from 'resend';
 import {
   ClinicSubscription,
@@ -11,6 +11,16 @@ import { SubscriptionPlanTier } from './entities/subscription-plan.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from '../../enums';
+import {
+  BranchBillingMode,
+  OwnerClinicLink,
+  OwnerClinicLinkStatus,
+} from '../multi-clinic/entities/owner-clinic-link.entity';
+import type { SubscriptionPayment } from './entities/subscription-payment.entity';
+
+function rupiah(value: number | string): string {
+  return `Rp${Number(value || 0).toLocaleString('id-ID')}`;
+}
 
 function daysBetween(a: Date, b: Date): number {
   const MS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -36,6 +46,9 @@ export class SubscriptionNotificationsService {
     private readonly clinicRepository: Repository<Clinic>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @Optional()
+    @InjectRepository(OwnerClinicLink)
+    private readonly linkRepository?: Repository<OwnerClinicLink>,
   ) {
     this.resend = new Resend(this.configService.get<string>('RESEND_API_KEY'));
   }
@@ -208,18 +221,38 @@ export class SubscriptionNotificationsService {
     }
   }
 
+  /**
+   * A branch paid by its Multi-Klinik Owner gets its renewal reminder sent to
+   * that owner (PRD alur E) — the branch's own owner doesn't pay for it.
+   */
+  private async billingOwnerFor(clinicId: number): Promise<User | null> {
+    const link = await this.linkRepository?.findOne({
+      where: {
+        clinicId,
+        status: OwnerClinicLinkStatus.APPROVED,
+        billingMode: BranchBillingMode.OWNER,
+      },
+      relations: { owner: true },
+    });
+    return link?.owner?.isActive ? link.owner : null;
+  }
+
   private async notifyClinic(
     sub: ClinicSubscription,
     daysLeft: number,
   ): Promise<boolean> {
-    const [clinic, owners] = await Promise.all([
+    const [clinic, owners, billingOwner] = await Promise.all([
       this.clinicRepository.findOne({ where: { id: sub.clinicId } }),
       this.userRepository.find({
         where: { clinicId: sub.clinicId, role: UserRole.OWNER, isActive: true },
       }),
+      this.billingOwnerFor(sub.clinicId),
     ]);
 
-    const recipients = owners.map((o) => o.email).filter(Boolean);
+    const recipients = billingOwner
+      ? [billingOwner.email].filter(Boolean)
+      : owners.map((o) => o.email).filter(Boolean);
+    const renewPath = billingOwner ? '/multi-klinik/langganan' : '/langganan';
     if (recipients.length === 0) {
       this.logger.warn(
         `No active owner email found for clinic ${sub.clinicId} — skipping H-${daysLeft} reminder`,
@@ -242,7 +275,7 @@ export class SubscriptionNotificationsService {
           <p>Halo,</p>
           <p>Langganan ApexRecord untuk klinik <strong>${clinic?.name ?? ''}</strong> akan berakhir dalam <strong>${daysLeft} hari</strong> (${sub.endDate}).</p>
           <p>Segera perpanjang agar tidak kehilangan akses untuk menambah, mengubah, atau menghapus data.</p>
-          <a href="${appUrl}/langganan" style="display: inline-block; padding: 10px 20px; background-color: #4F7EF8; color: white; text-decoration: none; border-radius: 5px;">
+          <a href="${appUrl}${renewPath}" style="display: inline-block; padding: 10px 20px; background-color: #4F7EF8; color: white; text-decoration: none; border-radius: 5px;">
             Perpanjang Sekarang
           </a>
           <p>Salam,<br>Tim ApexRecord</p>
@@ -255,6 +288,81 @@ export class SubscriptionNotificationsService {
     } catch (error) {
       this.logger.error(
         `Failed to send H-${daysLeft} reminder for clinic ${sub.clinicId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Kuitansi setelah Super Admin mengonfirmasi pembayaran (PRD Multi-Klinik
+   * SA-02). Owner payment → the Multi-Klinik Owner, listing every branch the
+   * payment extended; clinic payment → the clinic's owner(s). Never throws.
+   */
+  async sendPaymentReceipt(payment: SubscriptionPayment): Promise<boolean> {
+    try {
+      const clinicIds = payment.ownerId
+        ? (payment.coveredClinicIds ?? [])
+        : payment.clinicId
+          ? [payment.clinicId]
+          : [];
+      const [clinics, recipients, planRows] = await Promise.all([
+        clinicIds.length
+          ? this.clinicRepository.find({ where: { id: In(clinicIds) } })
+          : Promise.resolve([] as Clinic[]),
+        payment.ownerId
+          ? this.userRepository
+              .find({ where: { id: payment.ownerId } })
+              .then((rows) => rows.map((u) => u.email))
+          : this.userRepository
+              .find({
+                where: {
+                  clinicId: payment.clinicId as number,
+                  role: UserRole.OWNER,
+                  isActive: true,
+                },
+              })
+              .then((rows) => rows.map((u) => u.email)),
+        this.clinicSubscriptionRepository.manager.query(
+          'SELECT name FROM subscription_plans WHERE id = ? LIMIT 1',
+          [payment.planId],
+        ),
+      ]);
+      const to = recipients.filter(Boolean);
+      if (to.length === 0) return false;
+
+      const planName = (planRows as { name: string }[])[0]?.name ?? 'Langganan';
+      const number = `APX-${String(payment.id).padStart(6, '0')}`;
+      const paidAt = (payment.confirmedAt ?? new Date()).toLocaleDateString(
+        'id-ID',
+        {
+          dateStyle: 'long',
+        },
+      );
+      const clinicList = clinics
+        .map((c) => `<li>${c.name.replace(/</g, '&lt;')}</li>`)
+        .join('');
+
+      await this.resend.emails.send({
+        from: 'noreply@send.finarch.my.id',
+        to,
+        subject: `Kuitansi ${number} — pembayaran ApexRecord diterima`,
+        html: `
+          <h2>Kuitansi pembayaran</h2>
+          <p>Terima kasih, pembayaran Anda sudah kami terima.</p>
+          <table cellpadding="6" style="border-collapse: collapse;">
+            <tr><td>No. kuitansi</td><td><strong>${number}</strong></td></tr>
+            <tr><td>Tanggal</td><td>${paidAt}</td></tr>
+            <tr><td>Paket</td><td>${planName}${payment.quantity > 1 ? ` × ${payment.quantity} klinik` : ''}</td></tr>
+            <tr><td>Jumlah</td><td><strong>${rupiah(payment.amount)}</strong></td></tr>
+          </table>
+          ${clinicList ? `<p>Langganan diperpanjang untuk:</p><ul>${clinicList}</ul>` : ''}
+          <p>Salam,<br>Tim ApexRecord</p>
+        `,
+      });
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `Gagal mengirim kuitansi pembayaran #${payment.id}: ${error instanceof Error ? error.message : String(error)}`,
       );
       return false;
     }

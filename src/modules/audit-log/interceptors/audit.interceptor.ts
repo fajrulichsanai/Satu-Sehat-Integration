@@ -4,6 +4,7 @@ import { Observable, catchError, tap, throwError } from 'rxjs';
 import { AuditLogService } from '../audit-log.service';
 import { AuditActionType, AuditStatus } from '../entities/audit-log.entity';
 import { AUDIT_KEY, AuditMetadata } from '../decorators/audit.decorator';
+import { auditRoleOf } from '../../auth/branch-context';
 
 /**
  * Reads @Audit(entityType, actionType) metadata off the handler and records a
@@ -44,7 +45,7 @@ export class AuditInterceptor implements NestInterceptor {
           clinicId: request.clinicId ?? request.user?.clinicId ?? null,
           actorId: request.user?.userId ?? null,
           actorName: request.user?.name ?? 'Unknown',
-          actorRole: request.user?.role ?? 'unknown',
+          actorRole: auditRoleOf(request.user),
           actionType: meta.actionType,
           entityType: meta.entityType,
           entityId,
@@ -64,7 +65,7 @@ export class AuditInterceptor implements NestInterceptor {
           clinicId: request.clinicId ?? request.user?.clinicId ?? null,
           actorId: request.user?.userId ?? null,
           actorName: request.user?.name ?? 'Unknown',
-          actorRole: request.user?.role ?? 'unknown',
+          actorRole: auditRoleOf(request.user),
           actionType: meta.actionType,
           entityType: meta.entityType,
           entityId:

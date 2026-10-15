@@ -18,6 +18,8 @@ import { User } from '../../users/entities/user.entity';
 import { SubscriptionPlansService } from '../subscription-plans.service';
 import { ClinicSubscriptionsService } from '../clinic-subscriptions.service';
 import { SubscriptionPlanTier } from '../entities/subscription-plan.entity';
+import { OwnerClinicLink } from '../../multi-clinic/entities/owner-clinic-link.entity';
+import { SubscriptionNotificationsService } from '../subscription-notifications.service';
 
 function buildQb(result: [any[], number] = [[], 0]) {
   return {
@@ -43,6 +45,8 @@ describe('SubscriptionPaymentsService', () => {
   let userRepo: { find: jest.Mock };
   let plansService: { findOne: jest.Mock };
   let clinicSubsService: { extendSubscription: jest.Mock };
+  let linkRepo: { findOne: jest.Mock };
+  let notifications: { sendPaymentReceipt: jest.Mock };
 
   beforeEach(async () => {
     paymentRepo = {
@@ -55,6 +59,8 @@ describe('SubscriptionPaymentsService', () => {
     userRepo = { find: jest.fn().mockResolvedValue([]) };
     plansService = { findOne: jest.fn() };
     clinicSubsService = { extendSubscription: jest.fn() };
+    linkRepo = { findOne: jest.fn().mockResolvedValue(null) };
+    notifications = { sendPaymentReceipt: jest.fn().mockResolvedValue(true) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -67,6 +73,8 @@ describe('SubscriptionPaymentsService', () => {
         { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: SubscriptionPlansService, useValue: plansService },
         { provide: ClinicSubscriptionsService, useValue: clinicSubsService },
+        { provide: getRepositoryToken(OwnerClinicLink), useValue: linkRepo },
+        { provide: SubscriptionNotificationsService, useValue: notifications },
       ],
     }).compile();
 
@@ -78,6 +86,24 @@ describe('SubscriptionPaymentsService', () => {
   it('should be defined', () => expect(service).toBeDefined());
 
   describe('claim', () => {
+    it('charges a self-paying multiklinik branch one branch, no owner fee (positive)', async () => {
+      plansService.findOne.mockResolvedValue({
+        id: 2,
+        tier: SubscriptionPlanTier.MULTI_KLINIK,
+        price: 124000,
+        ownerFee: 50000,
+      });
+      linkRepo.findOne.mockResolvedValue({ id: 1, billingMode: 'self' });
+
+      const result = await service.claim(1, { planId: 2, quantity: 4 }, 9);
+
+      expect(linkRepo.findOne).toHaveBeenCalledWith({
+        where: { clinicId: 1, status: 'approved', billingMode: 'self' },
+      });
+      expect(result.quantity).toBe(1);
+      expect(result.amount).toBe(124000);
+    });
+
     it('computes amount as price + ownerFee for a single-clinic plan (positive)', async () => {
       plansService.findOne.mockResolvedValue({
         id: 1,
@@ -293,6 +319,19 @@ describe('SubscriptionPaymentsService', () => {
       );
     });
 
+    it('lets a multi-klinik owner open only their own combined payment proof (security)', async () => {
+      paymentRepo.findOne.mockResolvedValue({
+        id: 1,
+        clinicId: null,
+        ownerId: 5,
+        proofUrl: '/uploads/payment-proofs/proof-9.jpg',
+      });
+      (existsSync as jest.Mock).mockReturnValue(true);
+
+      await expect(service.getOwnerProofFilePath(1, 5)).resolves.toContain('proof-9.jpg');
+      await expect(service.getOwnerProofFilePath(1, 6)).rejects.toThrow(NotFoundException);
+    });
+
     it('throws NotFoundException when the payment has no proof (negative)', async () => {
       paymentRepo.findOne.mockResolvedValue({
         id: 1,
@@ -320,6 +359,25 @@ describe('SubscriptionPaymentsService', () => {
 
       expect(result.status).toBe(SubscriptionPaymentStatus.CONFIRMED);
       expect(result.subscriptionId).toBe(99);
+    });
+
+    it('sends the payer a receipt after confirming (positive)', async () => {
+      paymentRepo.findOne.mockResolvedValue({
+        id: 7,
+        ownerId: 5,
+        clinicId: null,
+        coveredClinicIds: [10, 11],
+        planId: 2,
+        status: SubscriptionPaymentStatus.PENDING,
+      });
+      clinicSubsService.extendSubscription.mockResolvedValue({ id: 99 });
+
+      await service.confirm(7, {}, 1);
+
+      expect(clinicSubsService.extendSubscription).toHaveBeenCalledTimes(2);
+      expect(notifications.sendPaymentReceipt).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 7, status: SubscriptionPaymentStatus.CONFIRMED }),
+      );
     });
 
     it('throws NotFoundException when the payment does not exist (negative)', async () => {
