@@ -116,7 +116,8 @@ describe('StorageQuotaService', () => {
 
   it('formats sizes for messages (edge)', () => {
     expect(formatBytes(1.5 * GB)).toBe('1,5 GB');
-    expect(formatBytes(5 * 1024 ** 2)).toBe('5 MB');
+    expect(formatBytes(5 * 1000 ** 2)).toBe('5 MB');
+    expect(formatBytes(0.1 * GB)).toBe('100 MB');
   });
 });
 

@@ -9,7 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { StorageKind, StorageUsage } from './storage-usage.entity';
 import { StorageAddon, StorageAddonSource } from './storage-addon.entity';
-import { GB, MAX_ADDON_GB_PER_PURCHASE } from './storage-quota.constants';
+import { GB, MAX_ADDON_GB_PER_PURCHASE, MB } from './storage-quota.constants';
 import { STORAGE_GB_PER_BRANCH } from '../multi-clinic/multi-clinic.constants';
 import {
   planLimitsForClinic,
@@ -89,7 +89,7 @@ function toNumber(value: unknown): number {
 export function formatBytes(bytes: number): string {
   if (bytes >= GB)
     return `${(bytes / GB).toLocaleString('id-ID', { maximumFractionDigits: 2 })} GB`;
-  const mb = bytes / 1024 ** 2;
+  const mb = bytes / MB;
   return `${mb.toLocaleString('id-ID', { maximumFractionDigits: 1 })} MB`;
 }
 
