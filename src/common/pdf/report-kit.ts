@@ -60,6 +60,11 @@ const BULAN = [
   'November',
   'Desember',
 ];
+export function tanggalPendek(d: string): string {
+  const [y, m, day] = d.slice(0, 10).split('-');
+  return `${day}/${m}/${y}`;
+}
+
 export function periodeLabel(period: string): string {
   const [y, m] = period.split('-');
   return `${BULAN[Number(m) - 1]} ${y}`;
@@ -158,6 +163,7 @@ export function section(text: string, note?: string): Node {
     ],
     margin: [0, 12, 0, 6],
     unbreakable: true,
+    headlineLevel: 1,
   };
 }
 
@@ -308,6 +314,9 @@ export function render(
     pageMargins: [40, 36, 40, 44],
     content,
     footer: footer(generatedBy),
+    // Judul bagian tidak boleh tertinggal sendirian di dasar halaman
+    pageBreakBefore: (node: Node, after: Node[]) =>
+      node.headlineLevel === 1 && after.length < 6,
     defaultStyle: { font: 'Roboto', fontSize: 9, color: INK },
   }).getBuffer();
 }

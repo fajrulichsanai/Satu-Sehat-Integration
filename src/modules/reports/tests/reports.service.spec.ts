@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ReportsService } from '../reports.service';
+import { ProfitLossService } from '../profit-loss.service';
 import { Encounter } from '../../encounters/entities/encounter.entity';
 import { Billing } from '../../billing/entities/billing.entity';
 import { Payment } from '../../payments/entities/payment.entity';
@@ -103,6 +104,10 @@ describe('ReportsService', () => {
         {
           provide: getRepositoryToken(PatientOriginGeocode),
           useValue: patientOriginGeocodeRepo,
+        },
+        {
+          provide: ProfitLossService,
+          useValue: { compute: jest.fn(), trend: jest.fn() },
         },
       ],
     }).compile();
@@ -1388,6 +1393,30 @@ describe('ReportsService', () => {
   });
 
   describe('getFinancialReport', () => {
+    const plStub = (o: Record<string, any> = {}) => ({
+      pendapatan: { bersih: 1000000 },
+      hpp: { total: 300000 },
+      labaKotor: 700000,
+      beban: { total: 200000 },
+      labaBersih: 500000,
+      marginPersen: 50,
+      tindakan: [
+        {
+          tarifId: 1,
+          nama: 'Tambal',
+          qty: 10,
+          hargaRata: 100000,
+          diskon: 5000,
+          pendapatan: 950000,
+          modal: 200000,
+          biayaLab: 100000,
+          shareFee: 150000,
+          laba: 500000,
+        },
+      ],
+      ...o,
+    });
+
     function mockDirectQueries(
       overrides: {
         summaryRow?: any[];
@@ -1395,9 +1424,8 @@ describe('ReportsService', () => {
         byPaymentMethod?: any[];
         byDoctorRevenue?: any[];
         shareRows?: any[];
-        tindakanRows?: any[];
-        pengeluaranRow?: any[];
-        prevSummaryRow?: any[];
+        current?: any;
+        previous?: any;
       } = {},
     ) {
       billingRepo.query
@@ -1413,21 +1441,19 @@ describe('ReportsService', () => {
           ],
         )
         .mockResolvedValueOnce(overrides.byDay ?? [])
-        .mockResolvedValueOnce(overrides.byDoctorRevenue ?? [])
-        .mockResolvedValueOnce(
-          overrides.prevSummaryRow ?? [{ totalPaid: '0' }],
-        );
+        .mockResolvedValueOnce(overrides.byDoctorRevenue ?? []);
       paymentRepo.query.mockResolvedValueOnce(overrides.byPaymentMethod ?? []);
-      billingItemRepo.query
-        .mockResolvedValueOnce(overrides.shareRows ?? [])
-        .mockResolvedValueOnce(overrides.tindakanRows ?? []);
-      operationalRecordRepo.query.mockResolvedValueOnce(
-        overrides.pengeluaranRow ?? [{ total: '0' }],
-      );
+      billingItemRepo.query.mockResolvedValueOnce(overrides.shareRows ?? []);
+      (service as any).profitLoss.compute
+        .mockResolvedValueOnce(overrides.current ?? plStub())
+        .mockResolvedValueOnce(
+          overrides.previous ?? plStub({ pendapatan: { bersih: 0 } }),
+        );
     }
 
     let businessMetricsSpy: jest.SpyInstance;
     beforeEach(() => {
+      (service as any).profitLoss.compute.mockReset();
       businessMetricsSpy = jest
         .spyOn(service as any, 'computeBusinessMetrics')
         .mockResolvedValue({
@@ -1443,14 +1469,11 @@ describe('ReportsService', () => {
       jest.spyOn(service as any, 'getDiscountStats').mockResolvedValue({});
     });
 
+    const q = { dateFrom: '2026-01-01', dateTo: '2026-01-31' } as any;
+
     it('computes the financial summary and collection rate (positive)', async () => {
       mockDirectQueries();
-
-      const result = await service.getFinancialReport(1, {
-        dateFrom: '2026-01-01',
-        dateTo: '2026-01-31',
-      } as any);
-
+      const result = await service.getFinancialReport(1, q);
       expect(result.data.summary).toEqual({
         totalBilling: 1000000,
         totalPaid: 800000,
@@ -1477,12 +1500,7 @@ describe('ReportsService', () => {
           },
         ],
       });
-
-      const result = await service.getFinancialReport(1, {
-        dateFrom: '2026-01-01',
-        dateTo: '2026-01-31',
-      } as any);
-
+      const result = await service.getFinancialReport(1, q);
       expect(result.data.summary.collectionRate).toBe(0);
     });
 
@@ -1502,12 +1520,7 @@ describe('ReportsService', () => {
           },
         ],
       });
-
-      const result = await service.getFinancialReport(1, {
-        dateFrom: '2026-01-01',
-        dateTo: '2026-01-31',
-      } as any);
-
+      const result = await service.getFinancialReport(1, q);
       expect(result.data.byDoctor[0]).toEqual({
         practitionerName: 'Dr. A',
         revenue: 500000,
@@ -1515,69 +1528,41 @@ describe('ReportsService', () => {
       });
     });
 
-    it('computes modal, labaBersih and marginPersen from tindakanTerlaris + pengeluaran (positive)', async () => {
-      mockDirectQueries({
-        summaryRow: [
-          {
-            totalBilling: '1000000',
-            totalPaid: '1000000',
-            totalOutstanding: '0',
-            totalRefunded: '0',
-            totalBillings: '5',
-          },
-        ],
-        tindakanRows: [
-          {
-            tarifId: 1,
-            tarifName: 'Tambal',
-            hargaPokok: '20000',
-            hargaJual: '100000',
-            frekuensi: '10',
-            totalDiskon: '5000',
-            totalSubtotal: '950000',
-          },
-        ],
-        pengeluaranRow: [{ total: '100000' }],
+    it('takes ringkasan & tindakan from the single profit-loss definition (positive)', async () => {
+      mockDirectQueries();
+      const result = await service.getFinancialReport(1, q);
+      expect(result.data.ringkasan).toEqual({
+        pendapatanTotal: 1000000,
+        modal: 300000,
+        labaKotor: 700000,
+        labaBersih: 500000,
+        pengeluaran: 200000,
+        marginPersen: 50,
       });
-
-      const result = await service.getFinancialReport(1, {
-        dateFrom: '2026-01-01',
-        dateTo: '2026-01-31',
-      } as any);
-
-      // modal = 20000 * 10 = 200000; labaBersih = 1,000,000(paid) - 200,000(modal) - 100,000(pengeluaran)
-      expect(result.data.ringkasan.modal).toBe(200000);
-      expect(result.data.ringkasan.labaBersih).toBe(700000);
-      expect(result.data.ringkasan.marginPersen).toBe(70);
-      expect(result.data.tindakanTerlaris[0].labaBersih).toBe(950000 - 200000);
+      // pendapatan - modal - beban = laba bersih
+      const r = result.data.ringkasan;
+      expect(r.pendapatanTotal - r.modal - r.pengeluaran).toBe(r.labaBersih);
+      expect(result.data.tindakanTerlaris[0]).toMatchObject({
+        namaTindakan: 'Tambal',
+        frekuensi: 10,
+        biayaLab: 100000,
+        shareFee: 150000,
+        labaBersih: 500000,
+      });
     });
 
     it('reports changePercent as null when the previous period had no revenue (negative/edge)', async () => {
-      mockDirectQueries({ prevSummaryRow: [{ totalPaid: null }] });
-      const result = await service.getFinancialReport(1, {
-        dateFrom: '2026-01-01',
-        dateTo: '2026-01-31',
-      } as any);
+      mockDirectQueries();
+      const result = await service.getFinancialReport(1, q);
       expect(result.data.comparison.changePercent).toBeNull();
     });
 
     it('computes a positive changePercent against a nonzero previous period (positive)', async () => {
       mockDirectQueries({
-        summaryRow: [
-          {
-            totalBilling: '1200000',
-            totalPaid: '1200000',
-            totalOutstanding: '0',
-            totalRefunded: '0',
-            totalBillings: '5',
-          },
-        ],
-        prevSummaryRow: [{ totalPaid: '1000000' }],
+        current: plStub({ pendapatan: { bersih: 1200000 } }),
+        previous: plStub({ pendapatan: { bersih: 1000000 } }),
       });
-      const result = await service.getFinancialReport(1, {
-        dateFrom: '2026-01-01',
-        dateTo: '2026-01-31',
-      } as any);
+      const result = await service.getFinancialReport(1, q);
       expect(result.data.comparison.changePercent).toBe(20);
     });
   });
@@ -1600,6 +1585,7 @@ describe('ReportsService', () => {
           ringkasan: {
             pendapatanTotal: 900000,
             modal: 300000,
+            labaKotor: 600000,
             labaBersih: 500000,
             pengeluaran: 100000,
             marginPersen: 55.6,
@@ -1630,20 +1616,20 @@ describe('ReportsService', () => {
       const getFinancialReportSpy = jest
         .spyOn(service, 'getFinancialReport')
         .mockResolvedValue(baseReport as any);
-      const monthlyTrendSpy = jest
-        .spyOn(service as any, 'computeMonthlyTrend')
-        .mockResolvedValue([
-          {
-            month: '2026-01',
-            revenue: 100,
-            modal: 10,
-            expense: 5,
-            netProfit: 85,
-            marginPercent: 85,
-            visits: 1,
-            newPatients: 1,
-          },
-        ]);
+      const monthlyTrendSpy = (
+        service as any
+      ).profitLoss.trend.mockResolvedValue([
+        {
+          month: '2026-01',
+          revenue: 100,
+          modal: 10,
+          expense: 5,
+          netProfit: 85,
+          marginPercent: 85,
+          visits: 1,
+          newPatients: 1,
+        },
+      ]);
       const byDoctorProfitSpy = jest
         .spyOn(service as any, 'computeByDoctorProfit')
         .mockResolvedValue([
@@ -1674,7 +1660,7 @@ describe('ReportsService', () => {
         dateFrom: '2026-01-01',
         dateTo: '2026-01-31',
       });
-      expect(result.data.labaKotor).toBe(900000 - 300000); // totalPaid - modal
+      expect(result.data.labaKotor).toBe(600000); // dari ringkasan (pendapatan - HPP)
       expect(result.data.monthlyTrend).toEqual([
         {
           month: '2026-01',
@@ -1722,7 +1708,7 @@ describe('ReportsService', () => {
       jest
         .spyOn(service, 'getFinancialReport')
         .mockResolvedValue(baseReport as any);
-      jest.spyOn(service as any, 'computeMonthlyTrend').mockResolvedValue([]);
+      (service as any).profitLoss.trend.mockResolvedValue([]);
       jest.spyOn(service as any, 'computeByDoctorProfit').mockResolvedValue([]);
       jest.spyOn(service as any, 'computeVisitHeatmap').mockResolvedValue([]);
       jest.spyOn(service as any, 'computeStockReport').mockResolvedValue({

@@ -27,6 +27,8 @@ import { Barang } from '../gudang/entities/barang.entity';
 import { StokTransaksi } from '../gudang/entities/stok-transaksi.entity';
 import { Patient } from '../patients/entities/patient.entity';
 import { PatientOriginGeocode } from './entities/patient-origin-geocode.entity';
+import { SHARE_FEE_JOIN, SHARE_FEE_SELECT, computeShareFee } from './share-fee';
+import { ProfitLossService } from './profit-loss.service';
 
 export interface DoctorFeeShareBreakdownItem {
   tarifId: number;
@@ -50,49 +52,6 @@ export interface DoctorFeeShareEntry {
   totalTindakan: number;
   totalBiayaLab: number;
   totalShareFee: number;
-}
-
-/**
- * Kolom share-fee per (dokter, tarif). Dasar fee persen = (harga satuan di
- * tagihan - biaya lab) x qty, memakai snapshot biaya lab di billing item
- * (fallback ke tarif untuk data lama). Konfigurasi fee nonaktif diabaikan.
- */
-const SHARE_FEE_SELECT = `
-         SUM(bi.quantity) AS count,
-         SUM(bi.quantity * bi.unit_price) AS totalHarga,
-         SUM(bi.quantity * COALESCE(bi.biaya_lab, t.biaya_lab, 0)) AS totalBiayaLab,
-         SUM(bi.quantity * GREATEST(bi.unit_price - COALESCE(bi.biaya_lab, t.biaya_lab, 0), 0)) AS dasarFee,
-         SUM(bi.quantity * COALESCE(bi.harga_pokok, t.harga_pokok, 0)) AS totalModal,
-         dfc.fee_type AS feeType,
-         dfc.fee_value AS feeValue`;
-
-const SHARE_FEE_JOIN = `
-       LEFT JOIN doctor_fee_configs dfc
-         ON dfc.tarif_id = t.id AND dfc.clinic_id = b.clinic_id AND dfc.is_active = 1`;
-
-export function computeShareFee(row: any) {
-  const count = parseInt(row.count, 10) || 0;
-  const hargaJual = parseFloat(row.hargaJual || 0);
-  const totalHarga =
-    row.totalHarga != null ? parseFloat(row.totalHarga) : hargaJual * count;
-  const totalBiayaLab = parseFloat(row.totalBiayaLab || 0);
-  const dasarFee =
-    row.dasarFee != null
-      ? parseFloat(row.dasarFee)
-      : Math.max(totalHarga - totalBiayaLab, 0);
-  const feeType: FeeType = row.feeType || FeeType.PERCENTAGE;
-  const feeValue = parseFloat(row.feeValue || 0);
-  const totalShare =
-    feeType === FeeType.FIXED ? count * feeValue : dasarFee * (feeValue / 100);
-  return {
-    count,
-    totalHarga,
-    totalBiayaLab,
-    dasarFee,
-    feeType,
-    feeValue,
-    totalShare,
-  };
 }
 
 @Injectable()
@@ -120,6 +79,7 @@ export class ReportsService {
     private readonly patientRepo: Repository<Patient>,
     @InjectRepository(PatientOriginGeocode)
     private readonly patientOriginGeocodeRepo: Repository<PatientOriginGeocode>,
+    private readonly profitLoss: ProfitLossService,
   ) {}
 
   async getDoctorFeeShareReport(
@@ -149,7 +109,7 @@ export class ReportsService {
        JOIN practitioners pr ON e.practitioner_id = pr.id
        JOIN tarifs t ON bi.tarif_id = t.id${SHARE_FEE_JOIN}
        WHERE b.clinic_id = ?
-         AND b.status != 'cancelled'
+         AND b.status NOT IN ('cancelled', 'refunded')
          AND YEAR(b.created_at) = ?
          AND MONTH(b.created_at) = ?
          ${practitionerFilter}
@@ -580,7 +540,7 @@ export class ReportsService {
        JOIN practitioners pr ON e.practitioner_id = pr.id
        JOIN tarifs t ON bi.tarif_id = t.id${SHARE_FEE_JOIN}
        WHERE b.clinic_id = ? AND DATE(b.created_at) BETWEEN ? AND ?
-         AND b.status != 'cancelled'
+         AND b.status NOT IN ('cancelled', 'refunded')
        GROUP BY pr.id, t.id, dfc.fee_type, dfc.fee_value`,
       [clinicId, query.dateFrom, query.dateTo],
     );
@@ -600,63 +560,29 @@ export class ReportsService {
       doctorFeeShare: shareByPractitioner.get(r.practitionerId) || 0,
     }));
 
-    // bi.subtotal is per-item, pre billing-level discount — a billing-level
-    // discount/additional fee (billings.total_discount / additional_fee)
-    // never lands on any single item, so raw SUM(bi.subtotal) overstates
-    // revenue whenever a billing has one. Scale each item by that billing's
-    // grand_total/subtotal ratio so tindakan-level totals foot back to the
-    // clinic's actual (billing.grand_total-based) revenue.
-    const tindakanRows = await this.billingItemRepo.query(
-      `SELECT
-         t.id AS tarifId,
-         t.name AS tarifName,
-         t.harga_pokok AS hargaPokok,
-         t.harga_jual AS hargaJual,
-         SUM(bi.quantity) AS frekuensi,
-         SUM(bi.discount) AS totalDiskon,
-         SUM(bi.subtotal * (b.grand_total / NULLIF(b.subtotal, 0))) AS totalSubtotal
-       FROM billing_items bi
-       JOIN billings b ON bi.billing_id = b.id
-       JOIN tarifs t ON bi.tarif_id = t.id
-       WHERE b.clinic_id = ? AND DATE(b.created_at) BETWEEN ? AND ?
-         AND b.status != 'cancelled'
-       GROUP BY t.id, t.name, t.harga_pokok, t.harga_jual
-       ORDER BY frekuensi DESC`,
-      [clinicId, query.dateFrom, query.dateTo],
+    // Laba rugi satu definisi (lihat ProfitLossService): pendapatan bersih -
+    // HPP (modal + lab) - beban (share fee, gaji, operasional rutin). Belanja
+    // bahan/alat tidak dihitung lagi sebagai beban karena bahan sudah masuk HPP.
+    const pl = await this.profitLoss.compute(
+      clinicId,
+      query.dateFrom,
+      query.dateTo,
+      { detail: false },
     );
-
-    const tindakanTerlaris = tindakanRows.map((r: any) => {
-      const frekuensi = parseInt(r.frekuensi, 10);
-      const hargaPokok = parseFloat(r.hargaPokok || 0);
-      const hargaJual = parseFloat(r.hargaJual || 0);
-      const totalDiskon = parseFloat(r.totalDiskon || 0);
-      const totalSubtotal = parseFloat(r.totalSubtotal || 0);
-      const modal = hargaPokok * frekuensi;
-      return {
-        tarifId: r.tarifId,
-        namaTindakan: r.tarifName,
-        modal,
-        hargaJual,
-        frekuensi,
-        totalDiskon,
-        labaBersih: totalSubtotal - modal,
-      };
-    });
-
-    const totalModal = tindakanTerlaris.reduce((sum, t) => sum + t.modal, 0);
-
-    const [pengeluaranRow] = await this.operationalRecordRepo.query(
-      `SELECT SUM(nominal) AS total FROM operational_records
-       WHERE clinic_id = ? AND tanggal BETWEEN ? AND ?`,
-      [clinicId, query.dateFrom, query.dateTo],
-    );
-    const totalPengeluaran = parseFloat(pengeluaranRow?.total || 0);
-
-    const labaBersih = totalPaid - totalModal - totalPengeluaran;
-    const marginPersen =
-      totalPaid > 0
-        ? parseFloat(((labaBersih / totalPaid) * 100).toFixed(1))
-        : 0;
+    const tindakanTerlaris = pl.tindakan
+      .map((t) => ({
+        tarifId: t.tarifId,
+        namaTindakan: t.nama,
+        modal: t.modal,
+        biayaLab: t.biayaLab,
+        shareFee: t.shareFee,
+        hargaJual: t.hargaRata,
+        frekuensi: t.qty,
+        totalDiskon: t.diskon,
+        pendapatan: t.pendapatan,
+        labaBersih: t.laba,
+      }))
+      .sort((a, b) => b.frekuensi - a.frekuensi);
 
     // ----- Perbandingan periode sebelumnya (durasi sama, langsung sebelum dateFrom) -----
     const rangeDays =
@@ -671,19 +597,19 @@ export class ReportsService {
     prevDateFrom.setDate(prevDateFrom.getDate() - (rangeDays - 1));
     const toIso = (d: Date) => d.toISOString().slice(0, 10);
 
-    const [prevSummaryRow] = await this.billingRepo.query(
-      `SELECT SUM(paid_amount) AS totalPaid
-       FROM billings
-       WHERE clinic_id = ? AND DATE(created_at) BETWEEN ? AND ?
-         AND status != 'cancelled'`,
-      [clinicId, toIso(prevDateFrom), toIso(prevDateTo)],
+    const prevPl = await this.profitLoss.compute(
+      clinicId,
+      toIso(prevDateFrom),
+      toIso(prevDateTo),
+      { detail: false },
     );
-    const previousPendapatan = parseFloat(prevSummaryRow?.totalPaid || 0);
+    const previousPendapatan = prevPl.pendapatan.bersih;
     const changePercent =
       previousPendapatan > 0
         ? parseFloat(
             (
-              ((totalPaid - previousPendapatan) / previousPendapatan) *
+              ((pl.pendapatan.bersih - previousPendapatan) /
+                previousPendapatan) *
               100
             ).toFixed(1),
           )
@@ -727,12 +653,14 @@ export class ReportsService {
         })),
         byDoctor,
         ringkasan: {
-          pendapatanTotal: totalPaid,
-          modal: totalModal,
-          labaBersih,
-          pengeluaran: totalPengeluaran,
-          marginPersen,
+          pendapatanTotal: pl.pendapatan.bersih,
+          modal: pl.hpp.total,
+          labaKotor: pl.labaKotor,
+          labaBersih: pl.labaBersih,
+          pengeluaran: pl.beban.total,
+          marginPersen: pl.marginPersen,
         },
+        labaRugi: pl,
         tindakanTerlaris,
         paymentStats,
         discountStats,
@@ -872,10 +800,9 @@ export class ReportsService {
   ) {
     const base = await this.getFinancialReport(clinicId, query);
 
-    const monthKeys = this.getTrailingMonthKeys(6);
     const [monthlyTrend, byDoctorProfit, visitHeatmap, stockReport] =
       await Promise.all([
-        this.computeMonthlyTrend(clinicId, monthKeys),
+        this.profitLoss.trend(clinicId, query.dateTo, 6),
         this.computeByDoctorProfit(clinicId, query.dateFrom, query.dateTo),
         this.computeVisitHeatmap(clinicId, query.dateFrom, query.dateTo),
         this.computeStockReport(clinicId, query.dateFrom, query.dateTo),
@@ -886,7 +813,7 @@ export class ReportsService {
       .sort((a, b) => b.totalDiskon - a.totalDiskon)
       .slice(0, 10);
 
-    const labaKotor = base.data.summary.totalPaid - base.data.ringkasan.modal;
+    const labaKotor = base.data.ringkasan.labaKotor;
 
     return {
       data: {
@@ -926,7 +853,7 @@ export class ReportsService {
        JOIN practitioners pr ON e.practitioner_id = pr.id
        JOIN tarifs t ON bi.tarif_id = t.id${SHARE_FEE_JOIN}
        WHERE b.clinic_id = ? AND DATE(b.created_at) BETWEEN ? AND ?
-         AND b.status != 'cancelled'
+         AND b.status NOT IN ('cancelled', 'refunded')
        GROUP BY pr.id, pr.name, t.id, dfc.fee_type, dfc.fee_value`,
       [clinicId, dateFrom, dateTo],
     );
