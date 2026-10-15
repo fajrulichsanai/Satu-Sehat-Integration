@@ -84,6 +84,8 @@ const KEEP_TABLES = new Set([
   'subscription_payments',
   'storage_addons',
   'data_requests',
+  // Catatan internal Super Admin tentang klinik ini.
+  'clinic_admin_notes',
 ]);
 
 export interface RetentionRow {

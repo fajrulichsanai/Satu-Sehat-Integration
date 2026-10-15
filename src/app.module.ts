@@ -32,6 +32,7 @@ import { OwnerCodeModule } from './modules/owner-code/owner-code.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { DataRequestsModule } from './modules/data-requests/data-requests.module';
 import { DataRetentionModule } from './modules/data-retention/data-retention.module';
+import { SuperAdminToolsModule } from './modules/super-admin-tools/super-admin-tools.module';
 import { ContentsModule } from './modules/contents/contents.module';
 import { TerminologyModule } from './modules/terminology/terminology.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
@@ -131,6 +132,7 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     ApiKeysModule,
     DataRequestsModule,
     DataRetentionModule,
+    SuperAdminToolsModule,
     TerminologyModule,
     DashboardModule,
     OperationalRecordsModule,

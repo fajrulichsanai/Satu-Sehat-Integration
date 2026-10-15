@@ -130,23 +130,30 @@ export class SuperAdminReportsService {
     in7.setDate(in7.getDate() + 7);
     const overdueBefore = new Date(Date.now() - 72 * 3600 * 1000);
 
-    const [payments, requests, expiring, deletions, global, notReady] =
-      await Promise.all([
-        this.paymentRepository.count({
-          where: { status: SubscriptionPaymentStatus.PENDING },
-        }),
-        q<{ open: number; overdue: number }>(
-          `SELECT COUNT(*) AS open, COALESCE(SUM(created_at < ?), 0) AS overdue
+    const [
+      payments,
+      requests,
+      expiring,
+      deletions,
+      global,
+      notReady,
+      followUps,
+    ] = await Promise.all([
+      this.paymentRepository.count({
+        where: { status: SubscriptionPaymentStatus.PENDING },
+      }),
+      q<{ open: number; overdue: number }>(
+        `SELECT COUNT(*) AS open, COALESCE(SUM(created_at < ?), 0) AS overdue
              FROM data_requests WHERE status IN ('pending', 'in_progress')`,
-          [overdueBefore],
-        ),
-        q<{
-          clinicId: number;
-          clinicName: string;
-          endDate: string;
-          tier: string | null;
-        }>(
-          `SELECT c.id AS clinicId, c.name AS clinicName,
+        [overdueBefore],
+      ),
+      q<{
+        clinicId: number;
+        clinicName: string;
+        endDate: string;
+        tier: string | null;
+      }>(
+        `SELECT c.id AS clinicId, c.name AS clinicName,
                   DATE_FORMAT(s.end_date, '%Y-%m-%d') AS endDate, p.tier AS tier
              FROM clinics c
              JOIN clinic_subscriptions s ON s.id = (
@@ -156,26 +163,41 @@ export class SuperAdminReportsService {
             WHERE c.data_purged_at IS NULL AND s.status = 'active'
               AND s.end_date >= ? AND s.end_date <= ?
             ORDER BY s.end_date ASC`,
-          [iso(today), iso(in7)],
-        ),
-        q<{ clinicId: number; clinicName: string; deleteAfter: string }>(
-          `SELECT id AS clinicId, name AS clinicName,
+        [iso(today), iso(in7)],
+      ),
+      q<{ clinicId: number; clinicName: string; deleteAfter: string }>(
+        `SELECT id AS clinicId, name AS clinicName,
                   DATE_FORMAT(data_delete_after, '%Y-%m-%d') AS deleteAfter
              FROM clinics
             WHERE data_delete_after IS NOT NULL AND data_purged_at IS NULL
             ORDER BY data_delete_after ASC`,
-        ),
-        q<{ value: string }>(
-          "SELECT value FROM platform_settings WHERE setting_key = 'satusehat.enabled'",
-        ),
-        q<{ n: number }>(
-          `SELECT COUNT(*) AS n FROM clinics c
+      ),
+      q<{ value: string }>(
+        "SELECT value FROM platform_settings WHERE setting_key = 'satusehat.enabled'",
+      ),
+      q<{ n: number }>(
+        `SELECT COUNT(*) AS n FROM clinics c
             WHERE c.data_purged_at IS NULL
               AND (c.satusehat_client_id IS NULL OR c.satusehat_org_id IS NULL)
               AND NOT EXISTS (SELECT 1 FROM clinic_features f WHERE f.clinic_id = c.id
                                AND f.feature_key = 'satusehat' AND f.enabled = 0)`,
-        ),
-      ]);
+      ),
+      // Tindak lanjut catatan internal yang jatuh tempo (PRD UP-06).
+      q<{
+        id: number;
+        clinicId: number;
+        clinicName: string;
+        body: string;
+        followUpOn: string;
+      }>(
+        `SELECT n.id, n.clinic_id AS clinicId, c.name AS clinicName, n.body,
+                  DATE_FORMAT(n.follow_up_on, '%Y-%m-%d') AS followUpOn
+             FROM clinic_admin_notes n JOIN clinics c ON c.id = n.clinic_id
+            WHERE n.done_at IS NULL AND n.follow_up_on IS NOT NULL AND n.follow_up_on <= ?
+            ORDER BY n.follow_up_on ASC LIMIT 20`,
+        [iso(today)],
+      ).catch(() => []),
+    ]);
     const daysLeft = (date: string) =>
       Math.round(
         (new Date(`${date}T00:00:00`).getTime() -
@@ -194,6 +216,11 @@ export class SuperAdminReportsService {
         ...e,
         clinicId: Number(e.clinicId),
         daysLeft: daysLeft(e.endDate),
+      })),
+      followUps: followUps.map((f) => ({
+        ...f,
+        id: Number(f.id),
+        clinicId: Number(f.clinicId),
       })),
       dataDeletions: deletions.map((d) => ({
         ...d,

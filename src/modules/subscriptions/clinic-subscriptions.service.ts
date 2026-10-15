@@ -31,6 +31,9 @@ export interface ClinicSubscriptionSummary {
   activeUsers?: number;
   satusehatStatus?: SatusehatStatus;
   multiClinicOwner?: { id: number; name: string } | null;
+  /** Indikator klinik tidak aktif (PRD UP-07). */
+  lastLoginAt?: Date | null;
+  visits30?: number;
   dataDeleteAfter?: string | null;
   dataPurgedAt?: Date | null;
 }
@@ -224,32 +227,42 @@ export class ClinicSubscriptionsService {
       clinicIds.length
         ? this.clinicRepository.manager.query(sql, params)
         : Promise.resolve([]);
-    const [owners, counts, features, links, global] = await Promise.all([
-      q<Owner>(
-        `SELECT clinic_id AS clinicId, id, name, email FROM users
+    const [owners, counts, features, links, global, activity] =
+      await Promise.all([
+        q<Owner>(
+          `SELECT clinic_id AS clinicId, id, name, email FROM users
           WHERE clinic_id IN (?) AND role = 'owner' ORDER BY is_active DESC, id ASC`,
-        [clinicIds],
-      ),
-      q<{ clinicId: number; n: number }>(
-        `SELECT clinic_id AS clinicId, COUNT(*) AS n FROM users
+          [clinicIds],
+        ),
+        q<{ clinicId: number; n: number }>(
+          `SELECT clinic_id AS clinicId, COUNT(*) AS n FROM users
           WHERE clinic_id IN (?) AND is_active = 1 GROUP BY clinic_id`,
-        [clinicIds],
-      ),
-      q<{ clinicId: number; enabled: number }>(
-        `SELECT clinic_id AS clinicId, enabled FROM clinic_features
+          [clinicIds],
+        ),
+        q<{ clinicId: number; enabled: number }>(
+          `SELECT clinic_id AS clinicId, enabled FROM clinic_features
           WHERE clinic_id IN (?) AND feature_key = 'satusehat'`,
-        [clinicIds],
-      ),
-      q<{ clinicId: number; id: number; name: string }>(
-        `SELECT l.clinic_id AS clinicId, u.id, u.name FROM owner_clinic_links l
+          [clinicIds],
+        ),
+        q<{ clinicId: number; id: number; name: string }>(
+          `SELECT l.clinic_id AS clinicId, u.id, u.name FROM owner_clinic_links l
            JOIN users u ON u.id = l.owner_id
           WHERE l.clinic_id IN (?) AND l.status = 'approved'`,
-        [clinicIds],
-      ),
-      q<{ value: string }>(
-        "SELECT value FROM platform_settings WHERE setting_key = 'satusehat.enabled'",
-      ),
-    ]);
+          [clinicIds],
+        ),
+        q<{ value: string }>(
+          "SELECT value FROM platform_settings WHERE setting_key = 'satusehat.enabled'",
+        ),
+        q<{ clinicId: number; lastLoginAt: Date | null; visits30: number }>(
+          `SELECT c.id AS clinicId,
+                (SELECT MAX(u.last_login_at) FROM users u WHERE u.clinic_id = c.id) AS lastLoginAt,
+                (SELECT COUNT(*) FROM encounters e
+                  WHERE e.clinic_id = c.id AND e.created_at >= NOW() - INTERVAL 30 DAY) AS visits30
+           FROM clinics c WHERE c.id IN (?)`,
+          [clinicIds],
+        ),
+      ]);
+    const activityBy = new Map(activity.map((a) => [Number(a.clinicId), a]));
     const ownerBy = new Map<number, Owner>();
     for (const o of owners) {
       if (!ownerBy.has(Number(o.clinicId))) ownerBy.set(Number(o.clinicId), o);
@@ -283,6 +296,8 @@ export class ClinicSubscriptionsService {
         activeUsers: countBy.get(clinic.id) ?? 0,
         satusehatStatus,
         multiClinicOwner: linkBy.get(clinic.id) ?? null,
+        lastLoginAt: activityBy.get(clinic.id)?.lastLoginAt ?? null,
+        visits30: Number(activityBy.get(clinic.id)?.visits30 ?? 0),
       };
     };
   }
