@@ -235,7 +235,8 @@ export class ClinicDataExportService {
           value !== undefined
         ) {
           const label = lookups[LOOKUP_COLUMNS[key]].get(Number(value));
-          value = label ? `${label} (#${String(value)})` : `#${String(value)}`;
+          const id = Number(value);
+          value = label ? `${label} (#${id})` : `#${id}`;
         } else {
           value = this.cell(zip, spec.table, row, key, value);
         }
@@ -247,7 +248,11 @@ export class ClinicDataExportService {
       let max = String(col.header ?? '').length;
       col.eachCell?.({ includeEmpty: false }, (cell) => {
         const len =
-          cell.value instanceof Date ? 18 : String(cell.value ?? '').length;
+          cell.value instanceof Date
+            ? 18
+            : typeof cell.value === 'string'
+              ? cell.value.length
+              : 12;
         if (len > max) max = len;
       });
       col.width = Math.min(50, Math.max(10, max + 2));
@@ -293,7 +298,7 @@ export class ClinicDataExportService {
     if (dataUrl) {
       const ext =
         dataUrl[1] === 'svg+xml' ? 'svg' : dataUrl[1].replace('jpeg', 'jpg');
-      const path = `berkas/tanda-tangan/${table}-${String(row.id)}-${key}.${ext}`;
+      const path = `berkas/tanda-tangan/${table}-${Number(row.id)}-${key}.${ext}`;
       zip.file(path, Buffer.from(dataUrl[2], 'base64'));
       return path;
     }
@@ -317,7 +322,7 @@ export class ClinicDataExportService {
         : '';
     const ext = extname(url.split('?')[0]).slice(0, 6) || '.bin';
     const name = original && extname(original) ? original : `${original}${ext}`;
-    const path = `berkas/${folder}/${String(row.id)}-${key.replace(/_url$/, '')}${name}`;
+    const path = `berkas/${folder}/${Number(row.id)}-${key.replace(/_url$/, '')}${name}`;
     try {
       if (url.startsWith('/uploads/')) {
         const local = normalize(join(process.cwd(), url.replace(/^\//, '')));

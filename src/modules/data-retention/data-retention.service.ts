@@ -365,7 +365,7 @@ export class DataRetentionService {
     }
 
     const files = await this.collectFiles(clinicId, clinic.logoUrl);
-    const existing = new Set(
+    const existing = new Set<string>(
       (
         (await this.dataSource.query(
           `SELECT TABLE_NAME AS t FROM information_schema.COLUMNS
@@ -373,7 +373,7 @@ export class DataRetentionService {
         )) as { t: string }[]
       ).map((r) => r.t),
     );
-    const allTables = new Set(
+    const allTables = new Set<string>(
       (
         (await this.dataSource.query(
           'SELECT TABLE_NAME AS t FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()',
