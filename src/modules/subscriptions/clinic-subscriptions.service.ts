@@ -131,8 +131,17 @@ export class ClinicSubscriptionsService {
 
     const endDate = new Date(base);
     if (periods > 1 && plan.billingCycle !== 'yearly') {
-      // 3/6/12 bulan: calendar months, so 12 months is a full year.
+      // 3/6/12 bulan: calendar months, so 12 months is a full year. Clamp
+      // to the month's last day (31 Des + 6 bulan = 30 Jun, not 1 Jul).
+      const day = endDate.getDate();
+      endDate.setDate(1);
       endDate.setMonth(endDate.getMonth() + periods);
+      const lastDay = new Date(
+        endDate.getFullYear(),
+        endDate.getMonth() + 1,
+        0,
+      ).getDate();
+      endDate.setDate(Math.min(day, lastDay));
     } else {
       endDate.setDate(
         endDate.getDate() + plan.durationDays * Math.max(1, periods),
