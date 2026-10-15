@@ -78,6 +78,15 @@ export class SubscriptionPaymentsController {
     return { planId: plan.id, planName: plan.name, ...quote };
   }
 
+  @Get('upgrade-quote')
+  @ApiOperation({
+    summary:
+      'Naik paket: selisih harga untuk sisa masa aktif (paket baru langsung berlaku setelah dikonfirmasi)',
+  })
+  upgradeQuote(@Query() query: QuoteQueryDto, @ClinicId() clinicId: number) {
+    return this.paymentsService.upgradeQuote(clinicId, query.planId);
+  }
+
   @Get('mine')
   @ApiOperation({ summary: "List the caller's clinic payment claim history" })
   listMine(
@@ -94,6 +103,21 @@ export class SubscriptionPaymentsController {
   })
   listQueue(@Query() query: SubscriptionPaymentQueryDto) {
     return this.paymentsService.listQueue(query);
+  }
+
+  @Get(':id/receipt.pdf')
+  @ApiOperation({ summary: 'Kuitansi PDF pembayaran yang sudah dikonfirmasi' })
+  async receiptPdf(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId({ optional: true }) clinicId: number | null,
+    @Res() res: Response,
+  ) {
+    const { fileName, pdf } = await this.paymentsService.receiptPdf(id, {
+      clinicId,
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(pdf);
   }
 
   @Get(':id/receipt')

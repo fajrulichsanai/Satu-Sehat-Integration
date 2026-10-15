@@ -260,6 +260,25 @@ export class MultiClinicController {
     );
   }
 
+  @Get('payments/:id/receipt.pdf')
+  @Roles(UserRole.MULTI_CLINIC_OWNER)
+  @ApiOperation({ summary: 'Kuitansi PDF pembayaran gabungan milik akun ini' })
+  async receiptPdf(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: any,
+    @Res() res: Response,
+  ) {
+    const { fileName, pdf } = await this.subscriptionPaymentsService.receiptPdf(
+      id,
+      {
+        ownerId: user.userId,
+      },
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(pdf);
+  }
+
   @Get('payments/:id/receipt')
   @Roles(UserRole.MULTI_CLINIC_OWNER)
   @ApiOperation({ summary: 'Kuitansi pembayaran gabungan milik akun ini' })

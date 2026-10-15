@@ -45,7 +45,12 @@ describe('SubscriptionPaymentsService', () => {
   let clinicRepo: { find: jest.Mock };
   let userRepo: { find: jest.Mock };
   let plansService: { findOne: jest.Mock };
-  let clinicSubsService: { extendSubscription: jest.Mock };
+  let clinicSubsService: {
+    extendSubscription: jest.Mock;
+    getInEffectForClinic: jest.Mock;
+    paidUntil: jest.Mock;
+    applyUpgrade: jest.Mock;
+  };
   let linkRepo: { findOne: jest.Mock };
   let notifications: { sendPaymentReceipt: jest.Mock };
   let storageQuota: {
@@ -60,10 +65,18 @@ describe('SubscriptionPaymentsService', () => {
       create: jest.fn((data) => data),
       save: jest.fn((data) => Promise.resolve({ id: 1, ...data })),
     };
-    clinicRepo = { find: jest.fn().mockResolvedValue([]) };
+    clinicRepo = {
+      find: jest.fn().mockResolvedValue([]),
+      manager: { query: jest.fn().mockResolvedValue([{ n: 3 }]) },
+    } as any;
     userRepo = { find: jest.fn().mockResolvedValue([]) };
     plansService = { findOne: jest.fn() };
-    clinicSubsService = { extendSubscription: jest.fn() };
+    clinicSubsService = {
+      extendSubscription: jest.fn(),
+      getInEffectForClinic: jest.fn().mockResolvedValue(null),
+      paidUntil: jest.fn().mockResolvedValue(null),
+      applyUpgrade: jest.fn(),
+    };
     linkRepo = { findOne: jest.fn().mockResolvedValue(null) };
     notifications = { sendPaymentReceipt: jest.fn().mockResolvedValue(true) };
     storageQuota = {
@@ -461,14 +474,14 @@ describe('SubscriptionPaymentsService', () => {
       clinicSubsService.extendSubscription.mockResolvedValue({ id: 99 });
 
       await service.confirm(7, {}, 1);
+      // The receipt (with its PDF) is sent after the confirm resolves.
+      await new Promise((r) => setImmediate(r));
 
       expect(clinicSubsService.extendSubscription).toHaveBeenCalledTimes(2);
-      expect(notifications.sendPaymentReceipt).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: 7,
-          status: SubscriptionPaymentStatus.CONFIRMED,
-        }),
-      );
+      expect(notifications.sendPaymentReceipt.mock.calls[0][0]).toMatchObject({
+        id: 7,
+        status: SubscriptionPaymentStatus.CONFIRMED,
+      });
     });
 
     it('throws NotFoundException when the payment does not exist (negative)', async () => {
@@ -607,6 +620,109 @@ describe('SubscriptionPaymentsService', () => {
       await expect(
         service.receipt(7, { clinicId: null }),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('naik/turun paket', () => {
+    const starter = {
+      id: 3,
+      name: 'Starter',
+      tier: SubscriptionPlanTier.BASIC,
+      price: 199000,
+      promoPrice: 99000,
+      promoUntil: '2999-12-31',
+      ownerFee: 0,
+    };
+    const pro = {
+      id: 1,
+      name: 'Pro',
+      tier: SubscriptionPlanTier.PRO,
+      price: 299000,
+      promoPrice: 149000,
+      promoUntil: '2999-12-31',
+      ownerFee: 0,
+      maxUsers: null,
+    };
+
+    it('quotes the price difference for the remaining days (positive)', async () => {
+      plansService.findOne.mockResolvedValue(pro);
+      clinicSubsService.getInEffectForClinic.mockResolvedValue({
+        id: 9,
+        planId: 3,
+        plan: starter,
+      });
+      clinicSubsService.paidUntil.mockResolvedValue('2026-11-13');
+      const q = await service.upgradeQuote(5, 1, '2026-10-15');
+      // (149.000 − 99.000) × 30 hari / 30 = 50.000
+      expect(q).toMatchObject({
+        allowed: true,
+        remainingDays: 30,
+        monthlyDifference: 50000,
+        amount: 50000,
+      });
+    });
+
+    it('refuses an upgrade during the trial or to a lower plan (negative)', async () => {
+      plansService.findOne.mockResolvedValue(pro);
+      clinicSubsService.getInEffectForClinic.mockResolvedValue({
+        id: 9,
+        planId: 4,
+        plan: { tier: SubscriptionPlanTier.TRIAL },
+      });
+      await expect(service.upgradeQuote(5, 1)).resolves.toMatchObject({
+        allowed: false,
+      });
+      plansService.findOne.mockResolvedValue(starter);
+      clinicSubsService.getInEffectForClinic.mockResolvedValue({
+        id: 9,
+        planId: 1,
+        plan: pro,
+      });
+      await expect(service.upgradeQuote(5, 3)).resolves.toMatchObject({
+        allowed: false,
+      });
+    });
+
+    it('stores an upgrade claim without extending, and confirm applies it (positive)', async () => {
+      plansService.findOne.mockResolvedValue(pro);
+      clinicSubsService.getInEffectForClinic.mockResolvedValue({
+        id: 9,
+        planId: 3,
+        plan: starter,
+      });
+      clinicSubsService.paidUntil.mockResolvedValue('2999-01-01');
+      const claim = await service.claim(
+        5,
+        { planId: 1, kind: 'upgrade' } as any,
+        9,
+      );
+      expect(claim).toMatchObject({ kind: 'upgrade', months: 0 });
+
+      paymentRepo.findOne.mockResolvedValue({
+        id: 1,
+        clinicId: 5,
+        planId: 1,
+        kind: 'upgrade',
+        status: SubscriptionPaymentStatus.PENDING,
+      });
+      clinicSubsService.applyUpgrade.mockResolvedValue({ id: 77 });
+      const confirmed = await service.confirm(1, {} as any, 30);
+      expect(clinicSubsService.applyUpgrade).toHaveBeenCalledWith(5, 1, 30);
+      expect(clinicSubsService.extendSubscription).not.toHaveBeenCalled();
+      expect(confirmed.subscriptionId).toBe(77);
+    });
+
+    it('rejects a downgrade when active accounts exceed the target plan (negative)', async () => {
+      clinicSubsService.getInEffectForClinic.mockResolvedValue({
+        id: 9,
+        planId: 1,
+        plan: pro,
+      });
+      plansService.findOne.mockResolvedValue(starter);
+      (clinicRepo as any).manager.query.mockResolvedValue([{ n: 8 }]);
+      await expect(
+        service.claim(5, { planId: 3 } as any, 9),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 });

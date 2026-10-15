@@ -90,4 +90,13 @@ export class SubscriptionPlan extends BaseEntity {
 
   @Column({ name: 'promo_until', type: 'date', nullable: true })
   promoUntil: string | null;
+
+  // Biaya admin owner Multi Klinik selama promo (null = ownerFee biasa).
+  @Column('decimal', {
+    name: 'promo_owner_fee',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
+  promoOwnerFee: number | null;
 }

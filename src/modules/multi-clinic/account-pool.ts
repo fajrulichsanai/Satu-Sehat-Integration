@@ -64,6 +64,9 @@ export interface AccountQuota {
   tier: string | null;
   planName: string | null;
   activeBranches?: number;
+  /** Masa coba: 'starter' minggu pertama, 'pro' minggu kedua. */
+  trialStage?: 'starter' | 'pro';
+  trialProFrom?: string;
 }
 
 /**
@@ -98,6 +101,8 @@ export async function accountQuotaForClinic(
     scope: 'clinic',
     tier: plan.tier,
     planName: plan.planName,
+    trialStage: plan.trialStage,
+    trialProFrom: plan.trialProFrom,
   };
 }
 
@@ -116,9 +121,13 @@ export async function assertAccountRoom(
   const message =
     quota.scope === 'multiklinik'
       ? `Jatah akun gabungan multiklinik sudah penuh (${quota.used}/${quota.limit}). Nonaktifkan akun yang tidak dipakai atau hubungi owner multiklinik.`
-      : quota.tier === 'basic' || !quota.tier
-        ? `Batas akun paket ${tierName} sudah penuh (${quota.used}/${quota.limit}). Naik ke paket Pro untuk sampai 25 akun, atau nonaktifkan akun yang tidak dipakai.`
-        : `Batas akun paket ${tierName} sudah penuh (${quota.used}/${quota.limit}). Nonaktifkan akun yang tidak dipakai, atau hubungi tim ApexRecord untuk batas lebih besar.`;
+      : quota.tier === 'trial'
+        ? quota.trialStage === 'starter'
+          ? `Masa coba minggu pertama dibatasi ${quota.limit} akun seperti paket Starter. Mulai ${quota.trialProFrom} batasnya naik menjadi 25 akun seperti paket Pro, atau berlangganan sekarang.`
+          : `Batas akun masa coba sudah penuh (${quota.used}/${quota.limit}). Berlangganan paket Pro untuk tetap memakai sampai 25 akun.`
+        : quota.tier === 'basic' || !quota.tier
+          ? `Batas akun paket ${tierName} sudah penuh (${quota.used}/${quota.limit}). Naik ke paket Pro untuk sampai 25 akun, atau nonaktifkan akun yang tidak dipakai.`
+          : `Batas akun paket ${tierName} sudah penuh (${quota.used}/${quota.limit}). Nonaktifkan akun yang tidak dipakai, atau hubungi tim ApexRecord untuk batas lebih besar.`;
   throw new ForbiddenException({
     success: false,
     error: { code: 'ACCOUNT_LIMIT_REACHED', message },

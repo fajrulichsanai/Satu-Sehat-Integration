@@ -37,6 +37,15 @@ export class CreateSubscriptionPaymentDto {
   @IsIn([1, 3, 6, 12])
   months?: number;
 
+  @ApiPropertyOptional({
+    enum: ['new', 'upgrade'],
+    default: 'new',
+    description: "'upgrade' = naik paket, bayar selisih sisa hari",
+  })
+  @IsOptional()
+  @IsIn(['new', 'upgrade'])
+  kind?: 'new' | 'upgrade';
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

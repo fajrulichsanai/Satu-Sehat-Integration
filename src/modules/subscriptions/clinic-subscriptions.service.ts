@@ -15,6 +15,10 @@ import { SubscriptionPlansService } from './subscription-plans.service';
 import { ClinicSubscriptionQueryDto } from './dto/clinic-subscription.dto';
 import { PaginatedResult } from '../../common/dto/pagination.dto';
 
+function isoToday(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export type SatusehatStatus = 'aktif' | 'dimatikan' | 'belum_siap';
 
 export interface ClinicSubscriptionSummary {
@@ -50,6 +54,100 @@ export class ClinicSubscriptionsService {
       order: { id: 'DESC' },
       relations: { plan: true },
     });
+  }
+
+  /**
+   * Langganan yang berlaku hari ini: baris aktif yang sudah dimulai. Baris
+   * yang dibayar di muka untuk periode berikutnya (mis. turun paket) belum
+   * berlaku sampai tanggal mulainya.
+   */
+  async getInEffectForClinic(
+    clinicId: number,
+    today: string = isoToday(),
+  ): Promise<ClinicSubscription | null> {
+    return this.clinicSubscriptionRepository
+      .createQueryBuilder('s')
+      .leftJoinAndSelect('s.plan', 'plan')
+      .where('s.clinicId = :clinicId', { clinicId })
+      .andWhere('s.status = :status', {
+        status: ClinicSubscriptionStatus.ACTIVE,
+      })
+      .andWhere('s.startDate <= :today AND s.endDate >= :today', { today })
+      .orderBy('s.id', 'DESC')
+      .getOne();
+  }
+
+  /**
+   * Naik paket (PRD keputusan tagihan): paket baru berlaku mulai hari ini
+   * untuk sisa masa aktif — baris yang sedang berlaku dipecah (sampai kemarin
+   * paket lama, mulai hari ini paket baru) dan baris yang sudah dibayar di
+   * muka untuk periode berikutnya ikut naik. Masa aktif tidak bertambah.
+   */
+  async applyUpgrade(
+    clinicId: number,
+    planId: number,
+    by: number,
+    today: string = isoToday(),
+  ): Promise<ClinicSubscription | null> {
+    const current = await this.getInEffectForClinic(clinicId, today);
+    if (!current) return null;
+    const note = `Naik paket dari ${current.plan?.name ?? `#${current.planId}`}`;
+    let upgraded: ClinicSubscription;
+    if (current.startDate < today) {
+      const yesterday = new Date(`${today}T00:00:00`);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const newRow = this.clinicSubscriptionRepository.create({
+        clinicId,
+        planId,
+        startDate: today,
+        endDate: current.endDate,
+        status: ClinicSubscriptionStatus.ACTIVE,
+        extendedBy: by,
+        notes: note,
+        createdBy: by,
+      });
+      current.endDate = isoToday(yesterday);
+      current.updatedBy = by;
+      await this.clinicSubscriptionRepository.save(current);
+      upgraded = await this.clinicSubscriptionRepository.save(newRow);
+    } else {
+      current.planId = planId;
+      current.notes = current.notes ? `${current.notes} · ${note}` : note;
+      current.updatedBy = by;
+      upgraded = await this.clinicSubscriptionRepository.save(current);
+    }
+    // Periode berikutnya yang sudah dibayar dengan paket lama ikut naik.
+    await this.clinicSubscriptionRepository
+      .createQueryBuilder()
+      .update()
+      .set({ planId, updatedBy: by })
+      .where(
+        'clinicId = :clinicId AND status = :status AND startDate > :today AND planId = :old',
+        {
+          clinicId,
+          status: ClinicSubscriptionStatus.ACTIVE,
+          today,
+          old: current.planId,
+        },
+      )
+      .execute();
+    return upgraded;
+  }
+
+  /** Tanggal berakhir terjauh dari langganan aktif (termasuk periode yang sudah dibayar di muka). */
+  async paidUntil(clinicId: number): Promise<string | null> {
+    const row = await this.clinicSubscriptionRepository
+      .createQueryBuilder('s')
+      .select('MAX(s.endDate)', 'end')
+      .where('s.clinicId = :clinicId AND s.status = :status', {
+        clinicId,
+        status: ClinicSubscriptionStatus.ACTIVE,
+      })
+      .getRawOne<{ end: string | Date | null }>();
+    if (!row?.end) return null;
+    return typeof row.end === 'string'
+      ? row.end.slice(0, 10)
+      : isoToday(row.end);
   }
 
   getHistoryForClinic(clinicId: number): Promise<ClinicSubscription[]> {

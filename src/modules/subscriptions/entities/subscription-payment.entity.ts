@@ -67,6 +67,11 @@ export class SubscriptionPayment extends BaseEntity {
   })
   storageAmount: number;
 
+  // 'new' = beli/perpanjang (menambah masa aktif); 'upgrade' = naik paket
+  // dengan membayar selisih sisa hari (masa aktif tidak berubah).
+  @Column({ type: 'varchar', length: 20, default: 'new' })
+  kind: 'new' | 'upgrade';
+
   // Lama langganan yang dibayar (bulan); konfirmasi memperpanjang sebanyak ini.
   @Column({ type: 'int', default: 1 })
   months: number;

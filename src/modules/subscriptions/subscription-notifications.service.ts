@@ -215,6 +215,7 @@ export class SubscriptionNotificationsService {
           <p>Halo,</p>
           <p>${message}</p>
           <p>Klinik <strong>${clinic?.name ?? ''}</strong> sedang menjalani masa Free Trial ${sub.plan?.durationDays ?? 14} hari (berakhir ${sub.endDate}).</p>
+          <p>Minggu pertama masa coba memakai batas paket Starter (5 akun); minggu kedua otomatis naik ke batas Pro (25 akun) agar Anda bisa mencoba semuanya. Storage masa coba maks. 100 MB.</p>
           <a href="${appUrl}/langganan" style="display: inline-block; padding: 10px 20px; background-color: #4F7EF8; color: white; text-decoration: none; border-radius: 5px;">
             Upgrade Sekarang
           </a>
@@ -314,7 +315,10 @@ export class SubscriptionNotificationsService {
    * SA-02). Owner payment → the Multi-Klinik Owner, listing every branch the
    * payment extended; clinic payment → the clinic's owner(s). Never throws.
    */
-  async sendPaymentReceipt(payment: SubscriptionPayment): Promise<boolean> {
+  async sendPaymentReceipt(
+    payment: SubscriptionPayment,
+    attachment?: { fileName: string; pdf: Buffer },
+  ): Promise<boolean> {
     try {
       const clinicIds = payment.ownerId
         ? (payment.coveredClinicIds ?? [])
@@ -362,6 +366,13 @@ export class SubscriptionNotificationsService {
         from: 'noreply@send.finarch.my.id',
         to,
         subject: `Kuitansi ${number} — pembayaran ApexRecord diterima`,
+        ...(attachment
+          ? {
+              attachments: [
+                { filename: attachment.fileName, content: attachment.pdf },
+              ],
+            }
+          : {}),
         html: `
           <h2>Kuitansi pembayaran</h2>
           <p>Terima kasih, pembayaran Anda sudah kami terima.</p>

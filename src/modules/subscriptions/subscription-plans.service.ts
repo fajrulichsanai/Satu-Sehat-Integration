@@ -27,6 +27,10 @@ export class SubscriptionPlansService {
       ...plan,
       promoActive: isPromoActive(plan),
       effectivePrice: effectivePrice(plan),
+      effectiveOwnerFee:
+        isPromoActive(plan) && plan.promoOwnerFee !== null
+          ? Number(plan.promoOwnerFee)
+          : Number(plan.ownerFee ?? 0),
     }));
   }
 

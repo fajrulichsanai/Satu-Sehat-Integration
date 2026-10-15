@@ -40,21 +40,43 @@ describe('account pool (PRD MK-07)', () => {
 
   it('a clinic that is not linked uses its plan limit: Starter 5 (positive/negative)', async () => {
     // link lookup → none; active accounts; current plan
-    let m = manager([[], [{ used: 4 }], [{ tier: 'basic', name: 'Starter', maxUsers: null }]]);
+    let m = manager([
+      [],
+      [{ used: 4 }],
+      [{ tier: 'basic', name: 'Starter', maxUsers: null }],
+    ]);
     await expect(assertAccountRoom(m, 10)).resolves.toBeUndefined();
-    m = manager([[], [{ used: 5 }], [{ tier: 'basic', name: 'Starter', maxUsers: null }]]);
+    m = manager([
+      [],
+      [{ used: 5 }],
+      [{ tier: 'basic', name: 'Starter', maxUsers: null }],
+    ]);
     await expect(assertAccountRoom(m, 10)).rejects.toMatchObject({
-      response: { error: { code: 'ACCOUNT_LIMIT_REACHED', message: expect.stringContaining('Naik ke paket Pro') } },
+      response: {
+        error: {
+          code: 'ACCOUNT_LIMIT_REACHED',
+          message: expect.stringContaining('Naik ke paket Pro'),
+        },
+      },
     });
   });
 
   it('Pro allows 25, the trial 5; a plan max_users overrides; no plan = Starter (edge)', async () => {
-    let q = await accountQuotaForClinic(manager([[], [{ used: 24 }], [{ tier: 'pro', maxUsers: null }]]), 10);
+    let q = await accountQuotaForClinic(
+      manager([[], [{ used: 24 }], [{ tier: 'pro', maxUsers: null }]]),
+      10,
+    );
     expect(q).toMatchObject({ scope: 'clinic', used: 24, limit: 25 });
     // Masa coba = batas Starter.
-    q = await accountQuotaForClinic(manager([[], [{ used: 0 }], [{ tier: 'trial', maxUsers: null }]]), 10);
+    q = await accountQuotaForClinic(
+      manager([[], [{ used: 0 }], [{ tier: 'trial', maxUsers: null }]]),
+      10,
+    );
     expect(q.limit).toBe(5);
-    q = await accountQuotaForClinic(manager([[], [{ used: 0 }], [{ tier: 'pro', maxUsers: 40 }]]), 10);
+    q = await accountQuotaForClinic(
+      manager([[], [{ used: 0 }], [{ tier: 'pro', maxUsers: 40 }]]),
+      10,
+    );
     expect(q.limit).toBe(40);
     q = await accountQuotaForClinic(manager([[], [{ used: 0 }], []]), 10);
     expect(q.limit).toBe(5);

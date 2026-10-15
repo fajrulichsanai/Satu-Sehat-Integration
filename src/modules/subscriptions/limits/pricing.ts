@@ -20,6 +20,7 @@ export interface PricedPlan {
   promoPrice?: number | string | null;
   promoUntil?: string | null;
   ownerFee?: number | string | null;
+  promoOwnerFee?: number | string | null;
   billingCycle?: string | null;
 }
 
@@ -54,7 +55,10 @@ export interface PriceQuote {
   unitPrice: number;
   promoActive: boolean;
   promoUntil: string | null;
+  /** Biaya admin owner per bulan yang berlaku (promo bila aktif). */
   ownerFee: number;
+  /** Biaya admin owner per bulan, harga normal. */
+  listOwnerFee: number;
   /** Paket × bulan, dengan harga normal. */
   listSubtotal: number;
   /** Potongan karena harga promo. */
@@ -86,7 +90,7 @@ export function quotePrice(input: {
   const months = yearlyPlan ? 1 : (input.months ?? 1);
   const quantity = Math.max(1, input.quantity ?? 1);
   const on = input.on ?? today();
-  const ownerFee = Math.max(
+  const listOwnerFee = Math.max(
     0,
     input.ownerFee ?? Number(input.plan.ownerFee ?? 0),
   );
@@ -94,7 +98,16 @@ export function quotePrice(input: {
   const promoActive = isPromoActive(input.plan, on);
   const unitPrice = effectivePrice(input.plan, on);
 
-  const listSubtotal = (listUnitPrice * quantity + ownerFee) * months;
+  // Biaya admin owner ikut promo bila paketnya punya promoOwnerFee.
+  const promoFee = input.plan.promoOwnerFee;
+  const ownerFee =
+    promoActive &&
+    listOwnerFee > 0 &&
+    promoFee !== null &&
+    promoFee !== undefined
+      ? Math.min(listOwnerFee, Math.max(0, Number(promoFee)))
+      : listOwnerFee;
+  const listSubtotal = (listUnitPrice * quantity + listOwnerFee) * months;
   const afterPromo = (unitPrice * quantity + ownerFee) * months;
   const durationDiscountPct = yearlyPlan
     ? 0
@@ -115,6 +128,7 @@ export function quotePrice(input: {
     promoActive,
     promoUntil: promoActive ? String(input.plan.promoUntil).slice(0, 10) : null,
     ownerFee,
+    listOwnerFee,
     listSubtotal,
     promoDiscount: listSubtotal - afterPromo,
     durationDiscountPct,

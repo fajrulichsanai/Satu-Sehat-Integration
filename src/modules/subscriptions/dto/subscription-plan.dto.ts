@@ -78,6 +78,15 @@ export class CreateSubscriptionPlanDto {
 
   @ApiPropertyOptional({
     description:
+      'Biaya admin owner Multi Klinik selama promo. Null = ownerFee biasa',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  promoOwnerFee?: number | null;
+
+  @ApiPropertyOptional({
+    description:
       'Batas akun aktif per klinik. Kosong = bawaan tier (masa coba & Starter 5, Pro 25, Multi Klinik 25 per cabang)',
   })
   @IsOptional()

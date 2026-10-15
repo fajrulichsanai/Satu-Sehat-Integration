@@ -75,3 +75,56 @@ describe('pricing', () => {
     });
   });
 });
+
+describe('pricing — promo Multi Klinik', () => {
+  const multi = {
+    price: 249000,
+    promoPrice: 124000,
+    promoUntil: '2026-12-31',
+    ownerFee: 99000,
+    promoOwnerFee: 50000,
+    billingCycle: 'monthly',
+  };
+
+  it('discounts both the per-clinic price and the owner fee during the promo (positive)', () => {
+    const q = quotePrice({
+      plan: multi,
+      quantity: 4,
+      months: 1,
+      on: '2026-10-15',
+    });
+    // normal 4×249.000 + 99.000 = 1.095.000; promo 4×124.000 + 50.000 = 546.000
+    expect(q).toMatchObject({
+      listSubtotal: 1095000,
+      promoDiscount: 549000,
+      ownerFee: 50000,
+      listOwnerFee: 99000,
+      total: 546000,
+    });
+  });
+
+  it('charges the normal owner fee after the promo (negative)', () => {
+    const q = quotePrice({
+      plan: multi,
+      quantity: 1,
+      months: 1,
+      on: '2027-01-01',
+    });
+    expect(q).toMatchObject({
+      ownerFee: 99000,
+      promoDiscount: 0,
+      total: 348000,
+    });
+  });
+
+  it('keeps a self-paying branch free of the owner fee (edge)', () => {
+    const q = quotePrice({
+      plan: multi,
+      quantity: 1,
+      months: 1,
+      ownerFee: 0,
+      on: '2026-10-15',
+    });
+    expect(q).toMatchObject({ ownerFee: 0, listOwnerFee: 0, total: 124000 });
+  });
+});

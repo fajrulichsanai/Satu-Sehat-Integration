@@ -32,8 +32,41 @@ import {
 } from '../multi-clinic/entities/owner-clinic-link.entity';
 import { SubscriptionNotificationsService } from './subscription-notifications.service';
 import { StorageQuotaService } from '../storage-quota/storage-quota.service';
-import { quotePrice, type PriceQuote } from './limits/pricing';
+import {
+  effectivePrice,
+  quotePrice,
+  today,
+  type PriceQuote,
+} from './limits/pricing';
+import { DEFAULT_MAX_USERS, DEFAULT_STORAGE_GB } from './limits/plan-limits';
+
+/** Urutan paket untuk naik/turun paket. Multi Klinik diurus lewat akun owner. */
+const TIER_RANK: Record<string, number> = { trial: 0, basic: 1, pro: 2 };
+const GB = 1000 ** 3;
+
+export interface UpgradeQuote {
+  allowed: boolean;
+  reason: string | null;
+  fromPlanId: number | null;
+  fromPlanName: string | null;
+  toPlanId: number;
+  toPlanName: string;
+  /** Paket baru berlaku mulai hari ini sampai `until` (akhir masa aktif). */
+  from: string;
+  until: string | null;
+  remainingDays: number;
+  /** Selisih harga per bulan (harga yang berlaku hari ini). */
+  monthlyDifference: number;
+  amount: number;
+}
+
+function daysInclusive(from: string, to: string): number {
+  const a = new Date(`${from}T00:00:00`).getTime();
+  const b = new Date(`${to}T00:00:00`).getTime();
+  return Math.max(0, Math.round((b - a) / 86_400_000) + 1);
+}
 import { BillingSettingsService } from './billing-settings.service';
+import { renderReceiptPdf } from './receipt-pdf';
 import type { SubscriptionPlan } from './entities/subscription-plan.entity';
 
 function toApiUrl(payment: SubscriptionPayment): SubscriptionPayment {
@@ -162,12 +195,166 @@ export class SubscriptionPaymentsService {
     return !!link;
   }
 
+  /**
+   * Naik paket (Starter → Pro) di tengah masa aktif: bayar selisih harga
+   * bulanan × sisa hari / 30, paket baru langsung berlaku setelah
+   * dikonfirmasi; masa aktif tidak berubah.
+   */
+  async upgradeQuote(
+    clinicId: number,
+    planId: number,
+    on = today(),
+  ): Promise<UpgradeQuote> {
+    const target = await this.subscriptionPlansService.findOne(planId);
+    const current = await this.clinicSubscriptionsService.getInEffectForClinic(
+      clinicId,
+      on,
+    );
+    const base: UpgradeQuote = {
+      allowed: false,
+      reason: null,
+      fromPlanId: current?.planId ?? null,
+      fromPlanName: current?.plan?.name ?? null,
+      toPlanId: target.id,
+      toPlanName: target.name,
+      from: on,
+      until: null,
+      remainingDays: 0,
+      monthlyDifference: 0,
+      amount: 0,
+    };
+    const targetRank = TIER_RANK[target.tier ?? ''];
+    const currentRank = TIER_RANK[current?.plan?.tier ?? ''];
+    if (
+      !current ||
+      currentRank === undefined ||
+      current.plan?.tier === SubscriptionPlanTier.TRIAL
+    ) {
+      return {
+        ...base,
+        reason:
+          'Belum ada langganan berbayar yang aktif. Pilih paket seperti biasa.',
+      };
+    }
+    if (targetRank === undefined || targetRank <= currentRank) {
+      return {
+        ...base,
+        reason: 'Paket tujuan tidak lebih tinggi dari paket sekarang.',
+      };
+    }
+    if (await this.isSelfPayingBranch(clinicId)) {
+      return {
+        ...base,
+        reason: 'Cabang multiklinik tidak bisa naik paket dari sini.',
+      };
+    }
+    const until = await this.clinicSubscriptionsService.paidUntil(clinicId);
+    const remainingDays = until ? daysInclusive(on, until) : 0;
+    const monthlyDifference = Math.max(
+      0,
+      effectivePrice(target, on) - effectivePrice(current.plan!, on),
+    );
+    // Dibulatkan ke ratusan rupiah.
+    const amount =
+      Math.round((monthlyDifference * remainingDays) / 30 / 100) * 100;
+    return {
+      ...base,
+      allowed: remainingDays > 0,
+      until,
+      remainingDays,
+      monthlyDifference,
+      amount,
+    };
+  }
+
+  /**
+   * Turun paket berlaku periode berikutnya dan ditolak bila akun aktif atau
+   * storage terpakai melebihi batas paket tujuan (keputusan tagihan PRD).
+   */
+  private async assertDowngradeFits(clinicId: number, plan: SubscriptionPlan) {
+    const current =
+      await this.clinicSubscriptionsService.getInEffectForClinic(clinicId);
+    const currentRank = TIER_RANK[current?.plan?.tier ?? ''];
+    const targetRank = TIER_RANK[plan.tier ?? ''];
+    if (
+      currentRank === undefined ||
+      targetRank === undefined ||
+      current?.plan?.tier === SubscriptionPlanTier.TRIAL
+    )
+      return;
+    if (targetRank >= currentRank) return;
+    const maxUsers =
+      plan.maxUsers ?? DEFAULT_MAX_USERS[plan.tier ?? 'basic'] ?? 5;
+    const [row] = (await this.clinicRepository.manager.query(
+      "SELECT COUNT(*) AS n FROM users WHERE clinic_id = ? AND is_active = 1 AND role <> 'pending'",
+      [clinicId],
+    )) as { n: number }[];
+    const activeUsers = Number(row?.n ?? 0);
+    if (activeUsers > maxUsers) {
+      throw new BadRequestException({
+        success: false,
+        error: {
+          code: 'DOWNGRADE_TOO_MANY_USERS',
+          message: `Paket ${plan.name} hanya untuk ${maxUsers} akun aktif, sekarang ada ${activeUsers}. Nonaktifkan ${activeUsers - maxUsers} akun dulu di User Management.`,
+        },
+      });
+    }
+    const quota = await this.storageQuota?.quotaForClinic(clinicId);
+    if (quota && quota.scope === 'clinic') {
+      const storageGb =
+        plan.storageGb ?? DEFAULT_STORAGE_GB[plan.tier ?? 'basic'] ?? 1;
+      const limitBytes = (Number(storageGb) + quota.extraGb) * GB;
+      if (quota.usedBytes > limitBytes) {
+        throw new BadRequestException({
+          success: false,
+          error: {
+            code: 'DOWNGRADE_STORAGE_TOO_BIG',
+            message: `Storage terpakai melebihi jatah paket ${plan.name} (${storageGb} GB + ${quota.extraGb} GB tambahan). Hapus file yang tidak dipakai atau beli storage tambahan dulu.`,
+          },
+        });
+      }
+    }
+  }
+
   async claim(
     clinicId: number,
     dto: CreateSubscriptionPaymentDto,
     createdBy: number,
     proof?: Express.Multer.File,
   ): Promise<SubscriptionPayment> {
+    if (dto.kind === 'upgrade') {
+      const upgrade = await this.upgradeQuote(clinicId, dto.planId);
+      if (!upgrade.allowed) {
+        throw new BadRequestException({
+          success: false,
+          error: {
+            code: 'UPGRADE_NOT_ALLOWED',
+            message: upgrade.reason ?? 'Tidak bisa naik paket',
+          },
+        });
+      }
+      const saved = await this.paymentRepository.save(
+        this.paymentRepository.create({
+          clinicId,
+          planId: dto.planId,
+          kind: 'upgrade',
+          quantity: 1,
+          months: 0,
+          amount: upgrade.amount,
+          status: SubscriptionPaymentStatus.PENDING,
+          notes:
+            dto.notes ??
+            `Naik paket dari ${upgrade.fromPlanName} ke ${upgrade.toPlanName}, ${upgrade.remainingDays} hari (s.d. ${upgrade.until})`,
+          proofUrl: proofFileToUrl(proof),
+          createdBy,
+        }),
+      );
+      return toApiUrl(saved);
+    }
+    await this.assertDowngradeFits(
+      clinicId,
+      await this.subscriptionPlansService.findOne(dto.planId),
+    );
     const { quote } = await this.quoteForClinic(
       clinicId,
       dto.planId,
@@ -371,6 +558,7 @@ export class SubscriptionPaymentsService {
     return {
       number: `APX-${String(payment.id).padStart(6, '0')}`,
       status: 'Lunas, dikonfirmasi',
+      kind: payment.kind ?? 'new',
       paymentId: payment.id,
       confirmedAt: payment.confirmedAt,
       createdAt: payment.createdAt,
@@ -388,6 +576,18 @@ export class SubscriptionPaymentsService {
           ? { name: clinics[0].name, email: clinics[0].email ?? null }
           : null,
       clinics: clinics.map((c) => ({ id: c.id, name: c.name })),
+    };
+  }
+
+  /** Kuitansi sebagai PDF (unduh, dan lampiran email saat dikonfirmasi). */
+  async receiptPdf(
+    id: number,
+    scope: { clinicId?: number | null; ownerId?: number },
+  ): Promise<{ fileName: string; pdf: Buffer }> {
+    const data = await this.receipt(id, scope);
+    return {
+      fileName: `kuitansi-${data.number}.pdf`,
+      pdf: await renderReceiptPdf(data),
     };
   }
 
@@ -488,6 +688,24 @@ export class SubscriptionPaymentsService {
           );
         if (firstSubscriptionId === null) firstSubscriptionId = subscription.id;
       }
+    } else if (payment.kind === 'upgrade') {
+      // Naik paket: tidak menambah masa aktif, hanya mengganti paketnya.
+      const upgraded = await this.clinicSubscriptionsService.applyUpgrade(
+        payment.clinicId as number,
+        payment.planId,
+        superAdminId,
+      );
+      if (!upgraded) {
+        throw new BadRequestException({
+          success: false,
+          error: {
+            code: 'UPGRADE_NO_ACTIVE_SUBSCRIPTION',
+            message:
+              'Klinik ini tidak punya langganan aktif lagi. Tolak klaim ini dan minta klinik membeli paket baru.',
+          },
+        });
+      }
+      firstSubscriptionId = upgraded.id;
     } else {
       const subscription =
         await this.clinicSubscriptionsService.extendSubscription(
@@ -507,8 +725,12 @@ export class SubscriptionPaymentsService {
     payment.updatedBy = superAdminId;
     if (dto.notes) payment.notes = dto.notes;
     const saved = await this.paymentRepository.save(payment);
-    // Kuitansi ke pembayar (SA-02). Fire-and-forget: never undoes the confirm.
-    void this.notifications?.sendPaymentReceipt(saved);
+    // Kuitansi PDF ke pembayar (SA-02). Fire-and-forget: never undoes the confirm.
+    void this.receiptPdf(saved.id, { clinicId: null })
+      .catch(() => undefined)
+      .then((attachment) =>
+        this.notifications?.sendPaymentReceipt(saved, attachment),
+      );
     return saved;
   }
 
