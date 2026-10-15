@@ -73,7 +73,10 @@ export class UsersService {
     if (!clinicId) {
       throw new BadRequestException({
         success: false,
-        error: { code: 'CLINIC_ID_REQUIRED', message: 'Manajer Cabang harus terikat ke satu cabang' },
+        error: {
+          code: 'CLINIC_ID_REQUIRED',
+          message: 'Manajer Cabang harus terikat ke satu cabang',
+        },
       });
     }
     const [link] = await manager.query(
@@ -85,7 +88,8 @@ export class UsersService {
         success: false,
         error: {
           code: 'NOT_A_BRANCH',
-          message: 'Manajer Cabang hanya untuk klinik yang terhubung ke owner multiklinik',
+          message:
+            'Manajer Cabang hanya untuk klinik yang terhubung ke owner multiklinik',
         },
       });
     }
@@ -98,7 +102,8 @@ export class UsersService {
         success: false,
         error: {
           code: 'BRANCH_MANAGER_EXISTS',
-          message: 'Cabang ini sudah punya Manajer Cabang. Nonaktifkan yang lama dulu.',
+          message:
+            'Cabang ini sudah punya Manajer Cabang. Nonaktifkan yang lama dulu.',
         },
       });
     }
@@ -249,6 +254,57 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  /**
+   * Super Admin: semua pengguna lintas klinik dengan filter dan paginasi
+   * (PRD Super Admin PG-01), beserta nama kliniknya.
+   */
+  async searchAll(query: {
+    page?: number;
+    limit?: number;
+    role?: string;
+    clinicId?: number;
+    search?: string;
+  }) {
+    const page = Math.max(1, query.page ?? 1);
+    const limit = Math.min(100, Math.max(1, query.limit ?? 20));
+    const qb = this.userRepository
+      .createQueryBuilder('u')
+      .orderBy('u.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
+    if (query.role) qb.andWhere('u.role = :role', { role: query.role });
+    if (query.clinicId)
+      qb.andWhere('u.clinicId = :clinicId', { clinicId: query.clinicId });
+    if (query.search) {
+      qb.andWhere('(u.name LIKE :q OR u.email LIKE :q)', {
+        q: `%${query.search}%`,
+      });
+    }
+    const [users, total] = await qb.getManyAndCount();
+    const clinicIds = [
+      ...new Set(
+        users.map((u) => u.clinicId).filter((id): id is number => !!id),
+      ),
+    ];
+    const clinics: { id: number; name: string }[] = clinicIds.length
+      ? await this.userRepository.manager.query(
+          'SELECT id, name FROM clinics WHERE id IN (?)',
+          [clinicIds],
+        )
+      : [];
+    const clinicName = new Map(clinics.map((c) => [Number(c.id), c.name]));
+    return {
+      success: true,
+      data: users.map((user) => ({
+        ...this.sanitizeUser(user),
+        clinicName: user.clinicId
+          ? (clinicName.get(user.clinicId) ?? null)
+          : null,
+      })),
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 },
+    };
   }
 
   async findAll(currentUser: CurrentUserPayload) {
@@ -462,7 +518,11 @@ export class UsersService {
         "SELECT id FROM owner_clinic_links WHERE clinic_id = ? AND status = 'approved' LIMIT 1",
         [currentUser.clinicId],
       );
-      if (link) roles.unshift({ value: UserRole.MANAJER_CABANG, label: 'Manajer Cabang' });
+      if (link)
+        roles.unshift({
+          value: UserRole.MANAJER_CABANG,
+          label: 'Manajer Cabang',
+        });
     }
 
     return { success: true, data: roles };

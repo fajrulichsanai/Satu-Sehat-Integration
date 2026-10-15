@@ -92,9 +92,18 @@ export class SuperAdminReportsService {
       ).length,
     }));
 
+    const now = new Date();
+    const newClinicsThisMonth = clinics.filter(
+      (c) =>
+        c.createdAt &&
+        c.createdAt.getFullYear() === now.getFullYear() &&
+        c.createdAt.getMonth() === now.getMonth(),
+    ).length;
+
     return {
       totalClinics,
       activeClinics,
+      newClinicsThisMonth,
       expiredClinics,
       pendingConfirmations,
       mrr,
@@ -102,6 +111,95 @@ export class SuperAdminReportsService {
       revenueByPeriod,
       newClinicsByPeriod,
       planDistribution,
+    };
+  }
+
+  /**
+   * Antrian kerja Super Admin untuk sidebar dan blok "Perlu tindakan" di
+   * Dashboard (PRD DB-01, UM-01): pembayaran menunggu, permintaan data
+   * terbuka/lewat 3×24 jam, langganan habis ≤ 7 hari, jadwal hapus data, dan
+   * klinik yang SATUSEHAT-nya belum siap (hanya bila saklar global menyala).
+   */
+  async queue() {
+    const q = <T>(sql: string, params: unknown[] = []): Promise<T[]> =>
+      this.clinicRepository.manager.query(sql, params);
+    const today = new Date();
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const in7 = new Date(today);
+    in7.setDate(in7.getDate() + 7);
+    const overdueBefore = new Date(Date.now() - 72 * 3600 * 1000);
+
+    const [payments, requests, expiring, deletions, global, notReady] =
+      await Promise.all([
+        this.paymentRepository.count({
+          where: { status: SubscriptionPaymentStatus.PENDING },
+        }),
+        q<{ open: number; overdue: number }>(
+          `SELECT COUNT(*) AS open, COALESCE(SUM(created_at < ?), 0) AS overdue
+             FROM data_requests WHERE status IN ('pending', 'in_progress')`,
+          [overdueBefore],
+        ),
+        q<{
+          clinicId: number;
+          clinicName: string;
+          endDate: string;
+          tier: string | null;
+        }>(
+          `SELECT c.id AS clinicId, c.name AS clinicName,
+                  DATE_FORMAT(s.end_date, '%Y-%m-%d') AS endDate, p.tier AS tier
+             FROM clinics c
+             JOIN clinic_subscriptions s ON s.id = (
+               SELECT s2.id FROM clinic_subscriptions s2 WHERE s2.clinic_id = c.id
+                ORDER BY s2.end_date DESC, s2.id DESC LIMIT 1)
+             LEFT JOIN subscription_plans p ON p.id = s.plan_id
+            WHERE c.data_purged_at IS NULL AND s.status = 'active'
+              AND s.end_date >= ? AND s.end_date <= ?
+            ORDER BY s.end_date ASC`,
+          [iso(today), iso(in7)],
+        ),
+        q<{ clinicId: number; clinicName: string; deleteAfter: string }>(
+          `SELECT id AS clinicId, name AS clinicName,
+                  DATE_FORMAT(data_delete_after, '%Y-%m-%d') AS deleteAfter
+             FROM clinics
+            WHERE data_delete_after IS NOT NULL AND data_purged_at IS NULL
+            ORDER BY data_delete_after ASC`,
+        ),
+        q<{ value: string }>(
+          "SELECT value FROM platform_settings WHERE setting_key = 'satusehat.enabled'",
+        ),
+        q<{ n: number }>(
+          `SELECT COUNT(*) AS n FROM clinics c
+            WHERE c.data_purged_at IS NULL
+              AND (c.satusehat_client_id IS NULL OR c.satusehat_org_id IS NULL)
+              AND NOT EXISTS (SELECT 1 FROM clinic_features f WHERE f.clinic_id = c.id
+                               AND f.feature_key = 'satusehat' AND f.enabled = 0)`,
+        ),
+      ]);
+    const daysLeft = (date: string) =>
+      Math.round(
+        (new Date(`${date}T00:00:00`).getTime() -
+          new Date(`${iso(today)}T00:00:00`).getTime()) /
+          86_400_000,
+      );
+    const open = Number(requests[0]?.open ?? 0);
+    const overdue = Number(requests[0]?.overdue ?? 0);
+    return {
+      pendingPayments: payments,
+      openDataRequests: open,
+      overdueDataRequests: overdue,
+      satusehatNotReady:
+        global[0]?.value === 'true' ? Number(notReady[0]?.n ?? 0) : 0,
+      expiringSoon: expiring.map((e) => ({
+        ...e,
+        clinicId: Number(e.clinicId),
+        daysLeft: daysLeft(e.endDate),
+      })),
+      dataDeletions: deletions.map((d) => ({
+        ...d,
+        clinicId: Number(d.clinicId),
+        daysLeft: daysLeft(d.deleteAfter),
+      })),
     };
   }
 

@@ -37,7 +37,12 @@ describe('ClinicSubscriptionsService', () => {
     save: jest.Mock;
     createQueryBuilder: jest.Mock;
   };
-  let clinicRepo: { findOne: jest.Mock; createQueryBuilder: jest.Mock };
+  let clinicRepo: {
+    findOne: jest.Mock;
+    createQueryBuilder: jest.Mock;
+    update: jest.Mock;
+    manager: { query: jest.Mock };
+  };
   let plansService: { findOne: jest.Mock; findActiveTrialPlan: jest.Mock };
 
   beforeEach(async () => {
@@ -51,6 +56,8 @@ describe('ClinicSubscriptionsService', () => {
     clinicRepo = {
       findOne: jest.fn(),
       createQueryBuilder: jest.fn(() => buildQb()),
+      update: jest.fn(),
+      manager: { query: jest.fn().mockResolvedValue([]) },
     };
     plansService = { findOne: jest.fn(), findActiveTrialPlan: jest.fn() };
 

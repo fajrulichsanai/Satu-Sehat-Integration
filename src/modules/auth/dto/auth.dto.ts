@@ -6,6 +6,7 @@ import {
   MinLength,
   MaxLength,
   IsOptional,
+  IsString,
 } from 'class-validator';
 
 export class RegisterDto {
@@ -39,7 +40,8 @@ export class RegisterDto {
 
   @ApiProperty({
     example: true,
-    description: 'Menyetujui Syarat & Ketentuan dan Kebijakan Privasi (wajib true)',
+    description:
+      'Menyetujui Syarat & Ketentuan dan Kebijakan Privasi (wajib true)',
   })
   @Equals(true, {
     message: 'Anda harus menyetujui Syarat & Ketentuan dan Kebijakan Privasi',
@@ -156,4 +158,15 @@ export class ActivationStatusResponseDto {
 
   @ApiProperty({ example: 1, nullable: true })
   clinicId: number | undefined;
+}
+
+export class ImpersonateDto {
+  @ApiProperty({
+    example: 'Membantu owner memeriksa laporan keuangan (tiket WA 12 Okt)',
+    description: 'Alasan login sebagai pengguna ini; tercatat di audit log',
+  })
+  @IsString()
+  @MinLength(5)
+  @MaxLength(255)
+  reason: string;
 }

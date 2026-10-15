@@ -96,6 +96,18 @@ export class SubscriptionPaymentsController {
     return this.paymentsService.listQueue(query);
   }
 
+  @Get(':id/receipt')
+  @ApiOperation({
+    summary:
+      'Kuitansi pembayaran yang sudah dikonfirmasi (klinik pemilik atau Super Admin)',
+  })
+  async receipt(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId({ optional: true }) clinicId: number | null,
+  ) {
+    return this.paymentsService.receipt(id, { clinicId });
+  }
+
   @Get(':id/proof-file')
   @ApiOperation({
     summary:

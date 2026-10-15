@@ -26,7 +26,6 @@ import {
   comparePassword,
 } from '../../common/utils/password.util';
 
-
 /**
  * Effective date of the Syarat & Ketentuan and Kebijakan Privasi on the
  * frontend (lib/company.ts LEGAL_EFFECTIVE_DATE). Bump both together when the
@@ -311,7 +310,11 @@ export class AuthService {
    * JwtStrategy re-reads them from the user row on every request. */
   private signAccessToken(
     user: User,
-    opts: { impersonated?: boolean; authTime?: number; expiresIn?: string } = {},
+    opts: {
+      impersonated?: boolean;
+      authTime?: number;
+      expiresIn?: string;
+    } = {},
   ): string {
     const claims: AccessTokenClaims = {
       sub: user.id,
@@ -371,11 +374,14 @@ export class AuthService {
         success: false,
         error: {
           code: 'IMPERSONATION_FORBIDDEN',
-          message: 'Password tidak bisa diganti saat masuk sebagai pengguna lain',
+          message:
+            'Password tidak bisa diganti saat masuk sebagai pengguna lain',
         },
       });
     }
-    const user = await this.userRepository.findOne({ where: { id: claims.sub } });
+    const user = await this.userRepository.findOne({
+      where: { id: claims.sub },
+    });
     if (!user || !(await comparePassword(currentPassword, user.passwordHash))) {
       throw new BadRequestException({
         success: false,
@@ -400,7 +406,8 @@ export class AuthService {
         success: false,
         error: {
           code: 'WEAK_PASSWORD',
-          message: 'Password baru minimal 8 karakter dan memuat huruf serta angka',
+          message:
+            'Password baru minimal 8 karakter dan memuat huruf serta angka',
         },
       });
     }
@@ -425,7 +432,7 @@ export class AuthService {
   /**
    * Super Admin support tool: issue a token that authenticates as another
    * user, so support/debugging can be done from that user's exact
-   * perspective. Short-lived (1h, vs the normal 24h) since it's meant for a
+   * perspective. Short-lived (30 minutes, vs the normal 24h) since it's meant for a
    * single support session, not standing access. The caller (AuthController)
    * is responsible for audit-logging who impersonated whom.
    */
@@ -461,15 +468,17 @@ export class AuthService {
       });
     }
 
+    // Sesi "Login sebagai" berakhir otomatis setelah 30 menit (PRD UP-02).
     const accessToken = this.signAccessToken(target, {
       impersonated: true,
-      expiresIn: '1h',
+      expiresIn: '30m',
     });
 
     return {
       success: true,
       data: {
         accessToken,
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
         user: {
           id: target.id,
           email: target.email,
@@ -561,7 +570,10 @@ export class AuthService {
     ) {
       throw new UnauthorizedException({
         success: false,
-        error: { code: 'INVALID_REFRESH', message: 'Sesi berakhir, silakan login ulang' },
+        error: {
+          code: 'INVALID_REFRESH',
+          message: 'Sesi berakhir, silakan login ulang',
+        },
       });
     }
     const accessToken = this.signAccessToken(user, { authTime: current.at });
@@ -596,7 +608,9 @@ export class AuthService {
   /** Denylist rows are useless once the token has expired anyway. */
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async purgeExpiredRevokedTokens() {
-    await this.revokedTokenRepository.delete({ expiresAt: LessThan(new Date()) });
+    await this.revokedTokenRepository.delete({
+      expiresAt: LessThan(new Date()),
+    });
   }
 
   /**

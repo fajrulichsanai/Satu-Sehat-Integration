@@ -26,6 +26,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   ChangePasswordDto,
+  ImpersonateDto,
 } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
@@ -237,10 +238,12 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Impersonation token issued' })
   async impersonate(
     @Param('userId', ParseIntPipe) userId: number,
+    @Body() dto: ImpersonateDto,
     @CurrentUser() admin: any,
     @Req() req: any,
   ) {
     const result = await this.authService.impersonate(userId);
+    const reason = dto.reason.trim();
     const target = result?.data?.user;
     void this.auditLogService.record({
       clinicId: target?.clinicId ?? null,
@@ -250,13 +253,16 @@ export class AuthController {
       actionType: AuditActionType.LOGIN,
       entityType: 'Impersonation',
       entityId: target?.id ?? null,
-      entityLabel: target ? `${target.name} (${target.email})` : null,
+      entityLabel: target
+        ? `${target.name} (${target.email}) — alasan: ${reason}`.slice(0, 255)
+        : null,
       afterValue: target
         ? {
             impersonatedUserId: target.id,
             impersonatedUserEmail: target.email,
             impersonatedUserRole: target.role,
             impersonatedClinicId: target.clinicId,
+            reason,
           }
         : null,
       status: AuditStatus.SUCCESS,

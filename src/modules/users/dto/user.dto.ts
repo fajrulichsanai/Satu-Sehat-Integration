@@ -6,8 +6,11 @@ import {
   IsEnum,
   IsOptional,
   IsInt,
+  Max,
   MaxLength,
+  Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { UserRole } from '../../../enums/user-role.enum';
 
 export class CreateUserDto {
@@ -150,4 +153,32 @@ export class UserListResponseDto {
     page: number;
     limit: number;
   };
+}
+
+export class UserSearchQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
+
+  @IsOptional()
+  @IsEnum(UserRole)
+  role?: UserRole;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  clinicId?: number;
+
+  @IsOptional()
+  @MaxLength(100)
+  search?: string;
 }

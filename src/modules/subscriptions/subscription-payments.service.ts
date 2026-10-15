@@ -5,7 +5,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import {
@@ -324,6 +324,70 @@ export class SubscriptionPaymentsService {
             ? ownerNameById.get(p.ownerId)
             : undefined,
       })),
+    };
+  }
+
+  /**
+   * Data kuitansi pembayaran yang sudah dikonfirmasi ("Lunas, dikonfirmasi"),
+   * untuk dicetak/disimpan PDF dari browser. clinicId null = Super Admin;
+   * ownerId = Multi-Klinik Owner untuk tagihan gabungannya.
+   */
+  async receipt(
+    id: number,
+    scope: { clinicId?: number | null; ownerId?: number },
+  ) {
+    const payment = await this.paymentRepository.findOne({
+      where: { id },
+      relations: { plan: true },
+    });
+    const allowed =
+      !!payment &&
+      (scope.ownerId !== undefined
+        ? payment.ownerId === scope.ownerId
+        : scope.clinicId === null || payment.clinicId === scope.clinicId);
+    if (
+      !payment ||
+      !allowed ||
+      payment.status !== SubscriptionPaymentStatus.CONFIRMED
+    ) {
+      throw new NotFoundException({
+        success: false,
+        error: {
+          code: 'RECEIPT_NOT_FOUND',
+          message:
+            'Kuitansi hanya tersedia untuk pembayaran yang sudah dikonfirmasi',
+        },
+      });
+    }
+    const clinicIds = payment.clinicId
+      ? [payment.clinicId]
+      : (payment.coveredClinicIds ?? []);
+    const clinics = clinicIds.length
+      ? await this.clinicRepository.find({ where: { id: In(clinicIds) } })
+      : [];
+    const payer = payment.ownerId
+      ? await this.userRepository.findOne({ where: { id: payment.ownerId } })
+      : null;
+    return {
+      number: `APX-${String(payment.id).padStart(6, '0')}`,
+      status: 'Lunas, dikonfirmasi',
+      paymentId: payment.id,
+      confirmedAt: payment.confirmedAt,
+      createdAt: payment.createdAt,
+      planName: payment.plan?.name ?? null,
+      quantity: payment.quantity,
+      months: payment.months ?? 1,
+      amount: Number(payment.amount),
+      promoDiscount: Number(payment.promoDiscount ?? 0),
+      durationDiscount: Number(payment.durationDiscount ?? 0),
+      extraStorageGb: Number(payment.extraStorageGb ?? 0),
+      storageAmount: Number(payment.storageAmount ?? 0),
+      billedTo: payer
+        ? { name: payer.name, email: payer.email }
+        : clinics[0]
+          ? { name: clinics[0].name, email: clinics[0].email ?? null }
+          : null,
+      clinics: clinics.map((c) => ({ id: c.id, name: c.name })),
     };
   }
 

@@ -260,6 +260,15 @@ export class MultiClinicController {
     );
   }
 
+  @Get('payments/:id/receipt')
+  @Roles(UserRole.MULTI_CLINIC_OWNER)
+  @ApiOperation({ summary: 'Kuitansi pembayaran gabungan milik akun ini' })
+  receipt(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.subscriptionPaymentsService.receipt(id, {
+      ownerId: user.userId,
+    });
+  }
+
   @Get('payments/:id/proof-file')
   @Roles(UserRole.MULTI_CLINIC_OWNER)
   @ApiOperation({

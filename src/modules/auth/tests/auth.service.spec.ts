@@ -290,7 +290,7 @@ describe('AuthService', () => {
 
       expect(jwtService.sign).toHaveBeenCalledWith(
         expect.objectContaining({ sub: 5, imp: true }),
-        { expiresIn: '1h' },
+        { expiresIn: '30m' },
       );
       expect(result.data.user.id).toBe(5);
     });

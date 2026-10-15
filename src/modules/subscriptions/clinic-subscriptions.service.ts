@@ -15,10 +15,20 @@ import { SubscriptionPlansService } from './subscription-plans.service';
 import { ClinicSubscriptionQueryDto } from './dto/clinic-subscription.dto';
 import { PaginatedResult } from '../../common/dto/pagination.dto';
 
+export type SatusehatStatus = 'aktif' | 'dimatikan' | 'belum_siap';
+
 export interface ClinicSubscriptionSummary {
   clinicId: number;
   clinicName: string;
   subscription: ClinicSubscription | null;
+  /** Kolom tambahan daftar klinik Super Admin (PRD KL-01, SH-06). */
+  createdAt?: Date;
+  owner?: { id: number; name: string; email: string } | null;
+  activeUsers?: number;
+  satusehatStatus?: SatusehatStatus;
+  multiClinicOwner?: { id: number; name: string } | null;
+  dataDeleteAfter?: string | null;
+  dataPurgedAt?: Date | null;
 }
 
 @Injectable()
@@ -80,10 +90,15 @@ export class ClinicSubscriptionsService {
     const clinics = await clinicsQb.getMany();
     const latest = await this.latestByClinicIds(clinics.map((c) => c.id));
 
+    const extras = await this.clinicExtras(clinics.map((c) => c.id));
     let rows: ClinicSubscriptionSummary[] = clinics.map((c) => ({
       clinicId: c.id,
       clinicName: c.name,
       subscription: latest.get(c.id) ?? null,
+      createdAt: c.createdAt,
+      dataDeleteAfter: c.dataDeleteAfter,
+      dataPurgedAt: c.dataPurgedAt,
+      ...extras(c),
     }));
 
     if (status) {
@@ -97,6 +112,80 @@ export class ClinicSubscriptionsService {
     return {
       data,
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 },
+    };
+  }
+
+  /**
+   * Owner, jumlah akun aktif, status SATUSEHAT (SH-06: aktif, dimatikan
+   * klinik, belum siap) dan owner multiklinik per klinik — beberapa query
+   * kumpulan, bukan satu query per klinik.
+   */
+  private async clinicExtras(clinicIds: number[]) {
+    type Owner = { clinicId: number; id: number; name: string; email: string };
+    const q = <T>(sql: string, params: unknown[] = []): Promise<T[]> =>
+      clinicIds.length
+        ? this.clinicRepository.manager.query(sql, params)
+        : Promise.resolve([]);
+    const [owners, counts, features, links, global] = await Promise.all([
+      q<Owner>(
+        `SELECT clinic_id AS clinicId, id, name, email FROM users
+          WHERE clinic_id IN (?) AND role = 'owner' ORDER BY is_active DESC, id ASC`,
+        [clinicIds],
+      ),
+      q<{ clinicId: number; n: number }>(
+        `SELECT clinic_id AS clinicId, COUNT(*) AS n FROM users
+          WHERE clinic_id IN (?) AND is_active = 1 GROUP BY clinic_id`,
+        [clinicIds],
+      ),
+      q<{ clinicId: number; enabled: number }>(
+        `SELECT clinic_id AS clinicId, enabled FROM clinic_features
+          WHERE clinic_id IN (?) AND feature_key = 'satusehat'`,
+        [clinicIds],
+      ),
+      q<{ clinicId: number; id: number; name: string }>(
+        `SELECT l.clinic_id AS clinicId, u.id, u.name FROM owner_clinic_links l
+           JOIN users u ON u.id = l.owner_id
+          WHERE l.clinic_id IN (?) AND l.status = 'approved'`,
+        [clinicIds],
+      ),
+      q<{ value: string }>(
+        "SELECT value FROM platform_settings WHERE setting_key = 'satusehat.enabled'",
+      ),
+    ]);
+    const ownerBy = new Map<number, Owner>();
+    for (const o of owners) {
+      if (!ownerBy.has(Number(o.clinicId))) ownerBy.set(Number(o.clinicId), o);
+    }
+    const countBy = new Map(
+      counts.map((c) => [Number(c.clinicId), Number(c.n)]),
+    );
+    const featureBy = new Map(
+      features.map((f) => [Number(f.clinicId), Number(f.enabled) === 1]),
+    );
+    const linkBy = new Map(
+      links.map((l) => [
+        Number(l.clinicId),
+        { id: Number(l.id), name: l.name },
+      ]),
+    );
+    const globalOn = global[0]?.value === 'true';
+
+    return (clinic: Clinic) => {
+      const owner = ownerBy.get(clinic.id);
+      const satusehatStatus: SatusehatStatus =
+        featureBy.get(clinic.id) === false
+          ? 'dimatikan'
+          : globalOn && clinic.satusehatClientId && clinic.satusehatOrgId
+            ? 'aktif'
+            : 'belum_siap';
+      return {
+        owner: owner
+          ? { id: Number(owner.id), name: owner.name, email: owner.email }
+          : null,
+        activeUsers: countBy.get(clinic.id) ?? 0,
+        satusehatStatus,
+        multiClinicOwner: linkBy.get(clinic.id) ?? null,
+      };
     };
   }
 

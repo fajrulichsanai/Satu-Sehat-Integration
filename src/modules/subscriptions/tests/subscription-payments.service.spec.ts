@@ -561,4 +561,52 @@ describe('SubscriptionPaymentsService', () => {
       );
     });
   });
+
+  describe('receipt', () => {
+    const confirmed = {
+      id: 7,
+      clinicId: 3,
+      ownerId: null,
+      status: SubscriptionPaymentStatus.CONFIRMED,
+      plan: { name: 'Starter Bulanan' },
+      quantity: 1,
+      months: 6,
+      amount: '534600.00',
+      promoDiscount: '600000.00',
+      durationDiscount: '59400.00',
+      extraStorageGb: 0,
+      storageAmount: 0,
+      confirmedAt: new Date('2026-10-15'),
+    };
+
+    it('returns a paid receipt to the owning clinic (positive)', async () => {
+      paymentRepo.findOne.mockResolvedValue(confirmed);
+      clinicRepo.find.mockResolvedValue([
+        { id: 3, name: 'Klinik A', email: 'a@x' },
+      ]);
+      const r = await service.receipt(7, { clinicId: 3 });
+      expect(r).toMatchObject({
+        number: 'APX-000007',
+        status: 'Lunas, dikonfirmasi',
+        months: 6,
+        amount: 534600,
+        durationDiscount: 59400,
+        billedTo: { name: 'Klinik A' },
+      });
+    });
+
+    it("hides another clinic's or a pending payment (negative)", async () => {
+      paymentRepo.findOne.mockResolvedValue(confirmed);
+      await expect(service.receipt(7, { clinicId: 4 })).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      paymentRepo.findOne.mockResolvedValue({
+        ...confirmed,
+        status: SubscriptionPaymentStatus.PENDING,
+      });
+      await expect(
+        service.receipt(7, { clinicId: null }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
 });
