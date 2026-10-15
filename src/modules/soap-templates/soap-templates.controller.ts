@@ -36,6 +36,14 @@ import { AuditActionType } from '../audit-log/entities/audit-log.entity';
 export class SoapTemplatesController {
   constructor(private readonly soapTemplatesService: SoapTemplatesService) {}
 
+  @Get('presets')
+  @ApiOperation({
+    summary: 'Template SOAP bawaan (gigi) dengan ICD-10 & SNOMED',
+  })
+  async presets() {
+    return { success: true, data: await this.soapTemplatesService.presets() };
+  }
+
   @Get()
   @ApiOperation({ summary: 'List SOAP templates (shared + own personal)' })
   async findAll(
