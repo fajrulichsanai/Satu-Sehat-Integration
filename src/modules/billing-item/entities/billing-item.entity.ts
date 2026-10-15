@@ -39,6 +39,24 @@ export class BillingItem extends BaseEntity {
   @Column('decimal', { precision: 10, scale: 2 })
   subtotal: number;
 
+  // Salinan modal (HPP) dan biaya lab per unit saat transaksi dibuat, agar
+  // laporan lama tidak berubah ketika tarif diubah kemudian.
+  @Column('decimal', {
+    name: 'harga_pokok',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
+  hargaPokok: number | null;
+
+  @Column('decimal', {
+    name: 'biaya_lab',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
+  biayaLab: number | null;
+
   // Relations
   @ManyToOne(() => Billing, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'billing_id' })

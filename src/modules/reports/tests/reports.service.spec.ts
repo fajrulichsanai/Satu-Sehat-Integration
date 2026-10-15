@@ -136,6 +136,32 @@ describe('ReportsService', () => {
       expect(result.data[0].breakdown[0].totalShare).toBe(80000);
     });
 
+    it('deducts biaya lab from the percentage fee base (positive)', async () => {
+      billingItemRepo.query.mockResolvedValue([
+        {
+          practitionerId: 1,
+          practitionerName: 'Dr. A',
+          tarifId: 10,
+          tarifName: 'Crown',
+          count: '2',
+          totalHarga: '3000000',
+          totalBiayaLab: '1000000',
+          dasarFee: '2000000',
+          feeType: FeeType.PERCENTAGE,
+          feeValue: '30',
+        },
+      ]);
+
+      const result = await service.getDoctorFeeShareReport(1, {
+        year: 2026,
+        month: 1,
+      } as any);
+
+      expect(result.data[0].totalShareFee).toBe(600000);
+      expect(result.data[0].totalBiayaLab).toBe(1000000);
+      expect(result.data[0].breakdown[0].dasarFee).toBe(2000000);
+    });
+
     it('computes fixed-fee share per practitioner (positive)', async () => {
       billingItemRepo.query.mockResolvedValue([
         {
@@ -721,7 +747,7 @@ describe('ReportsService', () => {
           practitionerName: 'Dr. A',
           hargaPokok: '20000',
           hargaJual: '100000',
-          qty: '5',
+          count: '5',
           revenue: '500000',
           feeType: FeeType.PERCENTAGE,
           feeValue: '10',
@@ -731,7 +757,7 @@ describe('ReportsService', () => {
           practitionerName: 'Dr. B',
           hargaPokok: '10000',
           hargaJual: '50000',
-          qty: '20',
+          count: '20',
           revenue: '1000000',
           feeType: FeeType.FIXED,
           feeValue: '5000',
@@ -759,7 +785,7 @@ describe('ReportsService', () => {
           practitionerName: 'Dr. A',
           hargaPokok: '10000',
           hargaJual: '50000',
-          qty: '2',
+          count: '2',
           revenue: '100000',
           feeType: FeeType.FIXED,
           feeValue: '1000',
@@ -769,7 +795,7 @@ describe('ReportsService', () => {
           practitionerName: 'Dr. A',
           hargaPokok: '5000',
           hargaJual: '20000',
-          qty: '3',
+          count: '3',
           revenue: '60000',
           feeType: FeeType.FIXED,
           feeValue: '500',
@@ -1699,13 +1725,11 @@ describe('ReportsService', () => {
       jest.spyOn(service as any, 'computeMonthlyTrend').mockResolvedValue([]);
       jest.spyOn(service as any, 'computeByDoctorProfit').mockResolvedValue([]);
       jest.spyOn(service as any, 'computeVisitHeatmap').mockResolvedValue([]);
-      jest
-        .spyOn(service as any, 'computeStockReport')
-        .mockResolvedValue({
-          totalInventoryValue: 0,
-          totalActiveItems: 0,
-          usage: [],
-        });
+      jest.spyOn(service as any, 'computeStockReport').mockResolvedValue({
+        totalInventoryValue: 0,
+        totalActiveItems: 0,
+        usage: [],
+      });
 
       const result = await service.getFinancialReportPro(1, {
         dateFrom: '2026-01-01',
@@ -1843,13 +1867,11 @@ describe('ReportsService', () => {
       jest
         .spyOn(service as any, 'computeMonthlyTrend')
         .mockResolvedValue(monthly);
-      jest
-        .spyOn(service as any, 'computeLtv')
-        .mockResolvedValue({
-          averageLtv: 500000,
-          averageVisitsPerPatient: 2,
-          patientCount: 50,
-        });
+      jest.spyOn(service as any, 'computeLtv').mockResolvedValue({
+        averageLtv: 500000,
+        averageVisitsPerPatient: 2,
+        patientCount: 50,
+      });
       jest
         .spyOn(service as any, 'computeDso')
         .mockResolvedValue({ averageDays: 10, outstandingCount: 3 });
@@ -1857,14 +1879,12 @@ describe('ReportsService', () => {
       jest
         .spyOn(service as any, 'computeCategoryProfitability')
         .mockResolvedValue([]);
-      jest
-        .spyOn(service as any, 'computeMarketingMetrics')
-        .mockResolvedValue({
-          totalAdSpend: 0,
-          newPatients: 0,
-          cac: null,
-          ltvCacRatio: null,
-        });
+      jest.spyOn(service as any, 'computeMarketingMetrics').mockResolvedValue({
+        totalAdSpend: 0,
+        newPatients: 0,
+        cac: null,
+        ltvCacRatio: null,
+      });
 
       encounterRepo.query.mockResolvedValueOnce([{ total: '80' }]); // totalPatientsRow
       billingRepo.query
@@ -1906,13 +1926,11 @@ describe('ReportsService', () => {
       jest
         .spyOn(service as any, 'computeMonthlyTrend')
         .mockResolvedValue(monthly);
-      jest
-        .spyOn(service as any, 'computeLtv')
-        .mockResolvedValue({
-          averageLtv: 0,
-          averageVisitsPerPatient: 0,
-          patientCount: 0,
-        });
+      jest.spyOn(service as any, 'computeLtv').mockResolvedValue({
+        averageLtv: 0,
+        averageVisitsPerPatient: 0,
+        patientCount: 0,
+      });
       jest
         .spyOn(service as any, 'computeDso')
         .mockResolvedValue({ averageDays: 0, outstandingCount: 0 });
@@ -1920,14 +1938,12 @@ describe('ReportsService', () => {
       jest
         .spyOn(service as any, 'computeCategoryProfitability')
         .mockResolvedValue([]);
-      jest
-        .spyOn(service as any, 'computeMarketingMetrics')
-        .mockResolvedValue({
-          totalAdSpend: 0,
-          newPatients: 0,
-          cac: null,
-          ltvCacRatio: null,
-        });
+      jest.spyOn(service as any, 'computeMarketingMetrics').mockResolvedValue({
+        totalAdSpend: 0,
+        newPatients: 0,
+        cac: null,
+        ltvCacRatio: null,
+      });
       encounterRepo.query.mockResolvedValueOnce([{ total: '0' }]);
       billingRepo.query
         .mockResolvedValueOnce([{ prevPatients: '0', returningPatients: '0' }])
@@ -1951,13 +1967,11 @@ describe('ReportsService', () => {
           newPatients: 0,
         })),
       );
-      jest
-        .spyOn(service as any, 'computeLtv')
-        .mockResolvedValue({
-          averageLtv: 0,
-          averageVisitsPerPatient: 0,
-          patientCount: 0,
-        });
+      jest.spyOn(service as any, 'computeLtv').mockResolvedValue({
+        averageLtv: 0,
+        averageVisitsPerPatient: 0,
+        patientCount: 0,
+      });
       jest
         .spyOn(service as any, 'computeDso')
         .mockResolvedValue({ averageDays: 0, outstandingCount: 0 });
@@ -1965,14 +1979,12 @@ describe('ReportsService', () => {
       jest
         .spyOn(service as any, 'computeCategoryProfitability')
         .mockResolvedValue([]);
-      jest
-        .spyOn(service as any, 'computeMarketingMetrics')
-        .mockResolvedValue({
-          totalAdSpend: 0,
-          newPatients: 0,
-          cac: null,
-          ltvCacRatio: null,
-        });
+      jest.spyOn(service as any, 'computeMarketingMetrics').mockResolvedValue({
+        totalAdSpend: 0,
+        newPatients: 0,
+        cac: null,
+        ltvCacRatio: null,
+      });
       encounterRepo.query.mockResolvedValueOnce([{ total: '0' }]);
       billingRepo.query
         .mockResolvedValueOnce([{ prevPatients: '0', returningPatients: '0' }])

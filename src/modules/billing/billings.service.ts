@@ -290,9 +290,43 @@ export class BillingsService {
 
       let subtotal = Number(billing.subtotal);
       if (dto.items) {
-        const processed = await this.processItems(manager, clinicId, dto.items);
+        const oldItems = await manager.find(BillingItem, {
+          where: { billingId: billing.id },
+        });
+        const previousCosts = new Map<
+          number,
+          { hargaPokok: number | null; biayaLab: number | null }
+        >();
+        for (const old of oldItems) {
+          if (old.tarifId && !previousCosts.has(old.tarifId)) {
+            previousCosts.set(old.tarifId, {
+              hargaPokok:
+                old.hargaPokok === null ? null : Number(old.hargaPokok),
+              biayaLab: old.biayaLab === null ? null : Number(old.biayaLab),
+            });
+          }
+        }
+        const processed = await this.processItems(
+          manager,
+          clinicId,
+          dto.items,
+          previousCosts,
+        );
         subtotal = processed.subtotal;
 
+        // Koreksi transaksi: kembalikan stok bahan dari tindakan lama, lalu
+        // potong ulang sesuai tindakan baru (sebelumnya stok tidak ikut).
+        for (const old of oldItems) {
+          if (old.tarifId) {
+            await this.gudangService.restoreForTindakan(
+              manager,
+              clinicId,
+              old.tarifId,
+              old.quantity,
+              userId,
+            );
+          }
+        }
         await manager.delete(BillingItem, { billingId: billing.id });
         await manager.save(
           BillingItem,
@@ -302,6 +336,17 @@ export class BillingsService {
             createdBy: userId,
           })),
         );
+        for (const item of processed.processedItems) {
+          if (item.tarifId) {
+            await this.gudangService.deductForTindakan(
+              manager,
+              clinicId,
+              item.tarifId,
+              item.quantity,
+              userId,
+            );
+          }
+        }
       }
 
       const totalDiscountInput =
@@ -360,6 +405,11 @@ export class BillingsService {
     manager: any,
     clinicId: number,
     items: BillingItemDto[],
+    /** Snapshot lama per tarif (saat edit) agar koreksi tidak mengubah modal historis. */
+    previousCosts: Map<
+      number,
+      { hargaPokok: number | null; biayaLab: number | null }
+    > = new Map(),
   ): Promise<{
     processedItems: Array<{
       tarifId?: number;
@@ -369,6 +419,8 @@ export class BillingsService {
       discount: number;
       discountType: DiscountType;
       subtotal: number;
+      hargaPokok: number | null;
+      biayaLab: number | null;
     }>;
     subtotal: number;
   }> {
@@ -381,12 +433,16 @@ export class BillingsService {
       discount: number;
       discountType: DiscountType;
       subtotal: number;
+      hargaPokok: number | null;
+      biayaLab: number | null;
     }> = [];
 
     for (const item of items) {
       const qty = item.quantity || 1;
       const discountType = item.discountType || DiscountType.NOMINAL;
       const discountValue = item.discount || 0;
+      let hargaPokok: number | null = null;
+      let biayaLab: number | null = null;
 
       if (item.tarifId) {
         const tarif = await manager.findOne(Tarif, {
@@ -413,6 +469,9 @@ export class BillingsService {
             `Diskon % untuk '${tarif.name}' melebihi batas maksimal`,
           );
         }
+        const previous = previousCosts.get(item.tarifId);
+        hargaPokok = previous?.hargaPokok ?? Number(tarif.hargaPokok ?? 0);
+        biayaLab = previous?.biayaLab ?? Number(tarif.biayaLab ?? 0);
       }
 
       const discountNominal =
@@ -431,6 +490,8 @@ export class BillingsService {
         discount: discountValue,
         discountType,
         subtotal: itemSubtotal,
+        hargaPokok,
+        biayaLab,
       });
     }
 

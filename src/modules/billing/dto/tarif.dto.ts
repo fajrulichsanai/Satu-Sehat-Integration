@@ -43,6 +43,15 @@ export class CreateTarifDto {
   @Min(0)
   hargaJual: number | undefined;
 
+  @ApiPropertyOptional({
+    default: 0,
+    description: 'Biaya lab per tindakan (Rp)',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  biayaLab?: number;
+
   @ApiPropertyOptional({ default: 0 })
   @IsOptional()
   @IsNumber()
@@ -82,6 +91,15 @@ export class UpdateTarifDto {
   @IsNumber()
   @Min(0)
   hargaJual?: number;
+
+  @ApiPropertyOptional({
+    default: 0,
+    description: 'Biaya lab per tindakan (Rp)',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  biayaLab?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

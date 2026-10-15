@@ -74,6 +74,7 @@ export class TarifsService {
       hargaPokok: dto.hargaPokok ?? 0,
       hargaJual: dto.hargaJual!,
       diskonMaksimal: dto.diskonMaksimal ?? 0,
+      biayaLab: dto.biayaLab ?? 0,
       createdBy: userId,
     } as any);
     return this.tarifRepository.save(tarif) as unknown as Promise<Tarif>;
@@ -97,6 +98,7 @@ export class TarifsService {
       hargaPokok: dto.hargaPokok ?? tarif.hargaPokok,
       hargaJual: dto.hargaJual ?? tarif.hargaJual,
       diskonMaksimal: dto.diskonMaksimal ?? tarif.diskonMaksimal,
+      biayaLab: dto.biayaLab ?? tarif.biayaLab,
       isActive: dto.isActive ?? tarif.isActive,
       updatedBy: userId,
     });

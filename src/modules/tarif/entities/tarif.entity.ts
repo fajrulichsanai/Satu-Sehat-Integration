@@ -26,6 +26,11 @@ export class Tarif extends BaseEntity {
   @Column('bigint', { name: 'harga_jual' })
   hargaJual: number;
 
+  // Biaya lab per tindakan (mis. crown, gigi tiruan): dikurangkan dari dasar
+  // share fee dokter dan dihitung sebagai biaya di laporan keuangan.
+  @Column('bigint', { name: 'biaya_lab', default: 0 })
+  biayaLab: number;
+
   @Column('bigint', { name: 'diskon_maksimal', default: 0 })
   diskonMaksimal: number;
 
