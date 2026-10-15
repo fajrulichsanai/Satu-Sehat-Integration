@@ -161,7 +161,7 @@ export class SubscriptionPaymentsService {
     const quantity = linkedClinicIds.length;
     // Storage tambahan jatah bersama ikut tagihan owner.
     const storage = this.storageCharge(
-      (await this.storageQuota?.extraGb({ ownerId })) ?? 0,
+      (await this.storageQuota?.billableExtraGb({ ownerId })) ?? 0,
       plan.billingCycle,
     );
     const amount =

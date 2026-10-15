@@ -48,7 +48,7 @@ describe('SubscriptionPaymentsService', () => {
   let clinicSubsService: { extendSubscription: jest.Mock };
   let linkRepo: { findOne: jest.Mock };
   let notifications: { sendPaymentReceipt: jest.Mock };
-  let storageQuota: { extraGbToBillForClinic: jest.Mock; extraGb: jest.Mock };
+  let storageQuota: { extraGbToBillForClinic: jest.Mock; billableExtraGb: jest.Mock };
 
   beforeEach(async () => {
     paymentRepo = {
@@ -65,7 +65,7 @@ describe('SubscriptionPaymentsService', () => {
     notifications = { sendPaymentReceipt: jest.fn().mockResolvedValue(true) };
     storageQuota = {
       extraGbToBillForClinic: jest.fn().mockResolvedValue(0),
-      extraGb: jest.fn().mockResolvedValue(0),
+      billableExtraGb: jest.fn().mockResolvedValue(0),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -105,10 +105,10 @@ describe('SubscriptionPaymentsService', () => {
     });
 
     it('bills the multiklinik pool add-ons to the owner (positive)', async () => {
-      storageQuota.extraGb.mockResolvedValue(2);
+      storageQuota.billableExtraGb.mockResolvedValue(2);
       plansService.findOne.mockResolvedValue({ id: 3, tier: SubscriptionPlanTier.MULTI_KLINIK, price: 124000, ownerFee: 50000, billingCycle: 'monthly' });
       const result = await service.claimForOwner(5, [10, 11], { planId: 3 } as any, 5);
-      expect(storageQuota.extraGb).toHaveBeenCalledWith({ ownerId: 5 });
+      expect(storageQuota.billableExtraGb).toHaveBeenCalledWith({ ownerId: 5 });
       expect(result).toMatchObject({ quantity: 2, extraStorageGb: 2, storageAmount: 20000, amount: 318000 });
     });
 

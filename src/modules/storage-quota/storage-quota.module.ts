@@ -5,6 +5,7 @@ import { StorageAddon } from './storage-addon.entity';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 import { StorageQuotaService } from './storage-quota.service';
 import { StorageReconcileService } from './storage-reconcile.service';
+import { StorageBonusReminderService } from './storage-bonus-reminder.service';
 import { StorageQuotaController } from './storage-quota.controller';
 
 /**
@@ -13,9 +14,16 @@ import { StorageQuotaController } from './storage-quota.controller';
  */
 @Global()
 @Module({
-  imports: [TypeOrmModule.forFeature([StorageUsage, StorageAddon]), AuditLogModule],
+  imports: [
+    TypeOrmModule.forFeature([StorageUsage, StorageAddon]),
+    AuditLogModule,
+  ],
   controllers: [StorageQuotaController],
-  providers: [StorageQuotaService, StorageReconcileService],
+  providers: [
+    StorageQuotaService,
+    StorageReconcileService,
+    StorageBonusReminderService,
+  ],
   exports: [StorageQuotaService],
 })
 export class StorageQuotaModule implements OnApplicationBootstrap {

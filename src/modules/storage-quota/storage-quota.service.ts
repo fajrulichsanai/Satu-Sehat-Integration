@@ -36,6 +36,39 @@ export interface StorageQuota {
   extraGb: number;
   /** Harga storage tambahan per GB per bulan. */
   pricePerGb: number;
+  /** Bagian storage tambahan yang ditagih saat ini (di luar bonus yang masih gratis). */
+  billableExtraGb: number;
+  /** Bonus dari Super Admin yang masih dalam masa gratis. */
+  bonuses: StorageBonus[];
+}
+
+export interface StorageBonus {
+  id: number;
+  gb: number;
+  /** Akhir masa gratis (inklusif); null = gratis selamanya. */
+  freeUntil: string | null;
+}
+
+/** YYYY-MM-DD in server-local time (same convention as subscriptions). */
+export function localDate(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Last free day of a bonus that is free for `months` months starting `from`. */
+export function freeUntilAfterMonths(
+  months: number,
+  from: Date = new Date(),
+): string {
+  const end = new Date(
+    from.getFullYear(),
+    from.getMonth() + months,
+    from.getDate(),
+  );
+  end.setDate(end.getDate() - 1);
+  return localDate(end);
 }
 
 /** Who asks for a change — the JWT user (see JwtStrategy). */
@@ -130,24 +163,24 @@ export class StorageQuotaService {
       const pool = await this.quotaForOwner(ownerId);
       return { ...pool, clinicUsedBytes };
     }
-    const [plan, extraGb] = await Promise.all([
+    const [plan, addons] = await Promise.all([
       planLimitsForClinic(this.dataSource, clinicId),
-      this.extraGb({ clinicId }),
+      this.addonSummary({ clinicId }),
     ]);
     return {
       usedBytes: clinicUsedBytes,
-      limitBytes: (plan.storageGb + extraGb) * GB,
+      limitBytes: Math.round((plan.storageGb + addons.extraGb) * GB),
       scope: 'clinic',
       clinicUsedBytes,
       includedGb: plan.storageGb,
-      extraGb,
+      ...addons,
       pricePerGb: STORAGE_ADDON_PRICE_PER_GB,
     };
   }
 
   /** Jatah bersama owner multiklinik: 5 GB × cabang aktif + tambahan, dipakai semua cabang. */
   async quotaForOwner(ownerId: number): Promise<StorageQuota> {
-    const [[row], extraGb] = await Promise.all([
+    const [[row], addons] = await Promise.all([
       this.dataSource.query(
         `SELECT
            (SELECT COUNT(*) FROM owner_clinic_links
@@ -157,19 +190,19 @@ export class StorageQuotaService {
              WHERE l.owner_id = ? AND l.status = 'approved' AND l.billing_mode <> 'stopped') AS used`,
         [ownerId, ownerId],
       ),
-      this.extraGb({ ownerId }),
+      this.addonSummary({ ownerId }),
     ]);
     const activeBranches = toNumber(row?.branches);
     const usedBytes = toNumber(row?.used);
     const includedGb = activeBranches * STORAGE_GB_PER_BRANCH;
     return {
       usedBytes,
-      limitBytes: (includedGb + extraGb) * GB,
+      limitBytes: (includedGb + addons.extraGb) * GB,
       scope: 'multiklinik',
       clinicUsedBytes: usedBytes,
       activeBranches,
       includedGb,
-      extraGb,
+      ...addons,
       pricePerGb: STORAGE_ADDON_PRICE_PER_GB,
     };
   }
@@ -197,24 +230,80 @@ export class StorageQuotaService {
   // ─── Storage tambahan (BL-05) ──────────────────────────────────────────
 
   /** Storage tambahan yang berlaku (GB) untuk satu klinik atau satu owner multiklinik. */
-  async extraGb(scope: { clinicId?: number; ownerId?: number }): Promise<number> {
-    if (!this.addonRepository) return 0;
-    const [row] = await this.dataSource.query(
-      scope.ownerId
-        ? 'SELECT COALESCE(SUM(gb), 0) AS gb FROM storage_addons WHERE owner_id = ?'
-        : 'SELECT COALESCE(SUM(gb), 0) AS gb FROM storage_addons WHERE clinic_id = ?',
-      [scope.ownerId ?? scope.clinicId],
-    );
-    return Math.max(0, toNumber(row?.gb));
+  async extraGb(scope: {
+    clinicId?: number;
+    ownerId?: number;
+  }): Promise<number> {
+    return (await this.addonSummary(scope)).extraGb;
+  }
+
+  private scopeSql(scope: { clinicId?: number; ownerId?: number }) {
+    return scope.ownerId
+      ? { where: 'owner_id = ?', param: scope.ownerId }
+      : { where: 'clinic_id = ?', param: scope.clinicId };
+  }
+
+  /**
+   * Total tambahan, bagian yang ditagih, dan bonus yang masih gratis. A
+   * bonus whose free period has ended stays (still counts to the limit)
+   * and is billed from then on.
+   */
+  async addonSummary(
+    scope: { clinicId?: number; ownerId?: number },
+    today: string = localDate(),
+  ): Promise<{
+    extraGb: number;
+    billableExtraGb: number;
+    bonuses: StorageBonus[];
+  }> {
+    if (!this.addonRepository)
+      return { extraGb: 0, billableExtraGb: 0, bonuses: [] };
+    const { where, param } = this.scopeSql(scope);
+    const [[row], bonuses] = await Promise.all([
+      this.dataSource.query(
+        `SELECT COALESCE(SUM(gb), 0) AS total,
+                COALESCE(SUM(CASE WHEN is_free = 0 OR (free_until IS NOT NULL AND free_until < ?)
+                                  THEN gb ELSE 0 END), 0) AS billable
+           FROM storage_addons WHERE ${where}`,
+        [today, param],
+      ),
+      this.dataSource.query(
+        `SELECT id, gb, DATE_FORMAT(free_until, '%Y-%m-%d') AS freeUntil
+           FROM storage_addons
+          WHERE ${where} AND is_free = 1 AND (free_until IS NULL OR free_until >= ?)
+          ORDER BY id ASC`,
+        [param, today],
+      ),
+    ]);
+    return {
+      extraGb: Math.max(0, toNumber(row?.total)),
+      billableExtraGb: Math.max(0, toNumber(row?.billable)),
+      bonuses: (
+        bonuses as { id: number; gb: number; freeUntil: string | null }[]
+      ).map((b) => ({
+        id: Number(b.id),
+        gb: toNumber(b.gb),
+        freeUntil: b.freeUntil ?? null,
+      })),
+    };
+  }
+
+  /** GB tambahan yang ditagih untuk satu klinik / owner multiklinik saat ini. */
+  async billableExtraGb(scope: {
+    clinicId?: number;
+    ownerId?: number;
+  }): Promise<number> {
+    return (await this.addonSummary(scope)).billableExtraGb;
   }
 
   /**
    * GB tambahan yang ditagih bersama perpanjangan klinik ini. A multiklinik
    * branch pays none itself — its pool's add-ons are on the owner's bill.
+   * Bonus yang masih dalam masa gratis tidak ditagih.
    */
   async extraGbToBillForClinic(clinicId: number): Promise<number> {
     if ((await this.poolOwnerOf(clinicId)) !== null) return 0;
-    return this.extraGb({ clinicId });
+    return this.billableExtraGb({ clinicId });
   }
 
   /**
@@ -289,17 +378,54 @@ export class StorageQuotaService {
     target: { clinicId?: number; ownerId?: number },
     gb: number,
     note?: string,
+    /**
+     * Bonus: gratis selama `freeMonths` bulan (null = selamanya), lalu ikut
+     * ditagih. Hanya untuk penambahan.
+     */
+    bonus?: { freeMonths: number | null },
   ): Promise<StorageQuota> {
     if (!!target.clinicId === !!target.ownerId) {
       throw new BadRequestException({
         success: false,
-        error: { code: 'INVALID_TARGET', message: 'Pilih satu klinik atau satu owner multiklinik' },
+        error: {
+          code: 'INVALID_TARGET',
+          message: 'Pilih satu klinik atau satu owner multiklinik',
+        },
       });
     }
     if (!Number.isInteger(gb) || gb === 0 || Math.abs(gb) > 1000) {
       throw new BadRequestException({
         success: false,
-        error: { code: 'INVALID_ADDON_GB', message: 'Perubahan storage harus bilangan bulat bukan nol (maks. 1000 GB)' },
+        error: {
+          code: 'INVALID_ADDON_GB',
+          message:
+            'Perubahan storage harus bilangan bulat bukan nol (maks. 1000 GB)',
+        },
+      });
+    }
+    if (bonus && gb < 0) {
+      throw new BadRequestException({
+        success: false,
+        error: {
+          code: 'INVALID_BONUS',
+          message:
+            'Bonus hanya untuk menambah storage. Untuk mencabut bonus, gunakan tombol Cabut.',
+        },
+      });
+    }
+    if (
+      bonus &&
+      bonus.freeMonths !== null &&
+      (!Number.isInteger(bonus.freeMonths) ||
+        bonus.freeMonths < 1 ||
+        bonus.freeMonths > 36)
+    ) {
+      throw new BadRequestException({
+        success: false,
+        error: {
+          code: 'INVALID_BONUS',
+          message: 'Masa gratis bonus 1–36 bulan',
+        },
       });
     }
     const current = await this.extraGb(target);
@@ -319,17 +445,80 @@ export class StorageQuotaService {
         gb,
         source: StorageAddonSource.ADMIN,
         note: note?.trim().slice(0, 255) || null,
+        isFree: !!bonus,
+        freeUntil:
+          bonus && bonus.freeMonths !== null
+            ? freeUntilAfterMonths(bonus.freeMonths)
+            : null,
         createdBy: actor.userId,
       }),
     );
+    const what = bonus
+      ? `Bonus storage ${gb} GB gratis ${bonus.freeMonths === null ? 'selamanya' : `${bonus.freeMonths} bulan`}`
+      : `${gb > 0 ? 'Tambah' : 'Kurangi'} storage tambahan ${Math.abs(gb)} GB (ditagih)`;
     this.audit(
       actor,
       target.clinicId ?? null,
-      `${gb > 0 ? 'Tambah' : 'Kurangi'} storage tambahan ${Math.abs(gb)} GB untuk ${target.ownerId ? `owner multiklinik #${target.ownerId}` : `klinik #${target.clinicId}`}${note ? ` — ${note}` : ''}`,
+      `${what} untuk ${target.ownerId ? `owner multiklinik #${target.ownerId}` : `klinik #${target.clinicId}`}${note ? ` — ${note}` : ''}`,
     );
     return target.ownerId
       ? this.quotaForOwner(target.ownerId)
       : this.quotaForClinic(target.clinicId!);
+  }
+
+  /** Super Admin: riwayat storage tambahan satu klinik / owner multiklinik. */
+  async listAddons(target: { clinicId?: number; ownerId?: number }) {
+    const { where, param } = this.scopeSql(target);
+    const rows: Record<string, unknown>[] = await this.dataSource.query(
+      `SELECT id, gb, source, note, is_free AS isFree,
+              DATE_FORMAT(free_until, '%Y-%m-%d') AS freeUntil, created_at AS createdAt
+         FROM storage_addons WHERE ${where} ORDER BY id DESC LIMIT 50`,
+      [param],
+    );
+    return rows.map((r) => ({
+      id: Number(r.id),
+      gb: toNumber(r.gb),
+      source: r.source as StorageAddonSource,
+      note: (r.note as string | null) ?? null,
+      isFree: !!Number(r.isFree),
+      freeUntil: (r.freeUntil as string | null) ?? null,
+      createdAt: r.createdAt,
+    }));
+  }
+
+  /** Super Admin mencabut sebuah bonus (jatahnya hilang, tidak pernah ditagih lagi). */
+  async revokeBonus(actor: StorageActor, id: number): Promise<void> {
+    const row = await this.addonRepository!.findOne({ where: { id } });
+    if (!row || !row.isFree) {
+      throw new BadRequestException({
+        success: false,
+        error: {
+          code: 'BONUS_NOT_FOUND',
+          message: 'Bonus storage tidak ditemukan',
+        },
+      });
+    }
+    const target = row.ownerId
+      ? { ownerId: row.ownerId }
+      : { clinicId: row.clinicId! };
+    const quota = row.ownerId
+      ? await this.quotaForOwner(row.ownerId)
+      : await this.quotaForClinic(row.clinicId!);
+    if (quota.usedBytes > quota.limitBytes - row.gb * GB) {
+      throw new BadRequestException({
+        success: false,
+        error: {
+          code: 'BONUS_IN_USE',
+          message: `Bonus ${row.gb} GB tidak bisa dicabut: pemakaian ${formatBytes(quota.usedBytes)} akan melebihi jatah.`,
+        },
+      });
+    }
+    await this.addonRepository!.delete({ id });
+    this.audit(
+      actor,
+      row.clinicId ?? null,
+      `Cabut bonus storage ${row.gb} GB untuk ${target.ownerId ? `owner multiklinik #${target.ownerId}` : `klinik #${target.clinicId}`}`,
+    );
   }
 
   private audit(actor: StorageActor, clinicId: number | null, label: string) {

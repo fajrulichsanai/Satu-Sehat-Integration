@@ -48,11 +48,12 @@ describe('account pool (PRD MK-07)', () => {
     });
   });
 
-  it('Pro and the trial allow 25; a plan max_users overrides; no plan = Starter (edge)', async () => {
+  it('Pro allows 25, the trial 5; a plan max_users overrides; no plan = Starter (edge)', async () => {
     let q = await accountQuotaForClinic(manager([[], [{ used: 24 }], [{ tier: 'pro', maxUsers: null }]]), 10);
     expect(q).toMatchObject({ scope: 'clinic', used: 24, limit: 25 });
+    // Masa coba = batas Starter.
     q = await accountQuotaForClinic(manager([[], [{ used: 0 }], [{ tier: 'trial', maxUsers: null }]]), 10);
-    expect(q.limit).toBe(25);
+    expect(q.limit).toBe(5);
     q = await accountQuotaForClinic(manager([[], [{ used: 0 }], [{ tier: 'pro', maxUsers: 40 }]]), 10);
     expect(q.limit).toBe(40);
     q = await accountQuotaForClinic(manager([[], [{ used: 0 }], []]), 10);

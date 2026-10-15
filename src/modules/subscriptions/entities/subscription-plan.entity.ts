@@ -58,7 +58,18 @@ export class SubscriptionPlan extends BaseEntity {
 
   // Jatah storage file layanan per klinik (GB). Null = bawaan tier — see
   // StorageQuotaService. For MULTI_KLINIK it is per branch, shared.
-  @Column({ name: 'storage_gb', type: 'int', nullable: true })
+  // Desimal: 0.1 = 100 MB (masa coba).
+  @Column({
+    name: 'storage_gb',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    transformer: {
+      to: (v: number | null | undefined) => v,
+      from: (v: string | null) => (v === null || v === undefined ? null : Number(v)),
+    },
+  })
   storageGb: number | null;
 
   // Batas akun aktif per klinik. Null = bawaan tier (Starter 5, Pro & masa

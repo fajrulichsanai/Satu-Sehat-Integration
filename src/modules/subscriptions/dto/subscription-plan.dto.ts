@@ -50,7 +50,7 @@ export class CreateSubscriptionPlanDto {
 
   @ApiPropertyOptional({
     description:
-      'Jatah storage file layanan (GB). Kosong = bawaan tier (Starter 1, Pro 5, Multi Klinik 5 per cabang)',
+      'Jatah storage file layanan (GB, boleh desimal: 0.1 = 100 MB). Kosong = bawaan tier (masa coba 0,1, Starter 1, Pro 5, Multi Klinik 5 per cabang)',
   })
   @IsOptional()
   @IsNumber()
@@ -59,7 +59,7 @@ export class CreateSubscriptionPlanDto {
 
   @ApiPropertyOptional({
     description:
-      'Batas akun aktif per klinik. Kosong = bawaan tier (Starter 5, Pro 25, Multi Klinik 25 per cabang)',
+      'Batas akun aktif per klinik. Kosong = bawaan tier (masa coba & Starter 5, Pro 25, Multi Klinik 25 per cabang)',
   })
   @IsOptional()
   @IsNumber()

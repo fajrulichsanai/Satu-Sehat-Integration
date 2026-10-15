@@ -2,18 +2,19 @@ import type { EntityManager } from 'typeorm';
 
 /**
  * Batas bawaan per tier paket bila paket tidak mengisi kolomnya sendiri
- * (PRD Super Admin, tabel Paket). Masa coba memakai batas Pro. Klinik
- * tanpa langganan memakai batas Starter.
+ * (PRD Super Admin, tabel Paket). Masa coba = Starter dengan storage
+ * 100 MB (keputusan 15 Okt 2026); setelah upgrade, jatah ikut paket baru.
+ * Klinik tanpa langganan memakai batas Starter.
  * Multi Klinik: per cabang aktif, dipakai bersama (lihat multi-clinic).
  */
 export const DEFAULT_MAX_USERS: Record<string, number> = {
-  trial: 25,
+  trial: 5,
   basic: 5,
   pro: 25,
   multi_klinik: 25,
 };
 export const DEFAULT_STORAGE_GB: Record<string, number> = {
-  trial: 5,
+  trial: 0.1,
   basic: 1,
   pro: 5,
   multi_klinik: 5,
