@@ -360,7 +360,9 @@ export class SubscriptionNotificationsService {
           <table cellpadding="6" style="border-collapse: collapse;">
             <tr><td>No. kuitansi</td><td><strong>${number}</strong></td></tr>
             <tr><td>Tanggal</td><td>${paidAt}</td></tr>
-            <tr><td>Paket</td><td>${planName}${payment.quantity > 1 ? ` × ${payment.quantity} klinik` : ''}</td></tr>
+            <tr><td>Paket</td><td>${planName}${payment.quantity > 1 ? ` × ${payment.quantity} klinik` : ''}${(payment.months ?? 1) > 1 ? ` · ${payment.months} bulan` : ''}</td></tr>
+            ${Number(payment.promoDiscount) > 0 ? `<tr><td>Potongan promo</td><td>− ${rupiah(payment.promoDiscount)}</td></tr>` : ''}
+            ${Number(payment.durationDiscount) > 0 ? `<tr><td>Diskon ${payment.months} bulan</td><td>− ${rupiah(payment.durationDiscount)}</td></tr>` : ''}
             ${Number(payment.extraStorageGb) > 0 ? `<tr><td>Storage tambahan</td><td>${payment.extraStorageGb} GB · ${rupiah(payment.storageAmount)}</td></tr>` : ''}
             <tr><td>Jumlah</td><td><strong>${rupiah(payment.amount)}</strong></td></tr>
           </table>

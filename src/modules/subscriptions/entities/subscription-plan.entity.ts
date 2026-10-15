@@ -67,7 +67,8 @@ export class SubscriptionPlan extends BaseEntity {
     nullable: true,
     transformer: {
       to: (v: number | null | undefined) => v,
-      from: (v: string | null) => (v === null || v === undefined ? null : Number(v)),
+      from: (v: string | null) =>
+        v === null || v === undefined ? null : Number(v),
     },
   })
   storageGb: number | null;
@@ -76,4 +77,17 @@ export class SubscriptionPlan extends BaseEntity {
   // coba 25). For MULTI_KLINIK it is per branch, shared.
   @Column({ name: 'max_users', type: 'int', nullable: true })
   maxUsers: number | null;
+
+  // Harga promo per bulan (per klinik untuk Multi Klinik), berlaku sampai
+  // promoUntil (inklusif). `price` tetap harga normal ("harga asli").
+  @Column('decimal', {
+    name: 'promo_price',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
+  promoPrice: number | null;
+
+  @Column({ name: 'promo_until', type: 'date', nullable: true })
+  promoUntil: string | null;
 }

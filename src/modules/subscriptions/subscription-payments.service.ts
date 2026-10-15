@@ -32,10 +32,9 @@ import {
 } from '../multi-clinic/entities/owner-clinic-link.entity';
 import { SubscriptionNotificationsService } from './subscription-notifications.service';
 import { StorageQuotaService } from '../storage-quota/storage-quota.service';
-import {
-  cycleMultiplier,
-  STORAGE_ADDON_PRICE_PER_GB,
-} from './limits/plan-limits';
+import { quotePrice, type PriceQuote } from './limits/pricing';
+import { BillingSettingsService } from './billing-settings.service';
+import type { SubscriptionPlan } from './entities/subscription-plan.entity';
 
 function toApiUrl(payment: SubscriptionPayment): SubscriptionPayment {
   if (!payment.proofUrl) return payment;
@@ -62,12 +61,89 @@ export class SubscriptionPaymentsService {
     @Optional()
     private readonly notifications?: SubscriptionNotificationsService,
     @Optional() private readonly storageQuota?: StorageQuotaService,
+    @Optional() private readonly billingSettings?: BillingSettingsService,
   ) {}
 
-  /** Storage tambahan × Rp10.000/GB/bulan × siklus paket (tahunan = 10×). */
-  private storageCharge(extraGb: number, billingCycle: string | null) {
-    const gb = Math.max(0, extraGb);
-    return { extraStorageGb: gb, storageAmount: gb * STORAGE_ADDON_PRICE_PER_GB * cycleMultiplier(billingCycle) };
+  private async discounts() {
+    return this.billingSettings?.getDurationDiscounts();
+  }
+
+  /** The amount columns a payment stores, from a quote. */
+  private amountsOf(quote: PriceQuote) {
+    return {
+      quantity: quote.quantity,
+      months: quote.months,
+      amount: quote.total,
+      promoDiscount: quote.promoDiscount,
+      durationDiscount: quote.durationDiscount,
+      extraStorageGb: quote.extraStorageGb,
+      storageAmount: quote.storageAmount,
+    };
+  }
+
+  /**
+   * Rincian tagihan untuk klinik ini: paket (promo bila aktif) × bulan,
+   * diskon lama langganan, dan storage tambahan. Same function the claim
+   * uses, so the preview always matches what gets billed.
+   */
+  async quoteForClinic(
+    clinicId: number,
+    planId: number,
+    months = 1,
+    requestedQuantity = 1,
+  ): Promise<{ plan: SubscriptionPlan; quote: PriceQuote }> {
+    const plan = await this.subscriptionPlansService.findOne(planId);
+    // Quantity (clinic count) only makes sense for Multi Klinik — any value
+    // sent for another tier is ignored so the amount can't be manipulated.
+    const selfPayingBranch =
+      plan.tier === SubscriptionPlanTier.MULTI_KLINIK &&
+      (await this.isSelfPayingBranch(clinicId));
+    const quantity =
+      plan.tier === SubscriptionPlanTier.MULTI_KLINIK && !selfPayingBranch
+        ? Math.max(1, requestedQuantity)
+        : 1;
+    const quote = quotePrice({
+      plan,
+      months,
+      quantity,
+      ownerFee: selfPayingBranch ? 0 : Number(plan.ownerFee ?? 0),
+      // One bill per period: plan + storage tambahan (PRD Super Admin BL-06).
+      extraStorageGb:
+        (await this.storageQuota?.extraGbToBillForClinic(clinicId)) ?? 0,
+      discounts: await this.discounts(),
+    });
+    return { plan, quote };
+  }
+
+  /** Rincian tagihan gabungan owner multiklinik untuk cabang yang ditanggungnya. */
+  async quoteForOwner(
+    ownerId: number,
+    clinicIds: number[],
+    planId: number,
+    months = 1,
+  ): Promise<{ plan: SubscriptionPlan; quote: PriceQuote }> {
+    const plan = await this.subscriptionPlansService.findOne(planId);
+    if (plan.tier !== SubscriptionPlanTier.MULTI_KLINIK) {
+      throw new BadRequestException({
+        success: false,
+        error: {
+          code: 'INVALID_PLAN_TIER',
+          message:
+            'Akun Multi-Klinik Owner hanya bisa membayar paket Multi Klinik',
+        },
+      });
+    }
+    const quote = quotePrice({
+      plan,
+      months,
+      quantity: Math.max(1, clinicIds.length),
+      ownerFee: Number(plan.ownerFee ?? 0),
+      // Storage tambahan jatah bersama ikut tagihan owner.
+      extraStorageGb:
+        (await this.storageQuota?.billableExtraGb({ ownerId })) ?? 0,
+      discounts: await this.discounts(),
+    });
+    return { plan, quote };
   }
 
   /**
@@ -92,30 +168,16 @@ export class SubscriptionPaymentsService {
     createdBy: number,
     proof?: Express.Multer.File,
   ): Promise<SubscriptionPayment> {
-    const plan = await this.subscriptionPlansService.findOne(dto.planId);
-    // Quantity (clinic count) only makes sense for Multi Klinik — any value
-    // sent for another tier is ignored so the amount can't be manipulated.
-    const selfPayingBranch =
-      plan.tier === SubscriptionPlanTier.MULTI_KLINIK &&
-      (await this.isSelfPayingBranch(clinicId));
-    const quantity =
-      plan.tier === SubscriptionPlanTier.MULTI_KLINIK && !selfPayingBranch
-        ? Math.max(1, dto.quantity ?? 1)
-        : 1;
-    const ownerFee = selfPayingBranch ? 0 : Number(plan.ownerFee ?? 0);
-    // One bill per period: plan + storage tambahan (PRD Super Admin BL-06).
-    const storage = this.storageCharge(
-      (await this.storageQuota?.extraGbToBillForClinic(clinicId)) ?? 0,
-      plan.billingCycle,
+    const { quote } = await this.quoteForClinic(
+      clinicId,
+      dto.planId,
+      dto.months ?? 1,
+      dto.quantity ?? 1,
     );
-    const amount =
-      Number(plan.price) * quantity + ownerFee + storage.storageAmount;
     const payment = this.paymentRepository.create({
       clinicId,
-      ...storage,
       planId: dto.planId,
-      quantity,
-      amount,
+      ...this.amountsOf(quote),
       status: SubscriptionPaymentStatus.PENDING,
       notes: dto.notes ?? null,
       proofUrl: proofFileToUrl(proof),
@@ -147,35 +209,18 @@ export class SubscriptionPaymentsService {
         },
       });
     }
-    const plan = await this.subscriptionPlansService.findOne(dto.planId);
-    if (plan.tier !== SubscriptionPlanTier.MULTI_KLINIK) {
-      throw new BadRequestException({
-        success: false,
-        error: {
-          code: 'INVALID_PLAN_TIER',
-          message:
-            'Akun Multi-Klinik Owner hanya bisa membayar paket Multi Klinik',
-        },
-      });
-    }
-    const quantity = linkedClinicIds.length;
-    // Storage tambahan jatah bersama ikut tagihan owner.
-    const storage = this.storageCharge(
-      (await this.storageQuota?.billableExtraGb({ ownerId })) ?? 0,
-      plan.billingCycle,
+    const { quote } = await this.quoteForOwner(
+      ownerId,
+      linkedClinicIds,
+      dto.planId,
+      dto.months ?? 1,
     );
-    const amount =
-      Number(plan.price) * quantity +
-      Number(plan.ownerFee ?? 0) +
-      storage.storageAmount;
     const payment = this.paymentRepository.create({
       clinicId: null,
-      ...storage,
       ownerId,
       planId: dto.planId,
-      quantity,
+      ...this.amountsOf(quote),
       coveredClinicIds: linkedClinicIds,
-      amount,
       status: SubscriptionPaymentStatus.PENDING,
       notes: dto.notes ?? null,
       proofUrl: proofFileToUrl(proof),
@@ -283,7 +328,10 @@ export class SubscriptionPaymentsService {
   }
 
   async getProofFilePath(id: number, clinicId: number | null): Promise<string> {
-    return this.resolveProofFile(id, (p) => clinicId === null || p.clinicId === clinicId);
+    return this.resolveProofFile(
+      id,
+      (p) => clinicId === null || p.clinicId === clinicId,
+    );
   }
 
   /** A Multi-Klinik Owner's own combined payment proof (owner-scoped). */
@@ -372,6 +420,7 @@ export class SubscriptionPaymentsService {
             payment.planId,
             superAdminId,
             dto.notes,
+            payment.months ?? 1,
           );
         if (firstSubscriptionId === null) firstSubscriptionId = subscription.id;
       }
@@ -382,6 +431,7 @@ export class SubscriptionPaymentsService {
           payment.planId,
           superAdminId,
           dto.notes,
+          payment.months ?? 1,
         );
       firstSubscriptionId = subscription.id;
     }

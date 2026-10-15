@@ -34,6 +34,7 @@ import { clinicLogoUploadOptions } from '../clinics/upload/clinic-logo.upload';
 import { SubscriptionPaymentsService } from '../subscriptions/subscription-payments.service';
 import {
   ClaimOwnerSubscriptionPaymentDto,
+  QuoteQueryDto,
   SubscriptionPaymentQueryDto,
 } from '../subscriptions/dto/subscription-payment.dto';
 import { paymentProofUploadOptions } from '../subscriptions/upload/payment-proof.storage';
@@ -206,6 +207,31 @@ export class MultiClinicController {
   ) {
     await this.multiClinicService.assertOwnsClinic(user.userId, clinicId);
     return this.clinicsService.uploadLogo(clinicId, file);
+  }
+
+  @Get('payments/quote')
+  @Roles(UserRole.MULTI_CLINIC_OWNER)
+  @ApiOperation({
+    summary:
+      'Rincian tagihan gabungan sebelum bayar (promo, diskon lama langganan, storage)',
+  })
+  async quotePayment(@Query() query: QuoteQueryDto, @CurrentUser() user: any) {
+    const clinicIds = await this.multiClinicService.getOwnerBilledClinicIds(
+      user.userId,
+    );
+    const { plan, quote } =
+      await this.subscriptionPaymentsService.quoteForOwner(
+        user.userId,
+        clinicIds,
+        query.planId,
+        query.months ?? 1,
+      );
+    return {
+      planId: plan.id,
+      planName: plan.name,
+      clinicCount: clinicIds.length,
+      ...quote,
+    };
   }
 
   @Post('payments/claim')

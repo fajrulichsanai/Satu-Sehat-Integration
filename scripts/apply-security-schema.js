@@ -38,6 +38,7 @@ const MIGRATIONS = [
   '1790160000000-ManajerCabangPasswordStorage',
   '1790170000000-BatasAkunStorageTambahan',
   '1790180000000-BonusStorageMasaCoba',
+  '1790190000000-PromoDanDiskonDurasi',
 ];
 
 async function main() {

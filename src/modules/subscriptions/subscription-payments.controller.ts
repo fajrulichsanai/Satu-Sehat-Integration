@@ -22,6 +22,7 @@ import {
 import { SubscriptionPaymentsService } from './subscription-payments.service';
 import {
   CreateSubscriptionPaymentDto,
+  QuoteQueryDto,
   ReviewSubscriptionPaymentDto,
   SubscriptionPaymentQueryDto,
 } from './dto/subscription-payment.dto';
@@ -60,6 +61,21 @@ export class SubscriptionPaymentsController {
     @UploadedFile() proof?: Express.Multer.File,
   ) {
     return this.paymentsService.claim(clinicId, dto, user.userId, proof);
+  }
+
+  @Get('quote')
+  @ApiOperation({
+    summary:
+      'Rincian harga sebelum bayar: harga normal, promo, diskon lama langganan, storage, total',
+  })
+  async quote(@Query() query: QuoteQueryDto, @ClinicId() clinicId: number) {
+    const { plan, quote } = await this.paymentsService.quoteForClinic(
+      clinicId,
+      query.planId,
+      query.months ?? 1,
+      query.quantity ?? 1,
+    );
+    return { planId: plan.id, planName: plan.name, ...quote };
   }
 
   @Get('mine')

@@ -48,7 +48,10 @@ describe('SubscriptionPaymentsService', () => {
   let clinicSubsService: { extendSubscription: jest.Mock };
   let linkRepo: { findOne: jest.Mock };
   let notifications: { sendPaymentReceipt: jest.Mock };
-  let storageQuota: { extraGbToBillForClinic: jest.Mock; billableExtraGb: jest.Mock };
+  let storageQuota: {
+    extraGbToBillForClinic: jest.Mock;
+    billableExtraGb: jest.Mock;
+  };
 
   beforeEach(async () => {
     paymentRepo = {
@@ -95,21 +98,79 @@ describe('SubscriptionPaymentsService', () => {
   describe('claim', () => {
     it('adds storage tambahan to the same bill: Rp10.000/GB/bulan, 10× for yearly (positive)', async () => {
       storageQuota.extraGbToBillForClinic.mockResolvedValue(3);
-      plansService.findOne.mockResolvedValue({ id: 1, tier: SubscriptionPlanTier.BASIC, price: 99000, ownerFee: 0, billingCycle: 'monthly' });
+      plansService.findOne.mockResolvedValue({
+        id: 1,
+        tier: SubscriptionPlanTier.BASIC,
+        price: 99000,
+        ownerFee: 0,
+        billingCycle: 'monthly',
+      });
       let result = await service.claim(1, { planId: 1 }, 9);
-      expect(result).toMatchObject({ extraStorageGb: 3, storageAmount: 30000, amount: 129000 });
+      expect(result).toMatchObject({
+        extraStorageGb: 3,
+        storageAmount: 30000,
+        amount: 129000,
+      });
 
-      plansService.findOne.mockResolvedValue({ id: 2, tier: SubscriptionPlanTier.BASIC, price: 990000, ownerFee: 0, billingCycle: 'yearly' });
+      plansService.findOne.mockResolvedValue({
+        id: 2,
+        tier: SubscriptionPlanTier.BASIC,
+        price: 990000,
+        ownerFee: 0,
+        billingCycle: 'yearly',
+      });
       result = await service.claim(1, { planId: 2 }, 9);
-      expect(result).toMatchObject({ extraStorageGb: 3, storageAmount: 300000, amount: 1290000 });
+      expect(result).toMatchObject({
+        extraStorageGb: 3,
+        storageAmount: 300000,
+        amount: 1290000,
+      });
+    });
+
+    it('applies promo price and duration discount for a 6-month claim (positive)', async () => {
+      storageQuota.extraGbToBillForClinic.mockResolvedValue(1);
+      plansService.findOne.mockResolvedValue({
+        id: 1,
+        tier: SubscriptionPlanTier.BASIC,
+        price: 199000,
+        promoPrice: 99000,
+        promoUntil: '2999-12-31',
+        ownerFee: 0,
+        billingCycle: 'monthly',
+      });
+      const result = await service.claim(1, { planId: 1, months: 6 }, 9);
+      // 99.000 × 6 = 594.000; −10% = 534.600; + storage 1 GB × 6 = 60.000
+      expect(result).toMatchObject({
+        months: 6,
+        promoDiscount: 600000,
+        durationDiscount: 59400,
+        storageAmount: 60000,
+        amount: 594600,
+      });
     });
 
     it('bills the multiklinik pool add-ons to the owner (positive)', async () => {
       storageQuota.billableExtraGb.mockResolvedValue(2);
-      plansService.findOne.mockResolvedValue({ id: 3, tier: SubscriptionPlanTier.MULTI_KLINIK, price: 124000, ownerFee: 50000, billingCycle: 'monthly' });
-      const result = await service.claimForOwner(5, [10, 11], { planId: 3 } as any, 5);
+      plansService.findOne.mockResolvedValue({
+        id: 3,
+        tier: SubscriptionPlanTier.MULTI_KLINIK,
+        price: 124000,
+        ownerFee: 50000,
+        billingCycle: 'monthly',
+      });
+      const result = await service.claimForOwner(
+        5,
+        [10, 11],
+        { planId: 3 } as any,
+        5,
+      );
       expect(storageQuota.billableExtraGb).toHaveBeenCalledWith({ ownerId: 5 });
-      expect(result).toMatchObject({ quantity: 2, extraStorageGb: 2, storageAmount: 20000, amount: 318000 });
+      expect(result).toMatchObject({
+        quantity: 2,
+        extraStorageGb: 2,
+        storageAmount: 20000,
+        amount: 318000,
+      });
     });
 
     it('charges a self-paying multiklinik branch one branch, no owner fee (positive)', async () => {
@@ -282,10 +343,7 @@ describe('SubscriptionPaymentsService', () => {
     });
 
     it('listQueue attaches ownerName from a batched user lookup for owner-scoped rows (positive)', async () => {
-      const qb = buildQb([
-        [{ id: 1, clinicId: null, ownerId: 7 }],
-        1,
-      ]);
+      const qb = buildQb([[{ id: 1, clinicId: null, ownerId: 7 }], 1]);
       paymentRepo.createQueryBuilder.mockReturnValue(qb);
       userRepo.find.mockResolvedValue([{ id: 7, name: 'Budi Owner' }]);
 
@@ -354,8 +412,12 @@ describe('SubscriptionPaymentsService', () => {
       });
       (existsSync as jest.Mock).mockReturnValue(true);
 
-      await expect(service.getOwnerProofFilePath(1, 5)).resolves.toContain('proof-9.jpg');
-      await expect(service.getOwnerProofFilePath(1, 6)).rejects.toThrow(NotFoundException);
+      await expect(service.getOwnerProofFilePath(1, 5)).resolves.toContain(
+        'proof-9.jpg',
+      );
+      await expect(service.getOwnerProofFilePath(1, 6)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws NotFoundException when the payment has no proof (negative)', async () => {
@@ -402,7 +464,10 @@ describe('SubscriptionPaymentsService', () => {
 
       expect(clinicSubsService.extendSubscription).toHaveBeenCalledTimes(2);
       expect(notifications.sendPaymentReceipt).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 7, status: SubscriptionPaymentStatus.CONFIRMED }),
+        expect.objectContaining({
+          id: 7,
+          status: SubscriptionPaymentStatus.CONFIRMED,
+        }),
       );
     });
 
@@ -447,6 +512,7 @@ describe('SubscriptionPaymentsService', () => {
         2,
         5,
         undefined,
+        1,
       );
       expect(clinicSubsService.extendSubscription).toHaveBeenNthCalledWith(
         2,
@@ -454,6 +520,7 @@ describe('SubscriptionPaymentsService', () => {
         2,
         5,
         undefined,
+        1,
       );
       expect(clinicSubsService.extendSubscription).toHaveBeenNthCalledWith(
         3,
@@ -461,6 +528,7 @@ describe('SubscriptionPaymentsService', () => {
         2,
         5,
         undefined,
+        1,
       );
       expect(result.status).toBe(SubscriptionPaymentStatus.CONFIRMED);
       // Only the first extended clinic's subscription id is stored — the

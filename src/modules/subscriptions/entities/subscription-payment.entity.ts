@@ -67,6 +67,27 @@ export class SubscriptionPayment extends BaseEntity {
   })
   storageAmount: number;
 
+  // Lama langganan yang dibayar (bulan); konfirmasi memperpanjang sebanyak ini.
+  @Column({ type: 'int', default: 1 })
+  months: number;
+
+  // Rincian potongan, sudah termasuk dalam `amount`.
+  @Column('decimal', {
+    name: 'promo_discount',
+    precision: 12,
+    scale: 2,
+    default: 0,
+  })
+  promoDiscount: number;
+
+  @Column('decimal', {
+    name: 'duration_discount',
+    precision: 12,
+    scale: 2,
+    default: 0,
+  })
+  durationDiscount: number;
+
   @Column('decimal', { precision: 12, scale: 2 })
   amount: number;
 

@@ -1,6 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+  IsIn,
+} from 'class-validator';
 import { PaginationDto } from '../../../common/dto/pagination.dto';
 import { SubscriptionPaymentStatus } from '../entities/subscription-payment.entity';
 
@@ -20,6 +27,16 @@ export class CreateSubscriptionPaymentDto {
   @Min(1)
   quantity?: number;
 
+  @ApiPropertyOptional({
+    enum: [1, 3, 6, 12],
+    default: 1,
+    description: 'Lama langganan (bulan)',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsIn([1, 3, 6, 12])
+  months?: number;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -31,10 +48,43 @@ export class ClaimOwnerSubscriptionPaymentDto {
   @IsInt()
   planId: number;
 
+  @ApiPropertyOptional({
+    enum: [1, 3, 6, 12],
+    default: 1,
+    description: 'Lama langganan (bulan)',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsIn([1, 3, 6, 12])
+  months?: number;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   notes?: string;
+}
+
+export class QuoteQueryDto {
+  @Type(() => Number)
+  @IsInt()
+  planId: number;
+
+  @ApiPropertyOptional({
+    enum: [1, 3, 6, 12],
+    default: 1,
+    description: 'Lama langganan (bulan)',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsIn([1, 3, 6, 12])
+  months?: number;
+
+  @ApiPropertyOptional({ default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  quantity?: number;
 }
 
 export class ReviewSubscriptionPaymentDto {

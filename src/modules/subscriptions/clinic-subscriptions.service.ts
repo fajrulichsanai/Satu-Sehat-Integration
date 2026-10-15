@@ -105,6 +105,8 @@ export class ClinicSubscriptionsService {
     planId: number,
     extendedBy: number,
     notes?: string | null,
+    /** Berapa periode paket yang dibayar (lama langganan 3/6/12 bulan). */
+    periods = 1,
   ): Promise<ClinicSubscription> {
     const clinic = await this.clinicRepository.findOne({
       where: { id: clinicId },
@@ -128,7 +130,14 @@ export class ClinicSubscriptionsService {
     const base = currentEnd && currentEnd > today ? currentEnd : today;
 
     const endDate = new Date(base);
-    endDate.setDate(endDate.getDate() + plan.durationDays);
+    if (periods > 1 && plan.billingCycle !== 'yearly') {
+      // 3/6/12 bulan: calendar months, so 12 months is a full year.
+      endDate.setMonth(endDate.getMonth() + periods);
+    } else {
+      endDate.setDate(
+        endDate.getDate() + plan.durationDays * Math.max(1, periods),
+      );
+    }
 
     const row = this.clinicSubscriptionRepository.create({
       clinicId,
