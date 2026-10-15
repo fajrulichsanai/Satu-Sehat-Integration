@@ -54,6 +54,9 @@ export class ClinicSubscription extends BaseEntity {
   @Column({ name: 'notified_h7_at', type: 'datetime', nullable: true })
   notifiedH7At: Date | null;
 
+  @Column({ name: 'notified_h3_at', type: 'datetime', nullable: true })
+  notifiedH3At: Date | null;
+
   @Column({ name: 'notified_h1_at', type: 'datetime', nullable: true })
   notifiedH1At: Date | null;
 

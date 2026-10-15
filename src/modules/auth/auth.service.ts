@@ -158,7 +158,7 @@ export class AuthService {
 
     await this.userRepository.save(user);
 
-    // New clinic gets an automatic 15-day free trial (see PRD bagian 7) so
+    // New clinic gets an automatic 14-day free trial (see PRD bagian 7) so
     // it isn't immediately locked out by SubscriptionGuard before ever
     // reaching the payment flow.
     if (clinic) {

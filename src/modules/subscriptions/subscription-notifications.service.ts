@@ -28,7 +28,7 @@ function daysBetween(a: Date, b: Date): number {
 }
 
 /**
- * Sends the H-7 / H-1 "your subscription is about to expire" email to a
+ * Sends the H-7 / H-3 / H-1 "your subscription is about to expire" email to a
  * clinic's owner(s). In-app warning (the renew popup, H-7 through expiry)
  * is handled entirely on the frontend from the subscription's endDate —
  * this service only covers the out-of-band email channel.
@@ -55,6 +55,7 @@ export class SubscriptionNotificationsService {
 
   async sendUpcomingExpiryReminders(): Promise<{
     h7Sent: number;
+    h3Sent: number;
     h1Sent: number;
   }> {
     const today = new Date(new Date().toDateString());
@@ -73,6 +74,7 @@ export class SubscriptionNotificationsService {
     }
 
     let h7Sent = 0;
+    let h3Sent = 0;
     let h1Sent = 0;
 
     for (const sub of latestByClinic.values()) {
@@ -84,6 +86,12 @@ export class SubscriptionNotificationsService {
           await this.clinicSubscriptionRepository.save(sub);
           h7Sent += 1;
         }
+      } else if (daysLeft === 3 && !sub.notifiedH3At) {
+        if (await this.notifyClinic(sub, 3)) {
+          sub.notifiedH3At = new Date();
+          await this.clinicSubscriptionRepository.save(sub);
+          h3Sent += 1;
+        }
       } else if (daysLeft === 1 && !sub.notifiedH1At) {
         if (await this.notifyClinic(sub, 1)) {
           sub.notifiedH1At = new Date();
@@ -93,12 +101,12 @@ export class SubscriptionNotificationsService {
       }
     }
 
-    return { h7Sent, h1Sent };
+    return { h7Sent, h3Sent, h1Sent };
   }
 
   /**
    * Trial-specific reminder sequence per PRD bagian 7 — dipicu berdasarkan
-   * hari sejak trial dimulai (7/13/15 dari 15 hari), yang secara matematis
+   * hari sejak trial dimulai (6/12/14 dari 14 hari), yang secara matematis
    * sama dengan sisa hari 8/2/0 sebelum trial berakhir. Terpisah dari
    * sendUpcomingExpiryReminders karena copy-nya beda (ajak upgrade, bukan
    * "perpanjang") dan hanya menyasar baris berstatus trial.
@@ -206,7 +214,7 @@ export class SubscriptionNotificationsService {
           <h2>Free Trial ApexRecord</h2>
           <p>Halo,</p>
           <p>${message}</p>
-          <p>Klinik <strong>${clinic?.name ?? ''}</strong> sedang menjalani masa Free Trial 15 hari (berakhir ${sub.endDate}).</p>
+          <p>Klinik <strong>${clinic?.name ?? ''}</strong> sedang menjalani masa Free Trial ${sub.plan?.durationDays ?? 14} hari (berakhir ${sub.endDate}).</p>
           <a href="${appUrl}/langganan" style="display: inline-block; padding: 10px 20px; background-color: #4F7EF8; color: white; text-decoration: none; border-radius: 5px;">
             Upgrade Sekarang
           </a>

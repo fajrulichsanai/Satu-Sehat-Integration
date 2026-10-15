@@ -31,6 +31,7 @@ import { IcdModule } from './modules/icd/icd.module';
 import { OwnerCodeModule } from './modules/owner-code/owner-code.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { DataRequestsModule } from './modules/data-requests/data-requests.module';
+import { DataRetentionModule } from './modules/data-retention/data-retention.module';
 import { ContentsModule } from './modules/contents/contents.module';
 import { TerminologyModule } from './modules/terminology/terminology.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
@@ -129,6 +130,7 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     OwnerCodeModule,
     ApiKeysModule,
     DataRequestsModule,
+    DataRetentionModule,
     TerminologyModule,
     DashboardModule,
     OperationalRecordsModule,

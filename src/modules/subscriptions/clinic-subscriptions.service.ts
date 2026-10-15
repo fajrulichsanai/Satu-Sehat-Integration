@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -118,6 +123,17 @@ export class ClinicSubscriptionsService {
       });
     }
 
+    if (clinic.dataPurgedAt) {
+      throw new BadRequestException({
+        success: false,
+        error: {
+          code: 'CLINIC_DATA_PURGED',
+          message:
+            'Data klinik ini sudah dihapus setelah berhenti berlangganan. Daftarkan klinik baru.',
+        },
+      });
+    }
+
     const plan = await this.subscriptionPlansService.findOne(planId);
     const current = await this.getCurrentForClinic(clinicId);
 
@@ -159,6 +175,14 @@ export class ClinicSubscriptionsService {
       createdBy: extendedBy,
     });
     const saved = await this.clinicSubscriptionRepository.save(row);
+    // Berlangganan lagi membatalkan jadwal hapus data (DataRetentionService).
+    if (clinic.dataDeleteAfter) {
+      await this.clinicRepository.update(clinicId, {
+        dataDeleteAfter: null,
+        dataDeleteH7At: null,
+        dataDeleteH1At: null,
+      });
+    }
     const withPlan = await this.clinicSubscriptionRepository.findOne({
       where: { id: saved.id },
       relations: { plan: true },
@@ -167,7 +191,7 @@ export class ClinicSubscriptionsService {
   }
 
   /**
-   * Auto-enrolls a freshly registered clinic into the Free Trial plan (15
+   * Auto-enrolls a freshly registered clinic into the Free Trial plan (14
    * hari, semua fitur sama seperti Starter — lihat PRD bagian 7). Never
    * throws: a clinic that fails to get a trial simply starts with no
    * subscription, same as today's behavior, rather than blocking registration.

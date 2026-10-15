@@ -39,6 +39,7 @@ const MIGRATIONS = [
   '1790170000000-BatasAkunStorageTambahan',
   '1790180000000-BonusStorageMasaCoba',
   '1790190000000-PromoDanDiskonDurasi',
+  '1790200000000-RetensiDataMasaCoba14',
 ];
 
 async function main() {

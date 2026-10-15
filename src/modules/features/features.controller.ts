@@ -118,6 +118,25 @@ export class FeaturesController {
     );
   }
 
+  @Put('super-admin/platform-settings/auto-purge')
+  @Roles(UserRole.SUPER_ADMIN)
+  @UseInterceptors(AuditInterceptor)
+  @Audit('PlatformSetting', AuditActionType.UPDATE)
+  @ApiOperation({
+    summary:
+      'Nyalakan/matikan penghapusan otomatis data klinik yang berhenti berlangganan',
+  })
+  async setPlatformAutoPurge(
+    @Body() dto: SetEnabledDto,
+    @CurrentUser() user: FeatureActor,
+    @Req() req: { auditEntityLabel?: string },
+  ) {
+    req.auditEntityLabel = `Hapus otomatis data klinik ${dto.enabled ? 'dinyalakan' : 'dimatikan'}`;
+    return ApiResponse.success(
+      await this.platform.setAutoPurgeEnabled(dto.enabled, user.userId),
+    );
+  }
+
   // ── Owner klinik: saklar SATUSEHAT kliniknya ──
 
   @Get('features/clinic/satusehat')

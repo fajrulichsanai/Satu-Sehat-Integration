@@ -132,4 +132,21 @@ export class Clinic extends BaseEntity {
     nullable: true,
   })
   satusehatPoliLocationId: string | null;
+
+  /**
+   * Langganan berhenti: data bisa diunduh sampai tanggal ini, lalu dihapus
+   * (lihat DataRetentionService). Null = tidak ada jadwal penghapusan.
+   */
+  @Column({ name: 'data_delete_after', type: 'date', nullable: true })
+  dataDeleteAfter: string | null;
+
+  @Column({ name: 'data_delete_h7_at', type: 'datetime', nullable: true })
+  dataDeleteH7At: Date | null;
+
+  @Column({ name: 'data_delete_h1_at', type: 'datetime', nullable: true })
+  dataDeleteH1At: Date | null;
+
+  /** Kapan data klinik ini dihapus; baris klinik tetap ada untuk riwayat tagihan. */
+  @Column({ name: 'data_purged_at', type: 'datetime', nullable: true })
+  dataPurgedAt: Date | null;
 }

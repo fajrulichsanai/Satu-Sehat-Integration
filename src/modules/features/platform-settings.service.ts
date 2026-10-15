@@ -6,6 +6,14 @@ import { PlatformSetting } from './entities/platform-setting.entity';
 /** Saklar global SATUSEHAT — mati sampai integrasi siap dipakai klinik */
 export const SATUSEHAT_ENABLED_KEY = 'satusehat.enabled';
 
+/**
+ * Penghapusan otomatis data klinik yang berhenti berlangganan setelah masa
+ * unduh 15 hari. Bawaan mati: jadwal tetap dibuat dan diberitahukan, tetapi
+ * data baru dihapus setelah Super Admin menyalakan saklar ini (atau
+ * menghapusnya sendiri per klinik).
+ */
+export const AUTO_PURGE_KEY = 'retention.auto_purge';
+
 /** Dibaca di setiap pemeriksaan fitur — disimpan sebentar di memori */
 const CACHE_MS = 30_000;
 
@@ -22,16 +30,29 @@ export class PlatformSettingsService {
     return (await this.all()).get(SATUSEHAT_ENABLED_KEY) === 'true';
   }
 
-  async get() {
-    return { satusehatEnabled: await this.isSatusehatEnabled() };
+  async isAutoPurgeEnabled(): Promise<boolean> {
+    return (await this.all()).get(AUTO_PURGE_KEY) === 'true';
   }
 
-  async setSatusehatEnabled(enabled: boolean, by: number) {
+  async get() {
+    return {
+      satusehatEnabled: await this.isSatusehatEnabled(),
+      autoPurgeEnabled: await this.isAutoPurgeEnabled(),
+    };
+  }
+
+  setSatusehatEnabled(enabled: boolean, by: number) {
+    return this.setFlag(SATUSEHAT_ENABLED_KEY, enabled, by);
+  }
+
+  setAutoPurgeEnabled(enabled: boolean, by: number) {
+    return this.setFlag(AUTO_PURGE_KEY, enabled, by);
+  }
+
+  private async setFlag(key: string, enabled: boolean, by: number) {
     const row =
-      (await this.repo.findOne({
-        where: { settingKey: SATUSEHAT_ENABLED_KEY },
-      })) ??
-      this.repo.create({ settingKey: SATUSEHAT_ENABLED_KEY, createdBy: by });
+      (await this.repo.findOne({ where: { settingKey: key } })) ??
+      this.repo.create({ settingKey: key, createdBy: by });
     Object.assign(row, { value: String(enabled), updatedBy: by });
     await this.repo.save(row);
     this.cache = null;

@@ -2,7 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { SubscriptionNotificationsService } from '../subscription-notifications.service';
-import { ClinicSubscription, ClinicSubscriptionStatus } from '../entities/clinic-subscription.entity';
+import {
+  ClinicSubscription,
+  ClinicSubscriptionStatus,
+} from '../entities/clinic-subscription.entity';
 import { SubscriptionPlanTier } from '../entities/subscription-plan.entity';
 import { Clinic } from '../../clinics/entities/clinic.entity';
 import { User } from '../../users/entities/user.entity';
@@ -29,17 +32,29 @@ describe('SubscriptionNotificationsService', () => {
   let linkRepo: { findOne: jest.Mock };
   let manager: { query: jest.Mock };
   const sentEmails = () =>
-    (Resend as unknown as jest.Mock).mock.results.at(-1)!.value.emails.send as jest.Mock;
+    (Resend as unknown as jest.Mock).mock.results.at(-1)!.value.emails
+      .send as jest.Mock;
 
   beforeEach(async () => {
-    manager = { query: jest.fn().mockResolvedValue([{ name: 'Multi Klinik Bulanan' }]) };
-    subRepo = { find: jest.fn(), save: jest.fn().mockResolvedValue(undefined), manager } as any;
+    manager = {
+      query: jest.fn().mockResolvedValue([{ name: 'Multi Klinik Bulanan' }]),
+    };
+    subRepo = {
+      find: jest.fn(),
+      save: jest.fn().mockResolvedValue(undefined),
+      manager,
+    } as any;
     linkRepo = { findOne: jest.fn().mockResolvedValue(null) };
     clinicRepo = {
       findOne: jest.fn().mockResolvedValue({ id: 1, name: 'Klinik A' }),
-      find: jest.fn().mockResolvedValue([{ id: 10, name: 'Cabang A' }, { id: 11, name: 'Cabang B' }]),
+      find: jest.fn().mockResolvedValue([
+        { id: 10, name: 'Cabang A' },
+        { id: 11, name: 'Cabang B' },
+      ]),
     } as any;
-    userRepo = { find: jest.fn().mockResolvedValue([{ email: 'owner@x.com' }]) };
+    userRepo = {
+      find: jest.fn().mockResolvedValue([{ email: 'owner@x.com' }]),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -61,9 +76,16 @@ describe('SubscriptionNotificationsService', () => {
 
   describe('sendUpcomingExpiryReminders', () => {
     it('sends the reminder of an owner-paid branch to the multiklinik owner (positive)', async () => {
-      linkRepo.findOne.mockResolvedValue({ owner: { email: 'mco@x.id', isActive: true } });
+      linkRepo.findOne.mockResolvedValue({
+        owner: { email: 'mco@x.id', isActive: true },
+      });
       subRepo.find.mockResolvedValue([
-        { clinicId: 1, endDate: endDateInDays(7), notifiedH7At: null, notifiedH1At: null },
+        {
+          clinicId: 1,
+          endDate: endDateInDays(7),
+          notifiedH7At: null,
+          notifiedH1At: null,
+        },
       ]);
 
       const result = await service.sendUpcomingExpiryReminders();
@@ -76,7 +98,12 @@ describe('SubscriptionNotificationsService', () => {
 
     it('sends an H-7 reminder for a subscription ending in exactly 7 days (positive)', async () => {
       subRepo.find.mockResolvedValue([
-        { clinicId: 1, endDate: endDateInDays(7), notifiedH7At: null, notifiedH1At: null },
+        {
+          clinicId: 1,
+          endDate: endDateInDays(7),
+          notifiedH7At: null,
+          notifiedH1At: null,
+        },
       ]);
 
       const result = await service.sendUpcomingExpiryReminders();
@@ -89,7 +116,12 @@ describe('SubscriptionNotificationsService', () => {
 
     it('sends an H-1 reminder for a subscription ending tomorrow (positive)', async () => {
       subRepo.find.mockResolvedValue([
-        { clinicId: 1, endDate: endDateInDays(1), notifiedH1At: null, notifiedH7At: null },
+        {
+          clinicId: 1,
+          endDate: endDateInDays(1),
+          notifiedH1At: null,
+          notifiedH7At: null,
+        },
       ]);
 
       const result = await service.sendUpcomingExpiryReminders();
@@ -107,31 +139,67 @@ describe('SubscriptionNotificationsService', () => {
       expect(result.h7Sent).toBe(0);
     });
 
-    it('skips a subscription not at exactly 7 or 1 days remaining (negative/edge)', async () => {
+    it('sends the H-3 reminder once (positive)', async () => {
       subRepo.find.mockResolvedValue([
-        { clinicId: 1, endDate: endDateInDays(3), notifiedH7At: null, notifiedH1At: null },
+        {
+          clinicId: 1,
+          endDate: endDateInDays(3),
+          notifiedH7At: null,
+          notifiedH3At: null,
+          notifiedH1At: null,
+        },
       ]);
 
       const result = await service.sendUpcomingExpiryReminders();
 
-      expect(result).toEqual({ h7Sent: 0, h1Sent: 0 });
+      expect(result).toEqual({ h7Sent: 0, h3Sent: 1, h1Sent: 0 });
+    });
+
+    it('skips a subscription not at exactly 7, 3 or 1 days remaining (negative/edge)', async () => {
+      subRepo.find.mockResolvedValue([
+        {
+          clinicId: 1,
+          endDate: endDateInDays(4),
+          notifiedH7At: null,
+          notifiedH1At: null,
+        },
+      ]);
+
+      const result = await service.sendUpcomingExpiryReminders();
+
+      expect(result).toEqual({ h7Sent: 0, h3Sent: 0, h1Sent: 0 });
     });
 
     it('only considers the latest (first) row per clinic when duplicates exist (positive/edge)', async () => {
       subRepo.find.mockResolvedValue([
-        { clinicId: 1, endDate: endDateInDays(7), notifiedH7At: null, notifiedH1At: null }, // latest (order id DESC)
-        { clinicId: 1, endDate: endDateInDays(1), notifiedH7At: null, notifiedH1At: null }, // stale history row
+        {
+          clinicId: 1,
+          endDate: endDateInDays(7),
+          notifiedH7At: null,
+          notifiedH1At: null,
+        }, // latest (order id DESC)
+        {
+          clinicId: 1,
+          endDate: endDateInDays(1),
+          notifiedH7At: null,
+          notifiedH1At: null,
+        }, // stale history row
       ]);
 
       const result = await service.sendUpcomingExpiryReminders();
 
-      expect(result).toEqual({ h7Sent: 1, h1Sent: 0 });
+      expect(result).toEqual({ h7Sent: 1, h3Sent: 0, h1Sent: 0 });
     });
 
     it('does not mark as notified when there is no active owner email (negative)', async () => {
       userRepo.find.mockResolvedValue([]);
       subRepo.find.mockResolvedValue([
-        { clinicId: 1, endDate: endDateInDays(7), notifiedH7At: null, notifiedH1At: null },
+        {
+          clinicId: 1,
+          endDate: endDateInDays(7),
+          notifiedH7At: null,
+          notifiedH1At: null,
+        },
       ]);
 
       const result = await service.sendUpcomingExpiryReminders();

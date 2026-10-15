@@ -53,7 +53,11 @@ export async function planLimitsForClinic(
     [clinicId],
   );
   const tier: string | null = row?.tier ?? null;
-  const pick = (value: unknown, defaults: Record<string, number>, fallback: number) =>
+  const pick = (
+    value: unknown,
+    defaults: Record<string, number>,
+    fallback: number,
+  ) =>
     value !== null && value !== undefined
       ? Number(value)
       : ((tier ? defaults[tier] : undefined) ?? fallback);
@@ -66,6 +70,8 @@ export async function planLimitsForClinic(
 }
 
 /** Pengali harga untuk siklus paket: tahunan = 10× bulanan. */
-export function cycleMultiplier(billingCycle: string | null | undefined): number {
+export function cycleMultiplier(
+  billingCycle: string | null | undefined,
+): number {
   return billingCycle === 'yearly' ? 10 : 1;
 }
