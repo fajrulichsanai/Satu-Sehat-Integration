@@ -679,4 +679,62 @@ describe('PatientsService', () => {
       expect(result.byReferrer[0].referralCount).toBe(2);
     });
   });
+
+  describe('getBirthdays', () => {
+    const run = async (
+      range: 'today' | 'week' | 'month',
+      now: string,
+      rows: any[] = [],
+      month?: number,
+    ) => {
+      const query = jest.fn().mockResolvedValue(rows);
+      (patientRepo as any).query = query;
+      const data = await service.getBirthdays(1, range, month, new Date(now));
+      return {
+        data,
+        sql: query.mock.calls[0][0] as string,
+        params: query.mock.calls[0][1],
+      };
+    };
+
+    it('bulan tertentu memakai MONTH(birth_date)', async () => {
+      const { sql, params } = await run('month', '2026-10-15T03:00:00Z', [], 3);
+      expect(sql).toContain('MONTH(p.birth_date) = ?');
+      expect(params).toEqual([1, 3]);
+    });
+
+    it('hari ini memakai tanggal WIB', async () => {
+      // 23:30 UTC tgl 14 = 06:30 WIB tgl 15
+      const { params } = await run('today', '2026-10-14T23:30:00Z');
+      expect(params).toEqual([1, '10-15']);
+    });
+
+    it('7 hari ke depan melewati pergantian tahun & usia bertambah', async () => {
+      const { params, data } = await run('week', '2026-12-29T03:00:00Z', [
+        { id: 1, name: 'A', birthDate: '1990-01-02', consentMarketing: 1 },
+        { id: 2, name: 'B', birthDate: '1990-12-29', consentMarketing: 0 },
+      ]);
+      expect(params).toEqual([
+        1,
+        '12-29',
+        '12-30',
+        '12-31',
+        '01-01',
+        '01-02',
+        '01-03',
+        '01-04',
+      ]);
+      expect(data[0].turning).toBe(37); // ulang tahun Jan 2027
+      expect(data[1]).toMatchObject({
+        turning: 36,
+        isToday: true,
+        consentMarketing: false,
+      });
+    });
+
+    it('lahir 29 Feb ikut dirayakan 28 Feb pada tahun biasa', async () => {
+      const { params } = await run('today', '2026-02-28T03:00:00Z');
+      expect(params).toEqual([1, '02-28', '02-29']);
+    });
+  });
 });

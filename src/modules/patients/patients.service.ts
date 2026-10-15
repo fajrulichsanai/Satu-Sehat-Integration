@@ -150,11 +150,91 @@ export class PatientsService {
     const term = search?.trim();
     if (term) {
       qb.andWhere(
-        '(p.name LIKE :search OR p.noRm LIKE :search OR p.nikHash = :nikHash)',
-        { search: `%${term}%`, nikHash: hashNik(term) },
+        "(p.name LIKE :search ESCAPE '\\\\' OR p.noRm LIKE :search ESCAPE '\\\\' OR p.nikHash = :nikHash)",
+        // % dan _ dari input diperlakukan sebagai huruf biasa, bukan wildcard
+        {
+          search: `%${term.replace(/[\\%_]/g, '\\$&')}%`,
+          nikHash: hashNik(term),
+        },
       );
     }
     return qb;
+  }
+
+  /**
+   * Pasien yang berulang tahun (promo ulang tahun): hari ini, 7 hari ke
+   * depan, atau sepanjang bulan tertentu. Hanya data yang perlu untuk
+   * menyapa pasien — tanpa NIK/alamat.
+   */
+  async getBirthdays(
+    clinicId: number,
+    range: 'today' | 'week' | 'month' = 'month',
+    month?: number,
+    now = new Date(),
+  ) {
+    // Tanggal kalender WIB (UTC+7) supaya "hari ini" tidak bergeser
+    const local = new Date(now.getTime() + 7 * 3600_000);
+    const year = local.getUTCFullYear();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const md = (d: Date) =>
+      `${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+    const isLeap = (y: number) =>
+      (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+
+    let where: string;
+    const params: unknown[] = [clinicId];
+    const targetMonth = month ?? local.getUTCMonth() + 1;
+    if (range === 'month') {
+      where = 'MONTH(p.birth_date) = ?';
+      params.push(targetMonth);
+    } else {
+      const days = range === 'today' ? 1 : 7;
+      const keys: string[] = [];
+      for (let i = 0; i < days; i++) {
+        const d = new Date(
+          Date.UTC(year, local.getUTCMonth(), local.getUTCDate() + i),
+        );
+        keys.push(md(d));
+        // Lahir 29 Feb dirayakan 28 Feb pada tahun biasa
+        if (md(d) === '02-28' && !isLeap(d.getUTCFullYear()))
+          keys.push('02-29');
+      }
+      where = `DATE_FORMAT(p.birth_date, '%m-%d') IN (${keys.map(() => '?').join(', ')})`;
+      params.push(...keys);
+    }
+
+    const rows: any[] = await this.patientRepository.query(
+      `SELECT p.id, p.no_rm AS noRm, p.name, p.gender, p.phone,
+         DATE_FORMAT(p.birth_date, '%Y-%m-%d') AS birthDate,
+         p.consent_marketing AS consentMarketing,
+         (SELECT MAX(e.arrived_time) FROM encounters e
+           WHERE e.patient_id = p.id AND e.clinic_id = p.clinic_id) AS lastVisit
+       FROM patients p
+       WHERE p.clinic_id = ? AND p.birth_date IS NOT NULL AND ${where}
+       ORDER BY DATE_FORMAT(p.birth_date, '%m-%d') ASC, p.name ASC
+       LIMIT 1000`,
+      params,
+    );
+    const todayKey = md(local);
+    return rows.map((r) => {
+      const [by, bm, bd] = String(r.birthDate).split('-').map(Number);
+      const thisYearKey = `${pad(bm)}-${pad(bd)}`;
+      // Usia yang dirayakan pada ulang tahun berikutnya / hari ini
+      const turning =
+        year - by + (range === 'month' || thisYearKey >= todayKey ? 0 : 1);
+      return {
+        id: Number(r.id),
+        noRm: r.noRm,
+        name: r.name,
+        gender: r.gender,
+        phone: r.phone ?? null,
+        birthDate: r.birthDate,
+        turning,
+        isToday: thisYearKey === todayKey,
+        consentMarketing: !!Number(r.consentMarketing),
+        lastVisit: r.lastVisit ?? null,
+      };
+    });
   }
 
   async getReferralSummary(clinicId: number) {

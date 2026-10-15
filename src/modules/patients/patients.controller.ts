@@ -16,7 +16,9 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PatientsService } from './patients.service';
+import { RequireFeature } from '../features/require-feature.decorator';
 import {
+  BirthdayQueryDto,
   CreatePatientDto,
   PatientQueryDto,
   PatientStatsQueryDto,
@@ -112,6 +114,21 @@ export class PatientsController {
       success: true,
       data: await this.patientsService.searchSatusehatPatients(dto, clinicId),
     };
+  }
+
+  @Get('birthdays')
+  @RequireFeature('ulang-tahun')
+  @ApiOperation({ summary: 'Pasien berulang tahun (promo ulang tahun)' })
+  async birthdays(
+    @ClinicId() clinicId: number,
+    @Query() query: BirthdayQueryDto,
+  ) {
+    const data = await this.patientsService.getBirthdays(
+      clinicId,
+      query.range,
+      query.month,
+    );
+    return { success: true, data };
   }
 
   @Get('referral-summary')

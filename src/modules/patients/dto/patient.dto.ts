@@ -15,6 +15,8 @@ import {
   MaxLength,
   ValidateIf,
   ValidateNested,
+  Min,
+  Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { FAMILY_RELATIONSHIP_CODES } from '../family-history';
@@ -360,6 +362,7 @@ export class PatientQueryDto extends PaginationDto {
   @ApiPropertyOptional({ description: 'Search by name, NIK, or No. RM' })
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   search?: string;
 
   @ApiPropertyOptional({ enum: Gender })
@@ -377,10 +380,26 @@ export class PatientQueryDto extends PaginationDto {
   kategori?: PatientCategory;
 }
 
+export class BirthdayQueryDto {
+  @ApiPropertyOptional({ enum: ['today', 'week', 'month'], default: 'month' })
+  @IsOptional()
+  @IsIn(['today', 'week', 'month'])
+  range?: 'today' | 'week' | 'month' = 'month';
+
+  @ApiPropertyOptional({ description: 'Bulan 1-12 (untuk range=month)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  month?: number;
+}
+
 export class PatientStatsQueryDto {
   @ApiPropertyOptional({ description: 'Search by name, NIK, or No. RM' })
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   search?: string;
 }
 
