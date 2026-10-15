@@ -4,7 +4,10 @@ import { DataSource } from 'typeorm';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { GudangService } from '../gudang.service';
 import { Barang } from '../entities/barang.entity';
-import { StokTransaksi, StokTransaksiType } from '../entities/stok-transaksi.entity';
+import {
+  StokTransaksi,
+  StokTransaksiType,
+} from '../entities/stok-transaksi.entity';
 import { TindakanBom } from '../entities/tindakan-bom.entity';
 
 function buildQb(result: [any[], number] = [[], 0]) {
@@ -41,7 +44,12 @@ describe('GudangService', () => {
     remove: jest.Mock;
   };
   let dataSource: { transaction: jest.Mock };
-  let manager: { findOne: jest.Mock; save: jest.Mock; create: jest.Mock; find: jest.Mock };
+  let manager: {
+    findOne: jest.Mock;
+    save: jest.Mock;
+    create: jest.Mock;
+    find: jest.Mock;
+  };
 
   const clinicId = 1;
   const userId = 9;
@@ -102,9 +110,7 @@ describe('GudangService', () => {
       const qb = buildQb();
       barangRepo.createQueryBuilder.mockReturnValue(qb);
       await service.findAllBarang(clinicId, { lowStock: true } as any);
-      expect(qb.andWhere).toHaveBeenCalledWith(
-        'b.stokSaatIni < b.stokMinimum',
-      );
+      expect(qb.andWhere).toHaveBeenCalledWith('b.stokSaatIni < b.stokMinimum');
     });
 
     it('throws NotFoundException for a missing barang (negative)', async () => {
@@ -118,11 +124,21 @@ describe('GudangService', () => {
       barangRepo.findOne.mockResolvedValue(null);
       await service.createBarang(
         clinicId,
-        { name: 'Kapas', sku: 'SKU1', satuanBeli: 'box', satuanPakai: 'pcs' } as any,
+        {
+          name: 'Kapas',
+          sku: 'SKU1',
+          satuanBeli: 'box',
+          satuanPakai: 'pcs',
+        } as any,
         userId,
       );
       expect(barangRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ konversiQty: 1, hargaBeli: 0, stokMinimum: 0, trackExpiry: false }),
+        expect.objectContaining({
+          konversiQty: 1,
+          hargaBeli: 0,
+          stokMinimum: 0,
+          trackExpiry: false,
+        }),
       );
     });
 
@@ -134,9 +150,12 @@ describe('GudangService', () => {
     });
 
     it('updates barang, only re-checking SKU uniqueness when it changes (positive)', async () => {
-      barangRepo.findOne
-        .mockResolvedValueOnce({ id: 1, clinicId, sku: 'OLD', name: 'A' }) // findOneBarang
-        ; // no further findOne call expected since sku unchanged
+      barangRepo.findOne.mockResolvedValueOnce({
+        id: 1,
+        clinicId,
+        sku: 'OLD',
+        name: 'A',
+      }); // findOneBarang // no further findOne call expected since sku unchanged
       const result = await service.updateBarang(
         1,
         clinicId,
@@ -257,7 +276,12 @@ describe('GudangService', () => {
       manager.findOne.mockResolvedValue({ ...barang, hargaBeli: 1000 });
       await service.createTransaksi(
         clinicId,
-        { barangId: 1, type: StokTransaksiType.IN, qty: 1, hargaBeli: 2000 } as any,
+        {
+          barangId: 1,
+          type: StokTransaksiType.IN,
+          qty: 1,
+          hargaBeli: 2000,
+        } as any,
         userId,
       );
       const savedBarang = manager.save.mock.calls.find(
@@ -270,8 +294,24 @@ describe('GudangService', () => {
   describe('getDashboard', () => {
     it('summarizes total items, low stock and inventory value (positive)', async () => {
       barangRepo.find.mockResolvedValue([
-        { id: 1, stokSaatIni: 2, stokMinimum: 5, hargaBeli: 1000, trackExpiry: false, name: 'A', sku: 'A1' },
-        { id: 2, stokSaatIni: 20, stokMinimum: 5, hargaBeli: 2000, trackExpiry: false, name: 'B', sku: 'B1' },
+        {
+          id: 1,
+          stokSaatIni: 2,
+          stokMinimum: 5,
+          hargaBeli: 1000,
+          trackExpiry: false,
+          name: 'A',
+          sku: 'A1',
+        },
+        {
+          id: 2,
+          stokSaatIni: 20,
+          stokMinimum: 5,
+          hargaBeli: 2000,
+          trackExpiry: false,
+          name: 'B',
+          sku: 'B1',
+        },
       ]);
 
       const result = await service.getDashboard(clinicId);
@@ -284,7 +324,13 @@ describe('GudangService', () => {
 
     it('skips the near-expiry query entirely when nothing tracks expiry (edge)', async () => {
       barangRepo.find.mockResolvedValue([
-        { id: 1, stokSaatIni: 10, stokMinimum: 5, hargaBeli: 1000, trackExpiry: false },
+        {
+          id: 1,
+          stokSaatIni: 10,
+          stokMinimum: 5,
+          hargaBeli: 1000,
+          trackExpiry: false,
+        },
       ]);
       await service.getDashboard(clinicId);
       expect(stokRepo.createQueryBuilder).not.toHaveBeenCalled();
@@ -292,7 +338,13 @@ describe('GudangService', () => {
 
     it('counts near-expiry items when tracked barang exist (positive)', async () => {
       barangRepo.find.mockResolvedValue([
-        { id: 1, stokSaatIni: 10, stokMinimum: 5, hargaBeli: 1000, trackExpiry: true },
+        {
+          id: 1,
+          stokSaatIni: 10,
+          stokMinimum: 5,
+          hargaBeli: 1000,
+          trackExpiry: true,
+        },
       ]);
       const qb = buildQb();
       qb.getRawMany.mockResolvedValue([{ barangId: 1 }]);
@@ -320,7 +372,11 @@ describe('GudangService', () => {
     it('throws NotFoundException when the barang does not exist (negative)', async () => {
       barangRepo.findOne.mockResolvedValue(null);
       await expect(
-        service.createBom(clinicId, { tarifId: 5, barangId: 999 } as any, userId),
+        service.createBom(
+          clinicId,
+          { tarifId: 5, barangId: 999 } as any,
+          userId,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
 

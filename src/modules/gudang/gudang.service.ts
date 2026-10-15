@@ -21,7 +21,10 @@ import {
   CreateStokTransaksiDto,
   StokTransaksiQueryDto,
 } from './dto/stok-transaksi.dto';
-import { CreateTindakanBomDto, UpdateTindakanBomDto } from './dto/tindakan-bom.dto';
+import {
+  CreateTindakanBomDto,
+  UpdateTindakanBomDto,
+} from './dto/tindakan-bom.dto';
 
 @Injectable()
 export class GudangService {
@@ -142,7 +145,11 @@ export class GudangService {
     return this.barangRepository.save(barang);
   }
 
-  async removeBarang(id: number, clinicId: number, userId: number): Promise<void> {
+  async removeBarang(
+    id: number,
+    clinicId: number,
+    userId: number,
+  ): Promise<void> {
     const barang = await this.findOneBarang(id, clinicId);
     barang.isActive = false;
     barang.updatedBy = userId;
@@ -302,7 +309,10 @@ export class GudangService {
 
   // ── BOM (Resep Bahan per Tindakan) ─────────────────────────────────────
 
-  async findBomByTarif(clinicId: number, tarifId: number): Promise<TindakanBom[]> {
+  async findBomByTarif(
+    clinicId: number,
+    tarifId: number,
+  ): Promise<TindakanBom[]> {
     return this.tindakanBomRepository.find({
       where: { clinicId, tarifId },
       relations: { barang: true },
@@ -319,13 +329,17 @@ export class GudangService {
       where: { id: dto.barangId, clinicId },
     });
     if (!barang) {
-      throw new NotFoundException(`Barang dengan ID ${dto.barangId} tidak ditemukan`);
+      throw new NotFoundException(
+        `Barang dengan ID ${dto.barangId} tidak ditemukan`,
+      );
     }
     const existing = await this.tindakanBomRepository.findOne({
       where: { clinicId, tarifId: dto.tarifId, barangId: dto.barangId },
     });
     if (existing) {
-      throw new BadRequestException('Barang ini sudah terdaftar di resep tindakan ini');
+      throw new BadRequestException(
+        'Barang ini sudah terdaftar di resep tindakan ini',
+      );
     }
     const bom = this.tindakanBomRepository.create({
       clinicId,
@@ -335,7 +349,9 @@ export class GudangService {
       wajib: dto.wajib ?? true,
       createdBy: userId,
     } as any);
-    return this.tindakanBomRepository.save(bom) as unknown as Promise<TindakanBom>;
+    return this.tindakanBomRepository.save(
+      bom,
+    ) as unknown as Promise<TindakanBom>;
   }
 
   async updateBom(
@@ -344,9 +360,13 @@ export class GudangService {
     dto: UpdateTindakanBomDto,
     userId: number,
   ): Promise<TindakanBom> {
-    const bom = await this.tindakanBomRepository.findOne({ where: { id, clinicId } });
+    const bom = await this.tindakanBomRepository.findOne({
+      where: { id, clinicId },
+    });
     if (!bom) {
-      throw new NotFoundException(`Resep bahan dengan ID ${id} tidak ditemukan`);
+      throw new NotFoundException(
+        `Resep bahan dengan ID ${id} tidak ditemukan`,
+      );
     }
     Object.assign(bom, {
       qtyPakai: dto.qtyPakai ?? bom.qtyPakai,
@@ -357,9 +377,13 @@ export class GudangService {
   }
 
   async removeBom(id: number, clinicId: number): Promise<void> {
-    const bom = await this.tindakanBomRepository.findOne({ where: { id, clinicId } });
+    const bom = await this.tindakanBomRepository.findOne({
+      where: { id, clinicId },
+    });
     if (!bom) {
-      throw new NotFoundException(`Resep bahan dengan ID ${id} tidak ditemukan`);
+      throw new NotFoundException(
+        `Resep bahan dengan ID ${id} tidak ditemukan`,
+      );
     }
     await this.tindakanBomRepository.remove(bom);
   }
