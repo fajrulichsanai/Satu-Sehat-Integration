@@ -24,6 +24,7 @@ import {
   CreateBillingDto,
   CreatePaymentDto,
   UpdateBillingDto,
+  UpdatePaymentDto,
 } from './dto/billing.dto';
 import { CreateTarifDto, TarifQueryDto, UpdateTarifDto } from './dto/tarif.dto';
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
@@ -203,6 +204,28 @@ export class BillingController {
   ) {
     const data = await this.paymentsService.createPayment(
       id,
+      clinicId,
+      dto,
+      user.userId,
+    );
+    return { success: true, data };
+  }
+
+  @Patch('billings/:id/payments/:paymentId')
+  @Audit('Payment', AuditActionType.UPDATE)
+  @ApiOperation({
+    summary: 'Perbaiki pembayaran yang salah input (jumlah/metode/catatan)',
+  })
+  async updatePayment(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('paymentId', ParseIntPipe) paymentId: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: UpdatePaymentDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.paymentsService.updatePayment(
+      id,
+      paymentId,
       clinicId,
       dto,
       user.userId,

@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { extname } from 'path';
+import { readFile } from 'fs/promises';
 import { S3StorageService } from '../../common/storage/s3-storage.service';
 import { ContentTemplatesService } from './content-templates.service';
 import { Clinic } from '../clinics/entities/clinic.entity';
@@ -18,7 +19,7 @@ import {
   CreateContentDto,
   UpdateContentDto,
 } from './dto/content.dto';
-import { AddContentPhotoDto } from './dto/content-photo.dto';
+import { AddContentPhotoDto, ImportPhotoDto } from './dto/content-photo.dto';
 import { StorageQuotaService } from '../storage-quota/storage-quota.service';
 import { StorageKind } from '../storage-quota/storage-usage.entity';
 import { ClinicalPhotosService } from '../clinical-photos/clinical-photos.service';
@@ -76,6 +77,29 @@ export class ContentsService {
       MIME[ext] ?? file.mimetype,
     );
     await this.storageQuota?.record(clinicId, StorageKind.CONTENT, url, file.size);
+    return { url };
+  }
+
+  /**
+   * Copies a photo already in the patient's folder (Fase 1) or Pemeriksaan
+   * Penunjang into this story's own storage, so it can be set as
+   * before/afterImageUrl like any manually uploaded photo — picking a photo
+   * for Konten never edits or moves the original clinical record.
+   */
+  async importPhoto(clinicId: number, dto: ImportPhotoDto) {
+    const { absolutePath } =
+      dto.sourceType === ContentPhotoSource.PATIENT_PHOTO
+        ? await this.clinicalPhotos.getFilePathById(dto.sourceId, clinicId)
+        : await this.supportingExam.getFilePathById(dto.sourceId, clinicId);
+    const buffer = await readFile(absolutePath);
+    await this.storageQuota?.assertRoom(clinicId, buffer.length);
+    const ext = extname(absolutePath).toLowerCase() || '.jpg';
+    const url = await this.storage.uploadBuffer(
+      `${keyPrefix(clinicId)}${randomUUID()}${ext}`,
+      buffer,
+      MIME[ext] ?? 'image/jpeg',
+    );
+    await this.storageQuota?.record(clinicId, StorageKind.CONTENT, url, buffer.length);
     return { url };
   }
 

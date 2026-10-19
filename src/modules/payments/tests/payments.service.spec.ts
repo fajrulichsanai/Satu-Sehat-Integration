@@ -180,4 +180,103 @@ describe('PaymentsService', () => {
       ),
     ).rejects.toThrow('Jumlah pembayaran harus lebih dari 0');
   });
+
+  describe('updatePayment', () => {
+    it('corrects a mis-entered amount and recomputes the billing (positive)', async () => {
+      manager.findOne
+        .mockResolvedValueOnce({
+          id: 1,
+          clinicId,
+          status: BillingStatus.PARTIAL,
+          paidAmount: 40000,
+          outstandingAmount: 60000,
+          grandTotal: 100000,
+        })
+        .mockResolvedValueOnce({ id: 5, billingId: 1, amount: 40000, method: 'cash' });
+
+      const result = await service.updatePayment(
+        1,
+        5,
+        clinicId,
+        { amount: 25000 } as any,
+        userId,
+      );
+
+      expect(result.amount).toBe(25000);
+      expect(result.paidAmount).toBe(25000);
+      expect(result.outstandingAmount).toBe(75000);
+      expect(result.billingStatus).toBe(BillingStatus.PARTIAL);
+    });
+
+    it('moves billing back to PAID when the corrected amount covers the total (positive/edge)', async () => {
+      manager.findOne
+        .mockResolvedValueOnce({
+          id: 1,
+          clinicId,
+          status: BillingStatus.PARTIAL,
+          paidAmount: 40000,
+          outstandingAmount: 60000,
+          grandTotal: 100000,
+        })
+        .mockResolvedValueOnce({ id: 5, billingId: 1, amount: 40000, method: 'cash' });
+
+      const result = await service.updatePayment(
+        1,
+        5,
+        clinicId,
+        { amount: 100000 } as any,
+        userId,
+      );
+
+      expect(result.billingStatus).toBe(BillingStatus.PAID);
+      expect(result.outstandingAmount).toBe(0);
+    });
+
+    it('rejects a correction that would push total paid past the grand total (negative)', async () => {
+      manager.findOne
+        .mockResolvedValueOnce({
+          id: 1,
+          clinicId,
+          status: BillingStatus.PARTIAL,
+          paidAmount: 40000,
+          outstandingAmount: 60000,
+          grandTotal: 100000,
+        })
+        .mockResolvedValueOnce({ id: 5, billingId: 1, amount: 40000, method: 'cash' });
+
+      await expect(
+        service.updatePayment(1, 5, clinicId, { amount: 999999 } as any, userId),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws NotFoundException for a payment outside this billing (negative)', async () => {
+      manager.findOne
+        .mockResolvedValueOnce({
+          id: 1,
+          clinicId,
+          status: BillingStatus.PARTIAL,
+          paidAmount: 40000,
+          outstandingAmount: 60000,
+          grandTotal: 100000,
+        })
+        .mockResolvedValueOnce(null);
+
+      await expect(
+        service.updatePayment(1, 999, clinicId, { amount: 1000 } as any, userId),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws BadRequestException when billing was already CANCELLED (negative)', async () => {
+      manager.findOne.mockResolvedValueOnce({
+        id: 1,
+        clinicId,
+        status: BillingStatus.CANCELLED,
+        grandTotal: 100000,
+      });
+
+      await expect(
+        service.updatePayment(1, 5, clinicId, { amount: 1000 } as any, userId),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
 });

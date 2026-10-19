@@ -1,4 +1,7 @@
+jest.mock('fs/promises', () => ({ readFile: jest.fn().mockResolvedValue(Buffer.from('img')) }));
+
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { readFile } from 'fs/promises';
 import { ContentsService } from '../contents.service';
 import { S3StorageService } from '../../../common/storage/s3-storage.service';
 import { ContentStatus } from '../entities/clinic-content.entity';
@@ -230,6 +233,28 @@ describe('ContentsService', () => {
       expect(result.consentMarketing).toBe(true);
       expect(result.folders).toHaveLength(1);
       expect(result.supportingExam).toHaveLength(1);
+    });
+  });
+
+  describe('importPhoto', () => {
+    it('copies a patient_photo into the content storage prefix (positive)', async () => {
+      clinicalPhotos.getFilePathById.mockResolvedValue({ absolutePath: '/x/uploads/patient-photos/a.jpg' });
+      const result = await service.importPhoto(5, { sourceType: 'patient_photo', sourceId: 1 } as any);
+      expect(result.url).toMatch(/^\/files\/contents\/5\//);
+      expect(readFile).toHaveBeenCalledWith('/x/uploads/patient-photos/a.jpg');
+    });
+
+    it('copies a supporting_exam_image into the content storage prefix (positive)', async () => {
+      supportingExam.getFilePathById.mockResolvedValue({ absolutePath: '/x/uploads/supporting-exam/b.png' });
+      const result = await service.importPhoto(5, { sourceType: 'supporting_exam_image', sourceId: 2 } as any);
+      expect(result.url).toMatch(/^\/files\/contents\/5\//);
+    });
+
+    it('propagates a not-found error for a source outside this clinic (negative)', async () => {
+      clinicalPhotos.getFilePathById.mockRejectedValue(new NotFoundException('Foto tidak ditemukan'));
+      await expect(
+        service.importPhoto(5, { sourceType: 'patient_photo', sourceId: 99 } as any),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 

@@ -34,7 +34,7 @@ import {
   CreateContentDto,
   UpdateContentDto,
 } from './dto/content.dto';
-import { AddContentPhotoDto, ReorderContentPhotosDto } from './dto/content-photo.dto';
+import { AddContentPhotoDto, ImportPhotoDto, ReorderContentPhotosDto } from './dto/content-photo.dto';
 import { contentImageUploadOptions } from './upload/content-image.upload';
 import { RequireFeature } from '../features/require-feature.decorator';
 
@@ -87,6 +87,15 @@ export class ContentsController {
   @ApiOperation({ summary: 'Logo klinik untuk digambar di story' })
   async logo(@ClinicId() clinicId: number, @Res() res: Response) {
     sendImage(res, await this.service.readLogo(clinicId));
+  }
+
+  @Post('import-photo')
+  @ApiOperation({
+    summary:
+      'Salin foto dari folder foto klinis / Pemeriksaan Penunjang pasien menjadi foto konten (before/after)',
+  })
+  async importPhoto(@ClinicId() clinicId: number, @Body() dto: ImportPhotoDto) {
+    return { success: true, data: await this.service.importPhoto(clinicId, dto) };
   }
 
   @Get('picker/:patientId')

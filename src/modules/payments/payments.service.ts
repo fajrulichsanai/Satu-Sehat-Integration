@@ -8,7 +8,7 @@ import { DataSource, Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { Billing, BillingStatus } from '../billing/entities/billing.entity';
 import { Payment } from './entities/payment.entity';
-import { CreatePaymentDto } from '../billing/dto/billing.dto';
+import { CreatePaymentDto, UpdatePaymentDto } from '../billing/dto/billing.dto';
 
 @Injectable()
 export class PaymentsService {
@@ -88,6 +88,89 @@ export class PaymentsService {
       return {
         paymentId: payment.id,
         receiptNumber,
+        paidAmount: billing.paidAmount,
+        outstandingAmount: billing.outstandingAmount,
+        billingStatus: billing.status,
+      };
+    });
+  }
+
+  /**
+   * Corrects an already-recorded payment's amount/method/note — e.g. a
+   * typo'd amount — without creating a new payment row. Billing's
+   * paidAmount/outstandingAmount/status are recomputed from the delta.
+   */
+  async updatePayment(
+    billingId: number,
+    paymentId: number,
+    clinicId: number,
+    dto: UpdatePaymentDto,
+    userId: number,
+  ) {
+    return this.dataSource.transaction(async (manager) => {
+      const billing = await manager.findOne(Billing, {
+        where: { id: billingId, clinicId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!billing) {
+        throw new NotFoundException(
+          `Billing dengan ID ${billingId} tidak ditemukan`,
+        );
+      }
+      if (
+        billing.status === BillingStatus.CANCELLED ||
+        billing.status === BillingStatus.REFUNDED
+      ) {
+        throw new BadRequestException(
+          `Billing sudah berstatus '${billing.status}', pembayarannya tidak bisa diubah`,
+        );
+      }
+
+      const payment = await manager.findOne(Payment, {
+        where: { id: paymentId, billingId },
+      });
+      if (!payment) {
+        throw new NotFoundException(
+          `Pembayaran dengan ID ${paymentId} tidak ditemukan`,
+        );
+      }
+
+      if (dto.amount !== undefined) {
+        const delta = dto.amount - Number(payment.amount);
+        const newPaidAmount = Number(billing.paidAmount) + delta;
+        if (newPaidAmount < 0) {
+          throw new BadRequestException(
+            'Total pembayaran tagihan ini tidak boleh jadi negatif',
+          );
+        }
+        if (newPaidAmount > Number(billing.grandTotal)) {
+          throw new BadRequestException(
+            `Jumlah pembayaran melebihi total tagihan (${billing.grandTotal})`,
+          );
+        }
+        payment.amount = dto.amount;
+        billing.paidAmount = newPaidAmount;
+        billing.outstandingAmount = Math.max(
+          0,
+          Number(billing.grandTotal) - newPaidAmount,
+        );
+        billing.status =
+          billing.outstandingAmount <= 0
+            ? BillingStatus.PAID
+            : newPaidAmount > 0
+              ? BillingStatus.PARTIAL
+              : BillingStatus.UNPAID;
+      }
+      if (dto.method !== undefined) payment.method = dto.method;
+      if (dto.note !== undefined) payment.note = dto.note;
+
+      await manager.save(Payment, payment);
+      billing.updatedBy = userId;
+      await manager.save(billing);
+
+      return {
+        paymentId: payment.id,
+        amount: payment.amount,
         paidAmount: billing.paidAmount,
         outstandingAmount: billing.outstandingAmount,
         billingStatus: billing.status,

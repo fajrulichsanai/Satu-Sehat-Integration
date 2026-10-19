@@ -174,3 +174,23 @@ export class CreatePaymentDto {
   @IsString()
   note?: string;
 }
+
+export class UpdatePaymentDto {
+  @ApiPropertyOptional({
+    description: 'Jumlah dibayar yang benar — perbaikan salah input, bukan pembayaran baru',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  amount?: number;
+
+  @ApiPropertyOptional({ enum: PaymentMethod })
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  method?: PaymentMethod;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  note?: string;
+}

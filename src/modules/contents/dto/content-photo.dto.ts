@@ -37,6 +37,20 @@ export class AddContentPhotoDto {
   blurFace?: boolean;
 }
 
+export class ImportPhotoDto {
+  @ApiProperty({ enum: ContentPhotoSource })
+  @IsEnum(ContentPhotoSource)
+  sourceType: ContentPhotoSource;
+
+  @ApiProperty({
+    description:
+      'id foto (patient_photos.id) atau gambar penunjang (supporting_exam_images.id), sesuai sourceType',
+  })
+  @IsInt()
+  @Min(1)
+  sourceId: number;
+}
+
 export class ReorderContentPhotosDto {
   @ApiProperty({ type: [Number], description: 'id content_photos sesuai urutan baru' })
   @IsArray()
