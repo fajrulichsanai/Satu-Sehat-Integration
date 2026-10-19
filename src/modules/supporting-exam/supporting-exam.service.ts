@@ -48,6 +48,21 @@ export class SupportingExamService {
     return images.map((image) => toApiUrl(encounterId, image));
   }
 
+  /** Semua gambar (foto & rontgen) pasien ini, lintas kontrol — dipakai folder "Pemeriksaan Penunjang" di pemilih foto konten. */
+  async listByPatient(
+    patientId: number,
+    clinicId: number,
+  ): Promise<SupportingExamImage[]> {
+    const images = await this.imageRepository
+      .createQueryBuilder('image')
+      .innerJoin('image.encounter', 'encounter')
+      .where('encounter.patientId = :patientId', { patientId })
+      .andWhere('encounter.clinicId = :clinicId', { clinicId })
+      .orderBy('image.id', 'DESC')
+      .getMany();
+    return images.map((image) => toApiUrl(image.encounterId, image));
+  }
+
   async create(
     encounterId: number,
     clinicId: number,
@@ -125,6 +140,35 @@ export class SupportingExamService {
       throw new NotFoundException(
         `Gambar dengan ID ${imageId} tidak ditemukan`,
       );
+    }
+    const absolutePath = join(process.cwd(), image.fileUrl.replace(/^\//, ''));
+    if (!existsSync(absolutePath)) {
+      throw new NotFoundException('File gambar tidak ditemukan');
+    }
+    return { absolutePath, originalName: image.originalName };
+  }
+
+  /** Dipakai saat konten menambahkan gambar ini — verifikasi klinik pemiliknya. */
+  async findByIdForClinic(
+    imageId: number,
+    clinicId: number,
+  ): Promise<SupportingExamImage | null> {
+    const image = await this.imageRepository
+      .createQueryBuilder('image')
+      .innerJoin('image.encounter', 'encounter')
+      .where('image.id = :imageId', { imageId })
+      .andWhere('encounter.clinicId = :clinicId', { clinicId })
+      .getOne();
+    return image ?? null;
+  }
+
+  async getFilePathById(
+    imageId: number,
+    clinicId: number,
+  ): Promise<{ absolutePath: string; originalName: string | null }> {
+    const image = await this.findByIdForClinic(imageId, clinicId);
+    if (!image) {
+      throw new NotFoundException(`Gambar dengan ID ${imageId} tidak ditemukan`);
     }
     const absolutePath = join(process.cwd(), image.fileUrl.replace(/^\//, ''));
     if (!existsSync(absolutePath)) {

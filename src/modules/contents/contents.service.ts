@@ -12,13 +12,17 @@ import { S3StorageService } from '../../common/storage/s3-storage.service';
 import { ContentTemplatesService } from './content-templates.service';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { ClinicContent, ContentStatus } from './entities/clinic-content.entity';
+import { ContentPhoto as ContentPhotoRow, ContentPhotoSource } from './entities/content-photo.entity';
 import {
   ContentQueryDto,
   CreateContentDto,
   UpdateContentDto,
 } from './dto/content.dto';
+import { AddContentPhotoDto } from './dto/content-photo.dto';
 import { StorageQuotaService } from '../storage-quota/storage-quota.service';
 import { StorageKind } from '../storage-quota/storage-usage.entity';
+import { ClinicalPhotosService } from '../clinical-photos/clinical-photos.service';
+import { SupportingExamService } from '../supporting-exam/supporting-exam.service';
 
 export type ContentPhoto = 'before' | 'after' | 'rendered';
 
@@ -39,8 +43,12 @@ export class ContentsService {
     private readonly repo: Repository<ClinicContent>,
     @InjectRepository(Clinic)
     private readonly clinicRepo: Repository<Clinic>,
+    @InjectRepository(ContentPhotoRow)
+    private readonly photoRepo: Repository<ContentPhotoRow>,
     private readonly storage: S3StorageService,
     private readonly templates: ContentTemplatesService,
+    private readonly clinicalPhotos: ClinicalPhotosService,
+    private readonly supportingExam: SupportingExamService,
     @Optional() private readonly storageQuota?: StorageQuotaService,
   ) {}
 
@@ -217,6 +225,94 @@ export class ContentsService {
       buffer,
       contentType: MIME[extname(url).toLowerCase()] ?? 'image/png',
     };
+  }
+
+  // ---------- Foto folder (layout "series") ----------
+
+  /**
+   * Folder pasien untuk dipilih sebagai foto konten: folder Fase 1 (sudah
+   * consent) + folder "Pemeriksaan Penunjang" (rontgen/foto yang sudah ada,
+   * sama-sama butuh consent). Tidak menyalin file, hanya menunjuk.
+   */
+  async pickerForPatient(patientId: number, clinicId: number) {
+    const consented = await this.clinicalPhotos.isConsented(patientId, clinicId);
+    if (!consented) {
+      return { consentMarketing: false, folders: [], supportingExam: [] };
+    }
+    const gallery = await this.clinicalPhotos.listForPatient(patientId, clinicId);
+    const supportingExam = await this.supportingExam.listByPatient(patientId, clinicId);
+    return {
+      consentMarketing: true,
+      folders: gallery.folders,
+      supportingExam,
+    };
+  }
+
+  async listPhotos(contentId: number, clinicId: number) {
+    await this.findOne(contentId, clinicId);
+    return this.photoRepo.find({
+      where: { contentId },
+      order: { sortOrder: 'ASC', id: 'ASC' },
+    });
+  }
+
+  async addPhoto(
+    contentId: number,
+    clinicId: number,
+    dto: AddContentPhotoDto,
+  ): Promise<ContentPhotoRow> {
+    await this.findOne(contentId, clinicId);
+    if (dto.sourceType === ContentPhotoSource.PATIENT_PHOTO) {
+      const photo = await this.clinicalPhotos.findByIdForClinic(dto.sourceId, clinicId);
+      if (!photo) throw new BadRequestException('Foto tidak ditemukan');
+    } else {
+      const image = await this.supportingExam.findByIdForClinic(dto.sourceId, clinicId);
+      if (!image) throw new BadRequestException('Gambar tidak ditemukan');
+    }
+    const count = await this.photoRepo.count({ where: { contentId } });
+    const row = this.photoRepo.create({
+      contentId,
+      sourceType: dto.sourceType,
+      sourceId: dto.sourceId,
+      sortOrder: count,
+      caption: dto.caption?.trim() || null,
+      blurFace: dto.blurFace ?? false,
+    });
+    return this.photoRepo.save(row);
+  }
+
+  async removePhoto(contentId: number, clinicId: number, photoId: number) {
+    await this.findOne(contentId, clinicId);
+    const row = await this.photoRepo.findOne({ where: { id: photoId, contentId } });
+    if (!row) throw new NotFoundException('Foto konten tidak ditemukan');
+    await this.photoRepo.remove(row);
+  }
+
+  async reorderPhotos(contentId: number, clinicId: number, orderedIds: number[]) {
+    await this.findOne(contentId, clinicId);
+    const rows = await this.photoRepo.find({ where: { contentId } });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const updates: ContentPhotoRow[] = [];
+    orderedIds.forEach((id, index) => {
+      const row = byId.get(id);
+      if (row && row.sortOrder !== index) {
+        row.sortOrder = index;
+        updates.push(row);
+      }
+    });
+    if (updates.length) await this.photoRepo.save(updates);
+    return this.listPhotos(contentId, clinicId);
+  }
+
+  async readContentPhotoFile(contentId: number, clinicId: number, photoId: number) {
+    await this.findOne(contentId, clinicId);
+    const row = await this.photoRepo.findOne({ where: { id: photoId, contentId } });
+    if (!row) throw new NotFoundException('Foto konten tidak ditemukan');
+    const { absolutePath } =
+      row.sourceType === ContentPhotoSource.PATIENT_PHOTO
+        ? await this.clinicalPhotos.getFilePathById(row.sourceId, clinicId)
+        : await this.supportingExam.getFilePathById(row.sourceId, clinicId);
+    return absolutePath;
   }
 
   /** Only photos this clinic uploaded through /contents/images are accepted. */

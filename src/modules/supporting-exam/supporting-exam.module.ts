@@ -13,5 +13,6 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
   ],
   controllers: [SupportingExamController],
   providers: [SupportingExamService],
+  exports: [SupportingExamService],
 })
 export class SupportingExamModule {}

@@ -12,6 +12,8 @@ export enum StorageKind {
   SUPPORTING_EXAM = 'supporting-exam',
   /** Foto untuk konten media sosial klinik. */
   CONTENT = 'content',
+  /** Foto klinis per pasien/kontrol (folder & template foto klinis). */
+  PATIENT_PHOTO = 'patient-photo',
 }
 
 /**

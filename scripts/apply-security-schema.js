@@ -42,6 +42,7 @@ const MIGRATIONS = [
   '1790200000000-RetensiDataMasaCoba14',
   '1790210000000-PromoMultiNaikPaketCatatanKlinik',
   '1790220000000-BiayaLabPayrollTemplateOpname',
+  '1790230000000-ClinicalPhotoFolders',
 ];
 
 async function main() {

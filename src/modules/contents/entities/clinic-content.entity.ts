@@ -21,6 +21,8 @@ export enum ContentLayout {
   STACK = 'stack',
   /** Before on the left, after on the right. */
   SPLIT = 'split',
+  /** 3+ photos, from content_photos — a case series, not just before/after. */
+  SERIES = 'series',
 }
 
 export enum ContentBackground {

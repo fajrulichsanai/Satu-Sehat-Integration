@@ -57,6 +57,7 @@ import { RecallsModule } from './modules/recalls/recalls.module';
 import { ConsentsModule } from './modules/consents/consents.module';
 import { MultiClinicModule } from './modules/multi-clinic/multi-clinic.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
+import { ClinicalPhotosModule } from './modules/clinical-photos/clinical-photos.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
@@ -169,6 +170,7 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     MultiClinicModule,
     StorageQuotaModule,
     OnboardingModule,
+    ClinicalPhotosModule,
     ContentsModule,
     ClinicalAccessModule,
   ],

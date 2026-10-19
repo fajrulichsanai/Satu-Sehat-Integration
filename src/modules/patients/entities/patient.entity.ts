@@ -225,6 +225,17 @@ export class Patient extends BaseEntity {
   @Column({ name: 'consent_version', length: 20, nullable: true })
   consentVersion: string;
 
+  // Izin pakai foto klinis pasien ini sebagai konten promosi — null = belum
+  // diputuskan, beda dari consentMarketing di atas (persetujuan umum data).
+  @Column({ name: 'photo_consent_marketing', type: 'boolean', nullable: true })
+  photoConsentMarketing: boolean | null;
+
+  @Column({ name: 'photo_consent_updated_at', type: 'datetime', nullable: true })
+  photoConsentUpdatedAt: Date | null;
+
+  @Column({ name: 'photo_consent_updated_by', nullable: true })
+  photoConsentUpdatedBy: number | null;
+
   // Relations
   @ManyToOne(() => Clinic, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'clinic_id' })
