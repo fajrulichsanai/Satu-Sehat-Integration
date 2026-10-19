@@ -11,7 +11,7 @@ import { extname } from 'path';
 import { S3StorageService } from '../../common/storage/s3-storage.service';
 import { ContentTemplatesService } from './content-templates.service';
 import { Clinic } from '../clinics/entities/clinic.entity';
-import { ClinicContent, ContentStatus } from './entities/clinic-content.entity';
+import { ClinicContent, ContentLayout, ContentStatus } from './entities/clinic-content.entity';
 import { ContentPhoto as ContentPhotoRow, ContentPhotoSource } from './entities/content-photo.entity';
 import {
   ContentQueryDto,
@@ -141,7 +141,14 @@ export class ContentsService {
     file?: Express.Multer.File,
   ) {
     const content = await this.findOne(id, clinicId);
-    if (!content.beforeImageUrl || !content.afterImageUrl) {
+    if (content.layout === ContentLayout.SERIES) {
+      const photoCount = await this.photoRepo.count({ where: { contentId: id } });
+      if (photoCount < 2) {
+        throw new BadRequestException(
+          'Pilih minimal 2 foto sebelum mempublikasikan',
+        );
+      }
+    } else if (!content.beforeImageUrl || !content.afterImageUrl) {
       throw new BadRequestException(
         'Pilih foto sebelum dan sesudah sebelum mempublikasikan',
       );

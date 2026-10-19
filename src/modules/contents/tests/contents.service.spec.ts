@@ -129,6 +129,16 @@ describe('ContentsService', () => {
     expect(published.publishedAt).toBeInstanceOf(Date);
   });
 
+  it('publishes a series layout once it has 2+ photos, no before/after needed (positive/negative)', async () => {
+    repo.findOne.mockResolvedValue({ id: 2, clinicId: 5, layout: 'series', status: ContentStatus.DRAFT });
+    photoRepo.count.mockResolvedValue(1);
+    await expect(service.publish(2, 5, 1, file)).rejects.toThrow(BadRequestException);
+
+    photoRepo.count.mockResolvedValue(2);
+    const published = await service.publish(2, 5, 1, file);
+    expect(published.status).toBe(ContentStatus.PUBLISHED);
+  });
+
   it('keeps other clinics’ content out of reach', async () => {
     repo.findOne.mockResolvedValue(null);
     await expect(service.findOne(1, 6)).rejects.toThrow(NotFoundException);
