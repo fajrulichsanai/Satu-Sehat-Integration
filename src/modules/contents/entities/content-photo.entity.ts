@@ -41,7 +41,7 @@ export class ContentPhoto {
   @Column({ name: 'sort_order', default: 0 })
   sortOrder: number;
 
-  @Column({ length: 160, nullable: true })
+  @Column({ type: 'varchar', length: 160, nullable: true })
   caption: string | null;
 
   @Column({ name: 'blur_face', default: false })

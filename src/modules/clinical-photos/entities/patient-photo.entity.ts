@@ -29,25 +29,25 @@ export class PatientPhoto {
   @Column({ name: 'encounter_id' })
   encounterId: number;
 
-  @Column({ name: 'template_id', nullable: true })
+  @Column({ name: 'template_id', type: 'int', nullable: true })
   templateId: number | null;
 
   @Column({ name: 'file_url', length: 500 })
   fileUrl: string;
 
-  @Column({ name: 'original_name', length: 255, nullable: true })
+  @Column({ name: 'original_name', type: 'varchar', length: 255, nullable: true })
   originalName: string | null;
 
   @Column({ name: 'taken_at' })
   takenAt: Date;
 
-  @Column({ name: 'taken_by', nullable: true })
+  @Column({ name: 'taken_by', type: 'int', nullable: true })
   takenBy: number | null;
 
-  @Column({ name: 'original_size_bytes', nullable: true })
+  @Column({ name: 'original_size_bytes', type: 'int', nullable: true })
   originalSizeBytes: number | null;
 
-  @Column({ name: 'compressed_size_bytes', nullable: true })
+  @Column({ name: 'compressed_size_bytes', type: 'int', nullable: true })
   compressedSizeBytes: number | null;
 
   @CreateDateColumn({ name: 'created_at' })

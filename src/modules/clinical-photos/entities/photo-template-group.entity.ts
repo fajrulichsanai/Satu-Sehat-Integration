@@ -10,7 +10,7 @@ import { PhotoTemplate } from './photo-template.entity';
 @Entity('photo_template_groups')
 @Index(['clinicId'])
 export class PhotoTemplateGroup extends BaseEntity {
-  @Column({ name: 'clinic_id', nullable: true })
+  @Column({ name: 'clinic_id', type: 'int', nullable: true })
   clinicId: number | null;
 
   @Column({ length: 100 })

@@ -233,7 +233,7 @@ export class Patient extends BaseEntity {
   @Column({ name: 'photo_consent_updated_at', type: 'datetime', nullable: true })
   photoConsentUpdatedAt: Date | null;
 
-  @Column({ name: 'photo_consent_updated_by', nullable: true })
+  @Column({ name: 'photo_consent_updated_by', type: 'int', nullable: true })
   photoConsentUpdatedBy: number | null;
 
   // Relations
