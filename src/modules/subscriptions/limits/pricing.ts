@@ -15,6 +15,18 @@ export const DEFAULT_DURATION_DISCOUNTS: Record<number, number> = {
   12: 17,
 };
 
+/**
+ * Diskon biaya admin owner Multi Klinik: bulan gratis, bukan persen — beda
+ * dari diskon harga per-klinik di atas. 12 bulan = bayar 10 bulan (hemat 2
+ * bulan), sesuai permintaan: admin fee Rp49rb/bulan, 1 tahun cukup Rp490rb.
+ */
+export const OWNER_FEE_FREE_MONTHS: Record<number, number> = {
+  1: 0,
+  3: 0,
+  6: 0,
+  12: 2,
+};
+
 export interface PricedPlan {
   price: number | string;
   promoPrice?: number | string | null;
@@ -84,6 +96,7 @@ export function quotePrice(input: {
   ownerFee?: number;
   extraStorageGb?: number;
   discounts?: Record<number, number>;
+  ownerFeeFreeMonths?: Record<number, number>;
   on?: string;
 }): PriceQuote {
   const yearlyPlan = input.plan.billingCycle === 'yearly';
@@ -107,12 +120,34 @@ export function quotePrice(input: {
     promoFee !== undefined
       ? Math.min(listOwnerFee, Math.max(0, Number(promoFee)))
       : listOwnerFee;
-  const listSubtotal = (listUnitPrice * quantity + listOwnerFee) * months;
-  const afterPromo = (unitPrice * quantity + ownerFee) * months;
+  const clinicListSubtotal = listUnitPrice * quantity * months;
+  const clinicAfterPromo = unitPrice * quantity * months;
+  const listSubtotal = clinicListSubtotal + listOwnerFee * months;
+  const afterPromo = clinicAfterPromo + ownerFee * months;
   const durationDiscountPct = yearlyPlan
     ? 0
     : ((input.discounts ?? DEFAULT_DURATION_DISCOUNTS)[months] ?? 0);
-  const durationDiscount = Math.round((afterPromo * durationDiscountPct) / 100);
+
+  // Biaya admin owner punya diskon sendiri (bulan gratis, bukan persen) untuk
+  // lama langganan yang terdaftar di OWNER_FEE_FREE_MONTHS (mis. 12 bulan =
+  // hemat 2 bulan). Lama langganan lain tetap ikut diskon persen gabungan
+  // seperti sebelumnya, supaya perilaku lama (mis. 3/6 bulan) tidak berubah.
+  const ownerFeeFreeMonths = yearlyPlan
+    ? 0
+    : Math.min(
+        months,
+        (input.ownerFeeFreeMonths ?? OWNER_FEE_FREE_MONTHS)[months] ?? 0,
+      );
+  let clinicDiscount: number;
+  let ownerFeeDiscount: number;
+  if (ownerFeeFreeMonths > 0) {
+    clinicDiscount = Math.round((clinicAfterPromo * durationDiscountPct) / 100);
+    ownerFeeDiscount = ownerFee * ownerFeeFreeMonths;
+  } else {
+    clinicDiscount = Math.round((afterPromo * durationDiscountPct) / 100);
+    ownerFeeDiscount = 0;
+  }
+  const durationDiscount = clinicDiscount + ownerFeeDiscount;
 
   const extraStorageGb = Math.max(0, input.extraStorageGb ?? 0);
   const storageAmount =

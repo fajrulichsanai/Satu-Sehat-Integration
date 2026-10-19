@@ -127,4 +127,23 @@ describe('pricing — promo Multi Klinik', () => {
     });
     expect(q).toMatchObject({ ownerFee: 0, listOwnerFee: 0, total: 124000 });
   });
+
+  it('gives the owner fee 2 free months at 12 bulan, separate from the per-clinic duration discount (positive)', () => {
+    const plan = { price: 149000, ownerFee: 49000, billingCycle: 'monthly' };
+    const q = quotePrice({
+      plan,
+      quantity: 2,
+      months: 12,
+      on: '2027-06-01', // no promo active
+    });
+    // Admin fee: 49.000 × 12 = 588.000, hemat 2 bulan (98.000) → 490.000.
+    // Harga cabang: 149.000 × 2 × 12 = 3.576.000, diskon 17% = 607.920.
+    expect(q).toMatchObject({
+      listOwnerFee: 49000,
+      ownerFee: 49000,
+      durationDiscountPct: 17,
+      durationDiscount: 607920 + 98000,
+      total: 3576000 + 588000 - (607920 + 98000),
+    });
+  });
 });
