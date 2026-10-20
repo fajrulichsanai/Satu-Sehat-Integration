@@ -34,7 +34,12 @@ import {
   CreateContentDto,
   UpdateContentDto,
 } from './dto/content.dto';
-import { AddContentPhotoDto, ImportPhotoDto, ReorderContentPhotosDto } from './dto/content-photo.dto';
+import {
+  AddContentPhotoDto,
+  ImportPhotoDto,
+  ReorderContentPhotosDto,
+  UpdateContentPhotoDto,
+} from './dto/content-photo.dto';
 import { contentImageUploadOptions } from './upload/content-image.upload';
 import { RequireFeature } from '../features/require-feature.decorator';
 
@@ -168,6 +173,20 @@ export class ContentsController {
     return {
       success: true,
       data: await this.service.reorderPhotos(id, clinicId, dto.orderedIds),
+    };
+  }
+
+  @Patch(':id/series-photos/:photoId')
+  @ApiOperation({ summary: 'Ubah caption/blur wajah satu foto konten series' })
+  async updateSeriesPhoto(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('photoId', ParseIntPipe) photoId: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: UpdateContentPhotoDto,
+  ) {
+    return {
+      success: true,
+      data: await this.service.updatePhoto(id, clinicId, photoId, dto),
     };
   }
 

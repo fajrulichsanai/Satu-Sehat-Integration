@@ -312,6 +312,20 @@ export class ContentsService {
     return this.photoRepo.save(row);
   }
 
+  async updatePhoto(
+    contentId: number,
+    clinicId: number,
+    photoId: number,
+    dto: { caption?: string | null; blurFace?: boolean },
+  ): Promise<ContentPhotoRow> {
+    await this.findOne(contentId, clinicId);
+    const row = await this.photoRepo.findOne({ where: { id: photoId, contentId } });
+    if (!row) throw new NotFoundException('Foto konten tidak ditemukan');
+    if (dto.caption !== undefined) row.caption = dto.caption?.trim() || null;
+    if (dto.blurFace !== undefined) row.blurFace = dto.blurFace;
+    return this.photoRepo.save(row);
+  }
+
   async removePhoto(contentId: number, clinicId: number, photoId: number) {
     await this.findOne(contentId, clinicId);
     const row = await this.photoRepo.findOne({ where: { id: photoId, contentId } });

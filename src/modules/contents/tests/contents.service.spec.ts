@@ -258,6 +258,24 @@ describe('ContentsService', () => {
     });
   });
 
+  describe('updatePhoto', () => {
+    it('toggles blurFace and trims the caption (positive)', async () => {
+      repo.findOne.mockResolvedValue({ id: 1, clinicId: 5 });
+      photoRepo.findOne.mockResolvedValue({ id: 3, contentId: 1, caption: null, blurFace: false });
+      const result = await service.updatePhoto(1, 5, 3, { caption: '  hai  ', blurFace: true });
+      expect(result.caption).toBe('hai');
+      expect(result.blurFace).toBe(true);
+    });
+
+    it('throws NotFoundException for a photo outside this content (negative)', async () => {
+      repo.findOne.mockResolvedValue({ id: 1, clinicId: 5 });
+      photoRepo.findOne.mockResolvedValue(null);
+      await expect(service.updatePhoto(1, 5, 99, { blurFace: true })).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
   describe('addPhoto', () => {
     beforeEach(() => {
       repo.findOne.mockResolvedValue({ id: 1, clinicId: 5 });

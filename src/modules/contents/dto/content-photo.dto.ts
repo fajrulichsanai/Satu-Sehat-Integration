@@ -51,6 +51,19 @@ export class ImportPhotoDto {
   sourceId: number;
 }
 
+export class UpdateContentPhotoDto {
+  @ApiPropertyOptional({ maxLength: 160, nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  caption?: string | null;
+
+  @ApiPropertyOptional({ description: 'Blur wajah di foto ini (opsional, bukan paksaan)' })
+  @IsOptional()
+  @IsBoolean()
+  blurFace?: boolean;
+}
+
 export class ReorderContentPhotosDto {
   @ApiProperty({ type: [Number], description: 'id content_photos sesuai urutan baru' })
   @IsArray()
