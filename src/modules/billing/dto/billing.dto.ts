@@ -2,6 +2,7 @@ import {
   IsArray,
   IsDateString,
   IsEnum,
+  IsBoolean,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -116,6 +117,14 @@ export class UpdateBillingDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Konfirmasi: bila total baru lebih kecil dari yang sudah dibayar, kembalikan selisihnya ke pasien (mengurangi pembayaran terbaru).',
+  })
+  @IsOptional()
+  @IsBoolean()
+  refundExcess?: boolean;
 }
 
 export class BillingQueryDto {

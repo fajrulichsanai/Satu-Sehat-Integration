@@ -14,6 +14,7 @@ import {
   DiscountType,
 } from '../billing-item/entities/billing-item.entity';
 import { Tarif } from '../tarif/entities/tarif.entity';
+import { Payment } from '../payments/entities/payment.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import { GudangService } from '../gudang/gudang.service';
 import { PatientRecallsService } from '../recalls/patient-recalls.service';
@@ -361,13 +362,23 @@ export class BillingsService {
       const additionalFee = dto.additionalFee ?? Number(billing.additionalFee);
       const grandTotal = subtotal - totalDiscountNominal + additionalFee;
 
-      // Lowering the bill below what the patient already paid would mark it
-      // paid and silently lose the overpayment.
+      // Menurunkan tagihan di bawah jumlah yang sudah dibayar berarti ada
+      // kelebihan bayar. Tidak boleh hilang diam-diam: harus dikonfirmasi
+      // (refundExcess), lalu selisihnya dikembalikan ke pasien dengan
+      // mengurangi pembayaran terbaru. Tiap pembayaran yang dikoreksi diberi
+      // catatan, dan nilai sebelum/sesudah tercatat di log aktivitas.
       const alreadyPaid = Number(billing.paidAmount);
+      let refundedAmount = 0;
       if (grandTotal < alreadyPaid) {
-        throw new BadRequestException(
-          `Total baru (Rp ${Math.round(grandTotal).toLocaleString('id-ID')}) lebih kecil dari yang sudah dibayar (Rp ${Math.round(alreadyPaid).toLocaleString('id-ID')}). Kurangi pembayaran lewat refund terlebih dahulu.`,
-        );
+        const excess = Math.round((alreadyPaid - grandTotal) * 100) / 100;
+        if (!dto.refundExcess) {
+          throw new BadRequestException(
+            `Total baru (Rp ${Math.round(grandTotal).toLocaleString('id-ID')}) lebih kecil dari yang sudah dibayar (Rp ${Math.round(alreadyPaid).toLocaleString('id-ID')}). Konfirmasi pengembalian selisih Rp ${Math.round(excess).toLocaleString('id-ID')} ke pasien untuk melanjutkan.`,
+          );
+        }
+        await this.returnExcessPayments(manager, billing.id, excess);
+        billing.paidAmount = grandTotal;
+        refundedAmount = excess;
       }
 
       billing.subtotal = subtotal;
@@ -394,11 +405,44 @@ export class BillingsService {
       this.logger.log(
         `[UPDATE] Billing berhasil diperbarui | id=${billing.id}, clinicId=${clinicId}`,
       );
-      return manager.findOne(Billing, {
+      const saved = await manager.findOne(Billing, {
         where: { id: billing.id },
         relations: { patient: true, items: true, payments: true },
       });
+      return saved && refundedAmount > 0
+        ? Object.assign(saved, { refundedAmount })
+        : saved;
     });
+  }
+
+  /**
+   * Kurangi pembayaran dari yang terbaru ke yang lama sebesar `excess`
+   * (dikembalikan ke pasien). Baris pembayaran tidak dihapus supaya nomor
+   * kuitansi tetap ada; jumlahnya diturunkan dan diberi catatan koreksi.
+   */
+  private async returnExcessPayments(
+    manager: any,
+    billingId: number,
+    excess: number,
+  ): Promise<void> {
+    const payments: Payment[] = await manager.find(Payment, {
+      where: { billingId },
+      order: { paidAt: 'DESC', id: 'DESC' },
+    });
+    const today = new Date().toISOString().slice(0, 10);
+    let remaining = excess;
+    for (const payment of payments) {
+      if (remaining <= 0) break;
+      const current = Number(payment.amount);
+      const cut = Math.min(current, remaining);
+      if (cut <= 0) continue;
+      const rupiah = (n: number) => Math.round(n).toLocaleString('id-ID');
+      const line = `[Koreksi ${today}] Rp ${rupiah(cut)} dikembalikan ke pasien karena total tagihan direvisi (semula Rp ${rupiah(current)})`;
+      payment.amount = Math.round((current - cut) * 100) / 100;
+      payment.note = payment.note ? `${payment.note}\n${line}` : line;
+      await manager.save(Payment, payment);
+      remaining = Math.round((remaining - cut) * 100) / 100;
+    }
   }
 
   private async processItems(

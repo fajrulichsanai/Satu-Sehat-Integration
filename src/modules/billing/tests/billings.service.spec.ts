@@ -34,7 +34,7 @@ describe('BillingsService', () => {
   let gudangService: { deductForTindakan: jest.Mock; restoreForTindakan: jest.Mock };
   let recallsService: { scheduleFromBillingItems: jest.Mock };
   let dataSource: { transaction: jest.Mock };
-  let manager: { findOne: jest.Mock; save: jest.Mock; delete: jest.Mock };
+  let manager: { findOne: jest.Mock; find: jest.Mock; save: jest.Mock; delete: jest.Mock };
 
   const clinicId = 1;
   const userId = 9;
@@ -42,6 +42,7 @@ describe('BillingsService', () => {
   beforeEach(async () => {
     manager = {
       findOne: jest.fn(),
+      find: jest.fn(),
       save: jest.fn((a: any, b?: any) => {
         if (b !== undefined) {
           return Array.isArray(b)
@@ -320,7 +321,7 @@ describe('BillingsService', () => {
   });
 
   describe('update', () => {
-    it('refuses to lower the bill below what was already paid (negative)', async () => {
+    it('refuses to lower the bill below what was already paid without confirmation (negative)', async () => {
       const billing = {
         id: 1,
         clinicId,
@@ -338,6 +339,68 @@ describe('BillingsService', () => {
         service.update(1, clinicId, { totalDiscount: 50000 } as any, userId),
       ).rejects.toThrow(BadRequestException);
       expect(billing.status).toBe(BillingStatus.PARTIAL);
+      expect(manager.find).not.toHaveBeenCalled();
+    });
+
+    it('returns the excess to the patient from the newest payments when confirmed, keeping a note (positive)', async () => {
+      const billing: any = {
+        id: 1,
+        clinicId,
+        status: BillingStatus.PAID,
+        subtotal: 100000,
+        totalDiscount: 0,
+        additionalFee: 0,
+        paidAmount: 100000,
+        outstandingAmount: 0,
+        notes: null,
+      };
+      const older: any = { id: 10, amount: 60000, note: null };
+      const newest: any = { id: 11, amount: 40000, note: 'Pelunasan' };
+      manager.findOne.mockResolvedValueOnce(billing).mockResolvedValueOnce({ ...billing });
+      manager.find.mockResolvedValueOnce([newest, older]);
+
+      const result: any = await service.update(
+        1,
+        clinicId,
+        { totalDiscount: 50000, refundExcess: true } as any,
+        userId,
+      );
+
+      // grandTotal 50.000, sudah dibayar 100.000 → kembalikan 50.000
+      expect(newest.amount).toBe(0);
+      expect(older.amount).toBe(50000);
+      expect(newest.note).toContain('Pelunasan');
+      expect(newest.note).toContain('dikembalikan ke pasien');
+      expect(billing.paidAmount).toBe(50000);
+      expect(billing.outstandingAmount).toBe(0);
+      expect(billing.status).toBe(BillingStatus.PAID);
+      expect(result.refundedAmount).toBe(50000);
+    });
+
+    it('does not touch payments when confirmed but nothing is overpaid (edge)', async () => {
+      const billing: any = {
+        id: 1,
+        clinicId,
+        status: BillingStatus.PARTIAL,
+        subtotal: 100000,
+        totalDiscount: 0,
+        additionalFee: 0,
+        paidAmount: 30000,
+        outstandingAmount: 70000,
+        notes: null,
+      };
+      manager.findOne.mockResolvedValueOnce(billing).mockResolvedValueOnce(billing);
+
+      const result: any = await service.update(
+        1,
+        clinicId,
+        { refundExcess: true } as any,
+        userId,
+      );
+
+      expect(manager.find).not.toHaveBeenCalled();
+      expect(result.refundedAmount).toBeUndefined();
+      expect(billing.paidAmount).toBe(30000);
     });
 
     it('recomputes grandTotal and marks PAID when outstanding drops to zero (positive)', async () => {
