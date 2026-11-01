@@ -98,6 +98,7 @@
     "testEnvironment": "node"
   },
   "overrides": {
+    "multer": "2.5.0",
     "exceljs": {
       "uuid": "^11.1.1"
     }
