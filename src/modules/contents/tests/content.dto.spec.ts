@@ -47,3 +47,51 @@ describe('UpdateContentDto settings', () => {
     expect(await errorsFor({ settings: { nope: 1 } })).toContain('nope');
   });
 });
+
+describe('UpdateContentDto settings.series (gaya rangkaian)', () => {
+  it('accepts a full series style (positive)', async () => {
+    expect(
+      await errorsFor({
+        settings: {
+          series: {
+            arrangement: 'hero',
+            gap: 20,
+            radius: 32,
+            captionStyle: 'bar',
+            captionPosition: 'bottom',
+            showNumbers: true,
+            bgColor: '#0f1f4d',
+            accentColor: '#BCD0FF',
+          },
+        },
+      }),
+    ).toBe('[]');
+  });
+
+  it('accepts an empty colour meaning "follow the theme" (edge)', async () => {
+    expect(
+      await errorsFor({ settings: { series: { bgColor: '', accentColor: '' } } }),
+    ).toBe('[]');
+  });
+
+  it('rejects unknown arrangement, out-of-range gap/radius and bad colours (negative)', async () => {
+    const errors = await errorsFor({
+      settings: {
+        series: {
+          arrangement: 'spiral',
+          gap: 99,
+          radius: -1,
+          bgColor: 'red',
+          captionStyle: 'huge',
+        },
+      },
+    });
+    for (const field of ['arrangement', 'gap', 'radius', 'bgColor', 'captionStyle']) {
+      expect(errors).toContain(field);
+    }
+  });
+
+  it('rejects an unknown series field (negative)', async () => {
+    expect(await errorsFor({ settings: { series: { nope: 1 } } })).toContain('nope');
+  });
+});
