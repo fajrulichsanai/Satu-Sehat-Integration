@@ -84,7 +84,8 @@ export class InvoiceService {
       );
     }
 
-    const rupiah = (value: number) => `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
+    const rupiah = (value: number) =>
+      `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
 
     const itemRows = (billing.items || []).map((item) => [
       { text: item.name, style: 'tableCell' },
@@ -95,13 +96,13 @@ export class InvoiceService {
 
     const clinic = billing.clinic;
     const clinicContactParts = [clinic?.phone, clinic?.email].filter(Boolean);
-    const clinicLocationParts = [clinic?.city, clinic?.province].filter(Boolean);
+    const clinicLocationParts = [clinic?.city, clinic?.province].filter(
+      Boolean,
+    );
 
     // Totals: only show a line when it's non-zero, so a simple fully-paid
     // cash invoice doesn't clutter the page with "Diskon: Rp 0" etc.
-    const totalRows: any[] = [
-      { label: 'Subtotal', value: billing.subtotal },
-    ];
+    const totalRows: any[] = [{ label: 'Subtotal', value: billing.subtotal }];
     if (Number(billing.totalDiscount) > 0) {
       totalRows.push({ label: 'Diskon', value: -billing.totalDiscount });
     }
@@ -123,14 +124,24 @@ export class InvoiceService {
               margin: [12, 0, 0, 0],
               stack: [
                 { text: clinic?.name || 'Klinik', style: 'clinicName' },
-                clinic?.address ? { text: clinic.address, style: 'clinicMeta' } : null,
+                clinic?.address
+                  ? { text: clinic.address, style: 'clinicMeta' }
+                  : null,
                 clinicLocationParts.length
-                  ? { text: clinicLocationParts.join(', '), style: 'clinicMeta' }
+                  ? {
+                      text: clinicLocationParts.join(', '),
+                      style: 'clinicMeta',
+                    }
                   : null,
                 clinicContactParts.length
-                  ? { text: clinicContactParts.join(' · '), style: 'clinicMeta' }
+                  ? {
+                      text: clinicContactParts.join(' · '),
+                      style: 'clinicMeta',
+                    }
                   : null,
-                clinic?.sipNumber ? { text: `SIP: ${clinic.sipNumber}`, style: 'clinicMeta' } : null,
+                clinic?.sipNumber
+                  ? { text: `SIP: ${clinic.sipNumber}`, style: 'clinicMeta' }
+                  : null,
               ].filter(Boolean),
             },
             {
@@ -152,7 +163,17 @@ export class InvoiceService {
           ],
         },
         {
-          canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1.5, lineColor: '#4F7EF8' }],
+          canvas: [
+            {
+              type: 'line',
+              x1: 0,
+              y1: 0,
+              x2: 515,
+              y2: 0,
+              lineWidth: 1.5,
+              lineColor: '#4F7EF8',
+            },
+          ],
           margin: [0, 12, 0, 16],
         },
         {
@@ -191,14 +212,19 @@ export class InvoiceService {
               [
                 { text: 'Layanan/Item', style: 'tableHeader' },
                 { text: 'Qty', style: 'tableHeader', alignment: 'center' },
-                { text: 'Harga Satuan', style: 'tableHeader', alignment: 'right' },
+                {
+                  text: 'Harga Satuan',
+                  style: 'tableHeader',
+                  alignment: 'right',
+                },
                 { text: 'Subtotal', style: 'tableHeader', alignment: 'right' },
               ],
               ...itemRows,
             ],
           },
           layout: {
-            hLineWidth: (i: number, node: any) => (i === 0 || i === 1 || i === node.table.body.length ? 1 : 0.5),
+            hLineWidth: (i: number, node: any) =>
+              i === 0 || i === 1 || i === node.table.body.length ? 1 : 0.5,
             hLineColor: () => '#E8ECF4',
             vLineWidth: () => 0,
           },
@@ -213,17 +239,35 @@ export class InvoiceService {
                 ...totalRows.map((row) => ({
                   columns: [
                     { text: row.label, style: 'totalLabel' },
-                    { text: rupiah(row.value), style: 'totalValue', alignment: 'right' },
+                    {
+                      text: rupiah(row.value),
+                      style: 'totalValue',
+                      alignment: 'right',
+                    },
                   ],
                 })),
                 {
-                  canvas: [{ type: 'line', x1: 0, y1: 0, x2: 220, y2: 0, lineWidth: 0.5, lineColor: '#E8ECF4' }],
+                  canvas: [
+                    {
+                      type: 'line',
+                      x1: 0,
+                      y1: 0,
+                      x2: 220,
+                      y2: 0,
+                      lineWidth: 0.5,
+                      lineColor: '#E8ECF4',
+                    },
+                  ],
                   margin: [0, 4, 0, 4],
                 },
                 {
                   columns: [
                     { text: 'Total', style: 'grandTotalLabel' },
-                    { text: rupiah(billing.grandTotal), style: 'grandTotalValue', alignment: 'right' },
+                    {
+                      text: rupiah(billing.grandTotal),
+                      style: 'grandTotalValue',
+                      alignment: 'right',
+                    },
                   ],
                 },
                 ...(showPaymentBreakdown
@@ -231,7 +275,11 @@ export class InvoiceService {
                       {
                         columns: [
                           { text: 'Sudah Dibayar', style: 'totalLabel' },
-                          { text: rupiah(billing.paidAmount), style: 'totalValue', alignment: 'right' },
+                          {
+                            text: rupiah(billing.paidAmount),
+                            style: 'totalValue',
+                            alignment: 'right',
+                          },
                         ],
                       },
                       {
@@ -266,10 +314,20 @@ export class InvoiceService {
         clinicName: { fontSize: 14, bold: true, color: '#1A2340' },
         clinicMeta: { fontSize: 9, color: '#6B7A99', margin: [0, 1, 0, 0] },
         invoiceTitle: { fontSize: 18, bold: true, color: '#4F7EF8' },
-        invoiceNumber: { fontSize: 10, bold: true, color: '#1A2340', margin: [0, 2, 0, 2] },
+        invoiceNumber: {
+          fontSize: 10,
+          bold: true,
+          color: '#1A2340',
+          margin: [0, 2, 0, 2],
+        },
         infoLabel: { fontSize: 9, color: '#A0AEC0' },
         infoValue: { fontSize: 11, bold: true, color: '#1A2340' },
-        tableHeader: { bold: true, fillColor: '#F5F6FA', color: '#1A2340', margin: [4, 6, 4, 6] },
+        tableHeader: {
+          bold: true,
+          fillColor: '#F5F6FA',
+          color: '#1A2340',
+          margin: [4, 6, 4, 6],
+        },
         tableCell: { margin: [4, 6, 4, 6], fontSize: 10 },
         totalLabel: { fontSize: 10, color: '#6B7A99' },
         totalValue: { fontSize: 10, color: '#1A2340' },

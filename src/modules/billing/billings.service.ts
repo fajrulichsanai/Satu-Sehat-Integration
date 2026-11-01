@@ -7,7 +7,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
 import { Billing, BillingStatus } from './entities/billing.entity';
 import {
   BillingItem,
@@ -45,29 +45,41 @@ export class BillingsService {
 
   async findAll(clinicId: number, query: BillingQueryDto) {
     this.logger.log(
-      `[GET-ALL] Mengambil daftar billing | clinicId=${clinicId}, status=${query.status || 'all'}`,
+      `[GET-ALL] Mengambil daftar billing | clinicId=${clinicId}, status=${query.status || 'all'}, month=${query.month || '-'}`,
     );
-    const qb = this.billingRepository
-      .createQueryBuilder('b')
-      .leftJoinAndSelect('b.patient', 'patient')
-      .where('b.clinicId = :clinicId', { clinicId });
+    // Periode (bulan/rentang tanggal/pasien) dipakai bersama oleh daftar,
+    // ringkasan, dan kalender tanggal; status hanya menyaring daftar.
+    const applyPeriod = (qb: SelectQueryBuilder<Billing>) => {
+      qb.where('b.clinicId = :clinicId', { clinicId });
+      if (query.month) {
+        qb.andWhere("DATE_FORMAT(b.created_at, '%Y-%m') = :month", {
+          month: query.month,
+        });
+      }
+      if (query.dateFrom) {
+        qb.andWhere('DATE(b.createdAt) >= :dateFrom', {
+          dateFrom: query.dateFrom,
+        });
+      }
+      if (query.dateTo) {
+        qb.andWhere('DATE(b.createdAt) <= :dateTo', { dateTo: query.dateTo });
+      }
+      if (query.patientId) {
+        qb.andWhere('b.patientId = :patientId', { patientId: query.patientId });
+      }
+      return qb;
+    };
 
+    const qb = applyPeriod(
+      this.billingRepository
+        .createQueryBuilder('b')
+        .leftJoinAndSelect('b.patient', 'patient'),
+    );
     if (query.status) {
       qb.andWhere('b.status = :status', { status: query.status });
     }
-    if (query.dateFrom) {
-      qb.andWhere('DATE(b.createdAt) >= :dateFrom', {
-        dateFrom: query.dateFrom,
-      });
-    }
-    if (query.dateTo) {
-      qb.andWhere('DATE(b.createdAt) <= :dateTo', { dateTo: query.dateTo });
-    }
-    if (query.patientId) {
-      qb.andWhere('b.patientId = :patientId', { patientId: query.patientId });
-    }
 
-    qb.orderBy('b.createdAt', 'DESC');
+    qb.orderBy('b.createdAt', 'DESC').addOrderBy('b.id', 'DESC');
 
     const page = query.page || 1;
     const limit = query.limit || 20;
@@ -75,6 +87,40 @@ export class BillingsService {
       .skip((page - 1) * limit)
       .take(limit)
       .getManyAndCount();
+
+    // Kartu statistik: dihitung di server untuk seluruh periode (bukan hanya
+    // halaman yang sedang tampil) dan tidak terpengaruh filter status.
+    const byStatus = await applyPeriod(
+      this.billingRepository.createQueryBuilder('b'),
+    )
+      .select('b.status', 'status')
+      .addSelect('COUNT(*)', 'count')
+      .addSelect('COALESCE(SUM(b.paid_amount), 0)', 'paid')
+      .groupBy('b.status')
+      .getRawMany<{ status: string; count: string; paid: string }>();
+    const summary = {
+      count: 0,
+      totalPaid: 0,
+      byStatus: { paid: 0, partial: 0, unpaid: 0 } as Record<string, number>,
+    };
+    for (const row of byStatus) {
+      summary.count += Number(row.count);
+      summary.totalPaid += Number(row.paid);
+      summary.byStatus[row.status] = Number(row.count);
+    }
+
+    let days: { date: string; count: number }[] | undefined;
+    if (query.month) {
+      const rows = await applyPeriod(
+        this.billingRepository.createQueryBuilder('b'),
+      )
+        .select("DATE_FORMAT(b.created_at, '%Y-%m-%d')", 'date')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('date')
+        .orderBy('date', 'ASC')
+        .getRawMany<{ date: string; count: string }>();
+      days = rows.map((r) => ({ date: r.date, count: Number(r.count) }));
+    }
 
     return {
       data: items.map((b) => ({
@@ -89,6 +135,8 @@ export class BillingsService {
         createdAt: b.createdAt,
       })),
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+      summary,
+      ...(days ? { days } : {}),
     };
   }
 

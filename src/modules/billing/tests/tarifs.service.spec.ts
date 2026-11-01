@@ -85,9 +85,7 @@ describe('TarifsService', () => {
 
     it('throws NotFoundException when not found (negative)', async () => {
       repo.findOne.mockResolvedValue(null);
-      await expect(service.findOne(999, 1)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.findOne(999, 1)).rejects.toThrow(NotFoundException);
     });
 
     it('does not leak a tarif belonging to another clinic (negative)', async () => {
@@ -128,15 +126,19 @@ describe('TarifsService', () => {
       await service.update(1, 1, { hargaJual: 75000 } as any, 9);
 
       expect(repo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'Old', hargaJual: 75000, updatedBy: 9 }),
+        expect.objectContaining({
+          name: 'Old',
+          hargaJual: 75000,
+          updatedBy: 9,
+        }),
       );
     });
 
     it('throws NotFoundException when target tarif is missing (negative)', async () => {
       repo.findOne.mockResolvedValue(null);
-      await expect(
-        service.update(999, 1, {} as any, 9),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.update(999, 1, {} as any, 9)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 

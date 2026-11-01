@@ -178,7 +178,9 @@ export class BillingController {
 
   @Patch('billings/:id/cancel')
   @Audit('Invoice', AuditActionType.UPDATE, { labelField: 'invoiceNumber' })
-  @ApiOperation({ summary: 'Batalkan billing (belum ada pembayaran) dan kembalikan stok BOM' })
+  @ApiOperation({
+    summary: 'Batalkan billing (belum ada pembayaran) dan kembalikan stok BOM',
+  })
   async cancelBilling(
     @Param('id', ParseIntPipe) id: number,
     @ClinicId() clinicId: number,
@@ -194,7 +196,9 @@ export class BillingController {
 
   @Post('billings/:id/payments')
   @Audit('Payment', AuditActionType.CREATE)
-  @Notify(NotificationType.PAYMENT_NEW, 'Pembayaran baru diterima', { labelField: 'amount' })
+  @Notify(NotificationType.PAYMENT_NEW, 'Pembayaran baru diterima', {
+    labelField: 'amount',
+  })
   @ApiOperation({ summary: 'Record payment for billing' })
   async createPayment(
     @Param('id', ParseIntPipe) id: number,

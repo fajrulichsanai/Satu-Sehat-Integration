@@ -8,6 +8,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Min,
   ValidateNested,
   Max,
@@ -128,6 +129,17 @@ export class UpdateBillingDto {
 }
 
 export class BillingQueryDto {
+  @ApiPropertyOptional({
+    description:
+      'Bulan (YYYY-MM) berdasarkan tanggal invoice dibuat. Respons memuat `days` (tanggal berisi transaksi) saat diisi.',
+    example: '2026-10',
+  })
+  @IsOptional()
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, {
+    message: 'month harus berformat YYYY-MM, mis. 2026-10',
+  })
+  month?: string;
+
   @ApiPropertyOptional({ enum: BillingStatus })
   @IsOptional()
   @IsEnum(BillingStatus)
@@ -186,7 +198,8 @@ export class CreatePaymentDto {
 
 export class UpdatePaymentDto {
   @ApiPropertyOptional({
-    description: 'Jumlah dibayar yang benar — perbaikan salah input, bukan pembayaran baru',
+    description:
+      'Jumlah dibayar yang benar — perbaikan salah input, bukan pembayaran baru',
   })
   @IsOptional()
   @IsNumber()
