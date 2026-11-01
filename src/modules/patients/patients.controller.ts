@@ -20,6 +20,7 @@ import { RequireFeature } from '../features/require-feature.decorator';
 import {
   BirthdayQueryDto,
   CreatePatientDto,
+  PatientHistoryQueryDto,
   PatientQueryDto,
   PatientStatsQueryDto,
   SearchSatusehatPatientDto,
@@ -176,6 +177,44 @@ export class PatientsController {
   ) {
     const encounters = await this.patientsService.findEncounters(id, clinicId);
     return { success: true, data: encounters };
+  }
+
+  @Audit('Patient', AuditActionType.VIEW)
+  @Get(':id/encounter-history')
+  @ApiOperation({
+    summary:
+      'Riwayat kunjungan pasien per bulan + pagination (plus daftar bulan & tanggal datang)',
+  })
+  async findEncounterHistory(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @Query() query: PatientHistoryQueryDto,
+  ) {
+    const data = await this.patientsService.findEncounterHistory(
+      id,
+      clinicId,
+      query,
+    );
+    return { success: true, data };
+  }
+
+  @Audit('Patient', AuditActionType.VIEW)
+  @Get(':id/billing-history')
+  @ApiOperation({
+    summary:
+      'Riwayat transaksi/invoice pasien per bulan + pagination (plus daftar bulan & tanggal)',
+  })
+  async findBillingHistory(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @Query() query: PatientHistoryQueryDto,
+  ) {
+    const data = await this.patientsService.findBillingHistory(
+      id,
+      clinicId,
+      query,
+    );
+    return { success: true, data };
   }
 
   @Audit('Patient', AuditActionType.VIEW)

@@ -8,7 +8,13 @@ import {
 } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  In,
+  Repository,
+  SelectQueryBuilder,
+} from 'typeorm';
 import { Patient } from './entities/patient.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import { EncounterSoapNote } from '../encounter-soap-notes/entities/encounter-soap-note.entity';
@@ -33,7 +39,10 @@ import { TreatmentPlansService } from '../treatment-plans/treatment-plans.servic
 import { FamilyHistoryService } from './family-history.service';
 import { MedicationHistoryService } from './medication-history.service';
 import { hashNik, maskNik } from '../../common/utils/nik-crypto.util';
-import type { SearchSatusehatPatientDto } from './dto/patient.dto';
+import type {
+  PatientHistoryQueryDto,
+  SearchSatusehatPatientDto,
+} from './dto/patient.dto';
 import {
   ClinicalAccessService,
   type ClinicalUser,
@@ -473,6 +482,144 @@ export class PatientsService {
         supportingExamImages: imagesByEncounter.get(e.id) ?? [],
       };
     });
+  }
+
+  /**
+   * Riwayat kunjungan satu pasien, per bulan & berhalaman. `months` memuat
+   * semua bulan yang punya data (untuk navigasi), `days` memuat tanggal
+   * datang pada bulan terpilih (atau semua bulan bila tidak difilter).
+   */
+  async findEncounterHistory(
+    patientId: number,
+    clinicId: number,
+    query: PatientHistoryQueryDto,
+  ) {
+    await this.findOne(patientId, clinicId);
+    const { page, limit, month } = query;
+    const scope = (qb: SelectQueryBuilder<Encounter>) => {
+      qb.where('e.patient_id = :patientId AND e.clinic_id = :clinicId', {
+        patientId,
+        clinicId,
+      });
+      if (month) {
+        qb.andWhere("DATE_FORMAT(e.arrived_time, '%Y-%m') = :month", {
+          month,
+        });
+      }
+      return qb;
+    };
+
+    const [rows, total] = await scope(
+      this.encounterRepository
+        .createQueryBuilder('e')
+        .leftJoinAndSelect('e.practitioner', 'practitioner'),
+    )
+      .orderBy('e.arrived_time', 'DESC')
+      .addOrderBy('e.id', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    const months = await this.encounterRepository
+      .createQueryBuilder('e')
+      .select("DATE_FORMAT(e.arrived_time, '%Y-%m')", 'month')
+      .addSelect('COUNT(*)', 'count')
+      .where('e.patient_id = :patientId AND e.clinic_id = :clinicId', {
+        patientId,
+        clinicId,
+      })
+      .groupBy('month')
+      .orderBy('month', 'DESC')
+      .getRawMany<{ month: string; count: string }>();
+
+    const days = await scope(this.encounterRepository.createQueryBuilder('e'))
+      .select("DATE_FORMAT(e.arrived_time, '%Y-%m-%d')", 'date')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('date')
+      .orderBy('date', 'ASC')
+      .getRawMany<{ date: string; count: string }>();
+
+    return {
+      items: rows.map((e) => ({
+        id: e.id,
+        status: e.status,
+        serviceType: e.serviceType,
+        chiefComplaint: e.chiefComplaint,
+        arrivedTime: e.arrivedTime,
+        finishedTime: e.finishedTime,
+        practitionerName: e.practitioner?.name,
+      })),
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      months: months.map((m) => ({ month: m.month, count: Number(m.count) })),
+      days: days.map((d) => ({ date: d.date, count: Number(d.count) })),
+    };
+  }
+
+  /** Riwayat transaksi (invoice) satu pasien: per bulan & berhalaman. */
+  async findBillingHistory(
+    patientId: number,
+    clinicId: number,
+    query: PatientHistoryQueryDto,
+  ) {
+    await this.findOne(patientId, clinicId);
+    const { page, limit, month } = query;
+    const scope = (qb: SelectQueryBuilder<Billing>) => {
+      qb.where('b.patient_id = :patientId AND b.clinic_id = :clinicId', {
+        patientId,
+        clinicId,
+      });
+      if (month) {
+        qb.andWhere("DATE_FORMAT(b.created_at, '%Y-%m') = :month", { month });
+      }
+      return qb;
+    };
+
+    const [rows, total] = await scope(
+      this.billingRepository
+        .createQueryBuilder('b')
+        .leftJoinAndSelect('b.items', 'items'),
+    )
+      .orderBy('b.created_at', 'DESC')
+      .addOrderBy('b.id', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    const months = await this.billingRepository
+      .createQueryBuilder('b')
+      .select("DATE_FORMAT(b.created_at, '%Y-%m')", 'month')
+      .addSelect('COUNT(*)', 'count')
+      .where('b.patient_id = :patientId AND b.clinic_id = :clinicId', {
+        patientId,
+        clinicId,
+      })
+      .groupBy('month')
+      .orderBy('month', 'DESC')
+      .getRawMany<{ month: string; count: string }>();
+
+    const days = await scope(this.billingRepository.createQueryBuilder('b'))
+      .select("DATE_FORMAT(b.created_at, '%Y-%m-%d')", 'date')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('date')
+      .orderBy('date', 'ASC')
+      .getRawMany<{ date: string; count: string }>();
+
+    return {
+      items: rows.map((b) => ({
+        id: b.id,
+        invoiceNumber: b.invoiceNumber,
+        status: b.status,
+        grandTotal: Number(b.grandTotal),
+        paidAmount: Number(b.paidAmount),
+        outstandingAmount: Number(b.outstandingAmount),
+        createdAt: b.createdAt,
+        encounterId: b.encounterId,
+        itemNames: (b.items ?? []).map((i) => i.name),
+      })),
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      months: months.map((m) => ({ month: m.month, count: Number(m.count) })),
+      days: days.map((d) => ({ date: d.date, count: Number(d.count) })),
+    };
   }
 
   /**
