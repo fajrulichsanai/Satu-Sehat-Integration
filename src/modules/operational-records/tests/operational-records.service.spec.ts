@@ -4,11 +4,16 @@ import { NotFoundException } from '@nestjs/common';
 import { OperationalRecordsService } from '../operational-records.service';
 import { OperationalRecord } from '../entities/operational-record.entity';
 
-function buildQb(result: [any[], number] = [[], 0]) {
+function buildQb(result: [any[], number] = [[], 0], rawRows: any[] = []) {
   return {
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
+    addOrderBy: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    groupBy: jest.fn().mockReturnThis(),
+    getRawMany: jest.fn().mockResolvedValue(rawRows),
     skip: jest.fn().mockReturnThis(),
     take: jest.fn().mockReturnThis(),
     getManyAndCount: jest.fn().mockResolvedValue(result),
@@ -72,6 +77,74 @@ describe('OperationalRecordsService', () => {
       expect(qb.andWhere).toHaveBeenCalledWith('o.kategori = :kategori', {
         kategori: 'utilitas',
       });
+    });
+
+    it('orders by date then id so paging is stable for same-day rows (positive)', async () => {
+      const qb = buildQb();
+      repo.createQueryBuilder.mockReturnValue(qb);
+      await service.list(1, {} as any);
+      expect(qb.orderBy).toHaveBeenCalledWith('o.tanggal', 'DESC');
+      expect(qb.addOrderBy).toHaveBeenCalledWith('o.id', 'DESC');
+    });
+
+    it('returns period summary with per-category breakdown, biggest first (positive)', async () => {
+      const qb = buildQb(
+        [[], 3],
+        [
+          { kategori: 'listrik', total: '300000', count: '2' },
+          { kategori: 'sewa', total: '2500000', count: '1' },
+        ],
+      );
+      repo.createQueryBuilder.mockReturnValue(qb);
+
+      const r: any = await service.list(1, { page: 1, limit: 2 } as any);
+
+      expect(r.data.summary.total).toBe(2800000);
+      expect(r.data.summary.count).toBe(3);
+      expect(r.data.summary.byKategori.map((k: any) => k.kategori)).toEqual([
+        'sewa',
+        'listrik',
+      ]);
+      expect(r.data.summary.filteredTotal).toBe(2800000);
+      expect(r.data.meta).toEqual({
+        total: 3,
+        page: 1,
+        limit: 2,
+        totalPages: 2,
+      });
+    });
+
+    it('category filter narrows the list total but keeps the breakdown intact (edge)', async () => {
+      const qb = buildQb(
+        [[], 2],
+        [
+          { kategori: 'listrik', total: '300000', count: '2' },
+          { kategori: 'sewa', total: '2500000', count: '1' },
+        ],
+      );
+      repo.createQueryBuilder.mockReturnValue(qb);
+
+      const r: any = await service.list(1, { kategori: 'listrik' } as any);
+
+      expect(r.data.summary.filteredTotal).toBe(300000);
+      expect(r.data.summary.total).toBe(2800000);
+      expect(r.data.summary.byKategori).toHaveLength(2);
+      // hanya query daftar yang disaring kategori; ringkasan memakai query terpisah
+      const kategoriCalls = qb.andWhere.mock.calls.filter((c: any[]) =>
+        String(c[0]).includes('o.kategori = :kategori'),
+      );
+      expect(kategoriCalls).toHaveLength(1);
+    });
+
+    it('returns an empty summary when there are no records (edge)', async () => {
+      const r: any = await service.list(1, {} as any);
+      expect(r.data.summary).toEqual({
+        total: 0,
+        count: 0,
+        byKategori: [],
+        filteredTotal: 0,
+      });
+      expect(r.data.meta.totalPages).toBe(0);
     });
   });
 
