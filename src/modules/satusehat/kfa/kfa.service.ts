@@ -12,10 +12,8 @@ import { Brackets, Repository } from 'typeorm';
 import { KfaProductEntity } from './entities/kfa-product.entity';
 import { SatusehatEnvironment } from '../../../enums/satusehat-environment.enum';
 import { SatusehatGlobalOauthService } from '../satusehat-global-oauth.service';
-import {
-  assertSatusehatEnabled,
-  satusehatPlatformEnabled,
-} from '../satusehat-platform';
+import { SATUSEHAT_FEATURE } from '../satusehat-access';
+import { FeaturesService } from '../../features/features.service';
 
 /**
  * Kamus Farmasi & Alat Kesehatan (KFA) SATUSEHAT.
@@ -197,6 +195,7 @@ export class KfaService {
     configService: ConfigService,
     @InjectRepository(KfaProductEntity)
     private readonly catalog: Repository<KfaProductEntity>,
+    private readonly features: FeaturesService,
   ) {
     this.scheduledSync =
       configService.get<string>('KFA_CATALOG_SYNC', 'false') === 'true';
@@ -212,6 +211,8 @@ export class KfaService {
     page?: number;
     size?: number;
     productType?: 'farmasi' | 'alkes';
+    /** false = klinik belum diaktifkan SATUSEHAT: hanya katalog lokal, tanpa panggilan ke KFA */
+    live?: boolean;
   }): Promise<KfaSearchResult> {
     if (
       (params.productType ?? 'farmasi') === 'farmasi' &&
@@ -223,7 +224,7 @@ export class KfaService {
         params.size ?? 20,
       );
     }
-    if (!satusehatPlatformEnabled()) {
+    if (params.live === false) {
       return {
         total: 0,
         page: params.page ?? 1,
@@ -251,12 +252,22 @@ export class KfaService {
   }
 
   /** Detail produk berdasarkan kode KFA (cache 24 jam). */
-  async getProduct(kfaCode: string): Promise<KfaProduct> {
+  async getProduct(kfaCode: string, live = true): Promise<KfaProduct> {
     if (!/^\d{8}$/.test(kfaCode)) {
       throw new BadRequestException('Kode KFA harus 8 digit angka');
     }
     const cached = this.detailCache.get(kfaCode);
     if (cached && Date.now() - cached.at < DETAIL_TTL_MS) return cached.product;
+    if (!live) {
+      // Klinik belum diaktifkan SATUSEHAT: hanya salinan lokal, tanpa panggilan ke KFA
+      const local = await this.catalog.findOne({ where: { kfaCode } });
+      if (!local) {
+        throw new NotFoundException(
+          `Kode KFA ${kfaCode} tidak ada di katalog lokal`,
+        );
+      }
+      return fromEntity(local);
+    }
 
     const qs = new URLSearchParams({ identifier: 'kfa', code: kfaCode });
     let body: any;
@@ -365,7 +376,11 @@ export class KfaService {
   /** Sinkron harian 02:00, aktif bila KFA_CATALOG_SYNC=true */
   @Cron(CronExpression.EVERY_DAY_AT_2AM)
   async scheduledCatalogSync(): Promise<void> {
-    if (!this.scheduledSync || !satusehatPlatformEnabled()) return;
+    if (!this.scheduledSync) return;
+    // Tidak ada faskes yang diaktifkan: tidak perlu menarik katalog dari KFA
+    if (!(await this.features.clinicIdsWithFeatureOn(SATUSEHAT_FEATURE)).size) {
+      return;
+    }
     try {
       const { saved } = await this.syncCatalog();
       this.logger.log(`Sinkron katalog KFA: ${saved} produk diperbarui`);
@@ -415,7 +430,6 @@ export class KfaService {
   }
 
   private async get(path: string): Promise<any> {
-    assertSatusehatEnabled();
     const token = await this.oauth.getAccessToken(this.environment);
     let response: Response;
     try {

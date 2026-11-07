@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { SyncQueueService } from '../sync/sync-queue.service';
 import { SatusehatSyncLog, SyncLogStatus } from '../sync/entities/satusehat-sync-log.entity';
 import { SyncOrchestratorService } from '../sync/sync-orchestrator.service';
+import { FeaturesService } from '../../features/features.service';
 
 describe('SyncQueueService', () => {
   let service: SyncQueueService;
@@ -18,6 +19,10 @@ describe('SyncQueueService', () => {
         SyncQueueService,
         { provide: getRepositoryToken(SatusehatSyncLog), useValue: repo },
         { provide: SyncOrchestratorService, useValue: orchestrator },
+        {
+          provide: FeaturesService,
+          useValue: { isClinicFeatureOn: jest.fn().mockResolvedValue(true) },
+        },
       ],
     }).compile();
 

@@ -51,8 +51,9 @@ import {
 import { readableFhirError } from '../fhir/fhir-error';
 import {
   SATUSEHAT_DISABLED_MESSAGE,
-  satusehatPlatformEnabled,
-} from '../satusehat-platform';
+  SATUSEHAT_FEATURE,
+} from '../satusehat-access';
+import { FeaturesService } from '../../features/features.service';
 
 export interface SyncStep {
   /** Nama langkah sesuai playbook, mis. "07. Diagnosis" */
@@ -151,7 +152,13 @@ export class SyncOrchestratorService {
     private readonly ssOrgRepo: Repository<SatusehatOrganization>,
     @InjectRepository(Immunization)
     private readonly immunizationRepo: Repository<Immunization>,
+    private readonly features: FeaturesService,
   ) {}
+
+  /** Integrasi SATUSEHAT menyala untuk faskes ini? (diatur super admin) */
+  private satusehatOn(clinicId: number): Promise<boolean> {
+    return this.features.isClinicFeatureOn(clinicId, SATUSEHAT_FEATURE);
+  }
 
   /**
    * Dipanggil di latar belakang setiap kunjungan dibuat atau statusnya
@@ -162,8 +169,8 @@ export class SyncOrchestratorService {
     encounterId: number,
     clinicId: number,
   ): Promise<void> {
-    // Saklar platform mati: tidak ada pembacaan DB maupun panggilan keluar
-    if (!satusehatPlatformEnabled()) return;
+    // Belum diaktifkan untuk faskes ini: tidak ada pembacaan data klinis maupun panggilan keluar
+    if (!(await this.satusehatOn(clinicId))) return;
     try {
       const clinic = withEffectiveCredentials(
         await this.clinicRepo.findOne({ where: { id: clinicId } }),
@@ -215,7 +222,7 @@ export class SyncOrchestratorService {
     const clinic = withEffectiveCredentials(
       await this.clinicRepo.findOne({ where: { id: clinicId } }),
     );
-    if (!satusehatPlatformEnabled()) {
+    if (!(await this.satusehatOn(clinicId))) {
       steps.push(
         this.fail(
           '00. Konfigurasi',
@@ -742,7 +749,7 @@ export class SyncOrchestratorService {
     const clinic = withEffectiveCredentials(
       await this.clinicRepo.findOne({ where: { id: clinicId } }),
     );
-    if (!satusehatPlatformEnabled()) {
+    if (!(await this.satusehatOn(clinicId))) {
       return { success: false, error: SATUSEHAT_DISABLED_MESSAGE };
     }
     if (!clinic || !this.isConfigured(clinic)) {

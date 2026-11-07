@@ -112,11 +112,20 @@ describe('SatusehatAdminService (pantauan super admin)', () => {
         { find: jest.fn().mockResolvedValue([]) },
       ) as any,
       { getSummary: jest.fn().mockResolvedValue({ resources: [] }) } as any,
+      {
+        isClinicFeatureOn: jest.fn(async (id: number) => id === 1),
+        clinicIdsWithFeatureOn: jest.fn(async () => new Set([1])),
+      } as any,
     );
   });
 
   it('classifies each clinic and aggregates counts without exposing secrets (positive)', async () => {
     const res = await service.overview();
+    expect(res.clinics.map((c: any) => [c.id, c.integrationEnabled])).toEqual([
+      [1, true],
+      [2, false],
+      [3, false],
+    ]);
     expect(res.totals).toEqual({
       clinics: 3,
       ready: 1,

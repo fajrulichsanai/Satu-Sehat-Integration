@@ -43,11 +43,14 @@ import { LabResult } from '../diagnostics/entities/lab-result.entity';
 import { RadiologyOrder } from '../diagnostics/entities/radiology-order.entity';
 import { Immunization } from '../immunizations/entities/immunization.entity';
 
+import { FeaturesModule } from '../features/features.module';
+
 @Module({
   imports: [
     ConfigModule,
     AuditLogModule,
     TerminologyModule,
+    FeaturesModule,
     TypeOrmModule.forFeature([
       Encounter,
       Patient,

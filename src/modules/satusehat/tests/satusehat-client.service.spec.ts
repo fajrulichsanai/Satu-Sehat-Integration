@@ -38,7 +38,9 @@ describe('SatusehatClientService', () => {
     };
     fetchMock = jest.fn();
     global.fetch = fetchMock;
-    service = new SatusehatClientService(repo as any);
+    service = new SatusehatClientService(repo as any, {
+      isClinicFeatureOn: jest.fn().mockResolvedValue(true),
+    } as any);
   });
 
   afterAll(() => {

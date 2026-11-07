@@ -35,6 +35,7 @@ describe('SyncOrchestratorService', () => {
       repo(), // PrescriptionReview
       repo(), // SatusehatOrganization
       repo(), // Immunization
+      { isClinicFeatureOn: jest.fn().mockResolvedValue(true) } as any, // FeaturesService
     );
   });
 

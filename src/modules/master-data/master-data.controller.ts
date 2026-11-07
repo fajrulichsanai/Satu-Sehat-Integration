@@ -14,6 +14,9 @@ import { MasterDataService } from './master-data.service';
 import { Public } from '../auth/decorators/public.decorator';
 import { ApiResponse } from '../../common/response/api-response';
 import { KfaService } from '../satusehat/kfa/kfa.service';
+import { FeaturesService } from '../features/features.service';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { SATUSEHAT_FEATURE } from '../satusehat/satusehat-access';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../../enums/user-role.enum';
@@ -30,7 +33,14 @@ export class MasterDataController {
   constructor(
     private readonly masterDataService: MasterDataService,
     private readonly kfaService: KfaService,
+    private readonly features: FeaturesService,
   ) {}
+
+  /** Pencarian live ke KFA hanya untuk faskes yang SATUSEHAT-nya diaktifkan admin. */
+  private async liveKfa(user?: { clinicId?: number | null }): Promise<boolean> {
+    if (!user?.clinicId) return true; // super admin / tanpa klinik
+    return this.features.isClinicFeatureOn(user.clinicId, SATUSEHAT_FEATURE);
+  }
 
   // SatuSehat's masterdata API replies with its own envelope
   // ({status, error, message, data}), not this app's {success, data}
@@ -133,9 +143,13 @@ export class MasterDataController {
   @ApiTags('master-data')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Cari obat/alkes di KFA SATUSEHAT' })
-  async searchKfa(@Query() query: SearchKfaQueryDto) {
+  async searchKfa(
+    @Query() query: SearchKfaQueryDto,
+    @CurrentUser() user: { clinicId?: number | null },
+  ) {
     return ApiResponse.success(
       await this.kfaService.search({
+        live: await this.liveKfa(user),
         keyword: query.keyword,
         page: query.page,
         size: query.size,
@@ -175,7 +189,12 @@ export class MasterDataController {
   @ApiOperation({
     summary: 'Detail produk KFA (bentuk sediaan, rute, zat aktif)',
   })
-  async getKfaProduct(@Param('kfaCode') kfaCode: string) {
-    return ApiResponse.success(await this.kfaService.getProduct(kfaCode));
+  async getKfaProduct(
+    @Param('kfaCode') kfaCode: string,
+    @CurrentUser() user: { clinicId?: number | null },
+  ) {
+    return ApiResponse.success(
+      await this.kfaService.getProduct(kfaCode, await this.liveKfa(user)),
+    );
   }
 }

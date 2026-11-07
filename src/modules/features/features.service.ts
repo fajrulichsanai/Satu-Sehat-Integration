@@ -23,7 +23,6 @@ import {
   OPT_IN_FEATURES,
 } from './feature-catalog';
 import { CreateCustomFeatureDto } from './dto/features.dto';
-import { satusehatPlatformEnabled } from '../satusehat/satusehat-platform';
 
 export interface FeatureActor {
   userId: number;
@@ -63,17 +62,12 @@ export class FeaturesService {
   // ── Fitur efektif ─────────────────────────────────────────────────────
 
   async effectiveFor(actor: FeatureActor) {
-    // Saklar platform: selama SATUSEHAT belum aktif, fitur ini hilang untuk semua
-    const satusehat = satusehatPlatformEnabled();
-    const platform = { satusehat };
-    const roleDefaults = (ROLE_DEFAULT_FEATURES[actor.role] ?? []).filter(
-      (k) => satusehat || k !== 'satusehat',
-    );
+    const roleDefaults = ROLE_DEFAULT_FEATURES[actor.role] ?? [];
     if (!actor.clinicId || !CLINIC_ROLES.includes(actor.role)) {
       return {
         features: [...roleDefaults],
         custom: [] as { key: string; name: string }[],
-        platform,
+        integrations: { satusehat: true },
       };
     }
     const [clinic, user, customs] = await Promise.all([
@@ -88,7 +82,6 @@ export class FeaturesService {
         if (def) features.add(f.key);
         continue;
       }
-      if (f.key === 'satusehat' && !satusehat) continue;
       if (clinic.get(f.key) === false) continue;
       if (OPT_IN_FEATURES.has(f.key) && clinic.get(f.key) !== true) continue;
       if (user.get(f.key) ?? def) features.add(f.key);
@@ -101,7 +94,12 @@ export class FeaturesService {
         custom.push({ key: c.key, name: c.name });
       }
     }
-    return { features: [...features], custom, platform };
+    // Status integrasi faskes (diatur super admin): dipakai UI untuk 'segera hadir'
+    return {
+      features: [...features],
+      custom,
+      integrations: { satusehat: clinic.get('satusehat') === true },
+    };
   }
 
   /**
@@ -112,7 +110,6 @@ export class FeaturesService {
     actor: FeatureActor,
     key: string,
   ): Promise<boolean> {
-    if (key === 'satusehat' && !satusehatPlatformEnabled()) return true;
     if (!actor.clinicId || !CLINIC_ROLES.includes(actor.role)) return false;
     const clinic = await this.clinicSettings(actor.clinicId);
     if (isCustomFeature(key)) {
@@ -125,6 +122,22 @@ export class FeaturesService {
     if (OPT_IN_FEATURES.has(key) && clinic.get(key) !== true) return true;
     const user = await this.userSettings(actor.userId, actor.clinicId);
     return user.get(key) === false;
+  }
+
+  /** Fitur ini menyala untuk klinik? Opt-in harus dinyalakan; lainnya menyala kecuali dimatikan. */
+  async isClinicFeatureOn(clinicId: number, key: string): Promise<boolean> {
+    const clinic = await this.clinicSettings(clinicId);
+    return OPT_IN_FEATURES.has(key)
+      ? clinic.get(key) === true
+      : clinic.get(key) !== false;
+  }
+
+  /** Id klinik yang menyalakan fitur opt-in ini (satu query, untuk daftar admin). */
+  async clinicIdsWithFeatureOn(key: string): Promise<Set<number>> {
+    const rows = await this.clinicFeatureRepo.find({
+      where: { featureKey: key, enabled: true },
+    });
+    return new Set(rows.map((r) => r.clinicId));
   }
 
   // ── Super admin: fitur klinik & fitur custom ──────────────────────────

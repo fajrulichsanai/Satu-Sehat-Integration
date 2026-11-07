@@ -17,6 +17,8 @@ import {
   withEffectiveCredentials,
 } from '../satusehat-credentials';
 import { SatusehatMonitorService } from '../monitor/satusehat-monitor.service';
+import { FeaturesService } from '../../features/features.service';
+import { SATUSEHAT_FEATURE } from '../satusehat-access';
 
 /** Hitungan total & terhubung per klinik (satu query per jenis data) */
 type Counts = Map<number, { total: number; linked: number; failed: number }>;
@@ -44,6 +46,7 @@ export class SatusehatAdminService {
     @InjectRepository(SatusehatSyncLog)
     private readonly syncLogRepo: Repository<SatusehatSyncLog>,
     private readonly monitor: SatusehatMonitorService,
+    private readonly features: FeaturesService,
   ) {}
 
   async overview() {
@@ -87,6 +90,8 @@ export class SatusehatAdminService {
     const pick = (m: Counts, id: number) =>
       m.get(id) ?? { total: 0, linked: 0, failed: 0 };
 
+    const enabledIds =
+      await this.features.clinicIdsWithFeatureOn(SATUSEHAT_FEATURE);
     const rows = clinics.map((c) => {
       const source = credentialSource(c);
       const effective = withEffectiveCredentials(c);
@@ -97,6 +102,8 @@ export class SatusehatAdminService {
         id: c.id,
         name: c.name,
         city: c.city ?? null,
+        /** Diaktifkan super admin untuk faskes ini */
+        integrationEnabled: enabledIds.has(c.id),
         credential: {
           source,
           environment: source ? effective.satusehatEnvironment : null,
@@ -168,6 +175,10 @@ export class SatusehatAdminService {
       ]);
     return {
       clinic: { id: clinic.id, name: clinic.name, city: clinic.city ?? null },
+      integrationEnabled: await this.features.isClinicFeatureOn(
+        clinicId,
+        SATUSEHAT_FEATURE,
+      ),
       credentialSource: credentialSource(clinic),
       verifiedName: clinic.satusehatOrgName ?? null,
       profile: clinic.satusehatProfile ?? null,

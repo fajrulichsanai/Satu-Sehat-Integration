@@ -53,9 +53,10 @@ export const STANDARD_FEATURE_KEYS: string[] = STANDARD_FEATURES.map(
 
 /**
  * Fitur opt-in: mati sampai super admin menyalakannya untuk klinik
- * (mis. imunisasi — hanya klinik yang memberi vaksin).
+ * (mis. imunisasi — hanya klinik yang memberi vaksin; satusehat — hanya
+ * faskes yang aksesnya sudah disetujui dan diaktifkan admin).
  */
-export const OPT_IN_FEATURES = new Set<string>(['imunisasi']);
+export const OPT_IN_FEATURES = new Set<string>(['imunisasi', 'satusehat']);
 
 /** Fitur custom dikenali dari awalan kunci */
 export const CUSTOM_PREFIX = 'custom:';

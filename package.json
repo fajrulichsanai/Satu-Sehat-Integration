@@ -94,10 +94,7 @@
       "**/*.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node",
-    "setupFiles": [
-      "<rootDir>/../test/jest-setup.js"
-    ]
+    "testEnvironment": "node"
   },
   "overrides": {
     "exceljs": {
