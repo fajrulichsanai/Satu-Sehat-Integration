@@ -16,9 +16,13 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PatientsService } from './patients.service';
+import { RequireFeature } from '../features/require-feature.decorator';
 import {
+  BirthdayQueryDto,
   CreatePatientDto,
+  PatientHistoryQueryDto,
   PatientQueryDto,
+  PatientStatsQueryDto,
   SearchSatusehatPatientDto,
   UpdatePatientDto,
 } from './dto/patient.dto';
@@ -27,7 +31,6 @@ import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { IsString } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Audit } from '../audit-log/decorators/audit.decorator';
-import { RequireFeature } from '../features/require-feature.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
 import { AuditActionType } from '../audit-log/entities/audit-log.entity';
 import { Notify } from '../notifications/decorators/notify.decorator';
@@ -73,6 +76,21 @@ export class PatientsController {
     };
   }
 
+  @Get('stats')
+  @ApiOperation({ summary: 'Patient counts (total, male, female, baby)' })
+  async stats(
+    @ClinicId() clinicId: number,
+    @Query() query: PatientStatsQueryDto,
+    @Req() req: { user?: { userId: number; role: string } },
+  ) {
+    const data = await this.patientsService.getStats(
+      clinicId,
+      query.search,
+      req.user,
+    );
+    return { success: true, data };
+  }
+
   @Get('search-satusehat')
   @RequireFeature('satusehat')
   @ApiOperation({ summary: 'Search patient by NIK via SATUSEHAT API' })
@@ -99,6 +117,21 @@ export class PatientsController {
       success: true,
       data: await this.patientsService.searchSatusehatPatients(dto, clinicId),
     };
+  }
+
+  @Get('birthdays')
+  @RequireFeature('ulang-tahun')
+  @ApiOperation({ summary: 'Pasien berulang tahun (promo ulang tahun)' })
+  async birthdays(
+    @ClinicId() clinicId: number,
+    @Query() query: BirthdayQueryDto,
+  ) {
+    const data = await this.patientsService.getBirthdays(
+      clinicId,
+      query.range,
+      query.month,
+    );
+    return { success: true, data };
   }
 
   @Get('referral-summary')
@@ -146,6 +179,44 @@ export class PatientsController {
   ) {
     const encounters = await this.patientsService.findEncounters(id, clinicId);
     return { success: true, data: encounters };
+  }
+
+  @Audit('Patient', AuditActionType.VIEW)
+  @Get(':id/encounter-history')
+  @ApiOperation({
+    summary:
+      'Riwayat kunjungan pasien per bulan + pagination (plus daftar bulan & tanggal datang)',
+  })
+  async findEncounterHistory(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @Query() query: PatientHistoryQueryDto,
+  ) {
+    const data = await this.patientsService.findEncounterHistory(
+      id,
+      clinicId,
+      query,
+    );
+    return { success: true, data };
+  }
+
+  @Audit('Patient', AuditActionType.VIEW)
+  @Get(':id/billing-history')
+  @ApiOperation({
+    summary:
+      'Riwayat transaksi/invoice pasien per bulan + pagination (plus daftar bulan & tanggal)',
+  })
+  async findBillingHistory(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @Query() query: PatientHistoryQueryDto,
+  ) {
+    const data = await this.patientsService.findBillingHistory(
+      id,
+      clinicId,
+      query,
+    );
+    return { success: true, data };
   }
 
   @Audit('Patient', AuditActionType.VIEW)

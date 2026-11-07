@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { UserRole } from '../../../enums';
+import { noClinicError } from '../branch-context';
 
 export const SKIP_CLINIC_CHECK_KEY = 'skipClinicCheck';
 
@@ -59,13 +60,7 @@ export class ClinicContextGuard implements CanActivate {
 
     // Validate that user has clinicId (should be set during registration)
     if (!user.clinicId) {
-      throw new ForbiddenException({
-        success: false,
-        error: {
-          code: 'NO_CLINIC_ASSIGNED',
-          message: 'User belum terdaftar di klinik manapun',
-        },
-      });
+      throw noClinicError(user, 'User belum terdaftar di klinik manapun');
     }
 
     // Store clinicId in request for easy access in controllers/services

@@ -28,7 +28,10 @@ describe('SuperAdminReportsService', () => {
   let planRepo: { find: jest.Mock };
 
   beforeEach(async () => {
-    clinicRepo = { count: jest.fn().mockResolvedValue(0), find: jest.fn().mockResolvedValue([]) };
+    clinicRepo = {
+      count: jest.fn().mockResolvedValue(0),
+      find: jest.fn().mockResolvedValue([]),
+    };
     subRepo = { find: jest.fn().mockResolvedValue([]) };
     paymentRepo = {
       count: jest.fn().mockResolvedValue(0),
@@ -41,7 +44,10 @@ describe('SuperAdminReportsService', () => {
         SuperAdminReportsService,
         { provide: getRepositoryToken(Clinic), useValue: clinicRepo },
         { provide: getRepositoryToken(ClinicSubscription), useValue: subRepo },
-        { provide: getRepositoryToken(SubscriptionPayment), useValue: paymentRepo },
+        {
+          provide: getRepositoryToken(SubscriptionPayment),
+          useValue: paymentRepo,
+        },
         { provide: getRepositoryToken(SubscriptionPlan), useValue: planRepo },
       ],
     }).compile();
@@ -87,14 +93,23 @@ describe('SuperAdminReportsService', () => {
     const confirmedQb = buildQb([]);
     paymentRepo.createQueryBuilder.mockReturnValue(confirmedQb);
 
-    await service.summary({ dateFrom: '2026-01-01', dateTo: '2026-01-31' } as any);
-
-    expect(confirmedQb.andWhere).toHaveBeenCalledWith('p.confirmedAt >= :dateFrom', {
+    await service.summary({
       dateFrom: '2026-01-01',
-    });
-    expect(confirmedQb.andWhere).toHaveBeenCalledWith('p.confirmedAt <= :dateTo', {
       dateTo: '2026-01-31',
-    });
+    } as any);
+
+    expect(confirmedQb.andWhere).toHaveBeenCalledWith(
+      'p.confirmedAt >= :dateFrom',
+      {
+        dateFrom: '2026-01-01',
+      },
+    );
+    expect(confirmedQb.andWhere).toHaveBeenCalledWith(
+      'p.confirmedAt <= :dateTo',
+      {
+        dateTo: '2026-01-31',
+      },
+    );
   });
 
   it('excludes payments confirmed more than 30 days ago from MRR (negative/edge)', async () => {

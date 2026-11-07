@@ -55,4 +55,48 @@ export class SubscriptionPlan extends BaseEntity {
     default: 0,
   })
   ownerFee: number | null;
+
+  // Jatah storage file layanan per klinik (GB). Null = bawaan tier — see
+  // StorageQuotaService. For MULTI_KLINIK it is per branch, shared.
+  // Desimal: 0.1 = 100 MB (masa coba).
+  @Column({
+    name: 'storage_gb',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    transformer: {
+      to: (v: number | null | undefined) => v,
+      from: (v: string | null) =>
+        v === null || v === undefined ? null : Number(v),
+    },
+  })
+  storageGb: number | null;
+
+  // Batas akun aktif per klinik. Null = bawaan tier (Starter 5, Pro & masa
+  // coba 25). For MULTI_KLINIK it is per branch, shared.
+  @Column({ name: 'max_users', type: 'int', nullable: true })
+  maxUsers: number | null;
+
+  // Harga promo per bulan (per klinik untuk Multi Klinik), berlaku sampai
+  // promoUntil (inklusif). `price` tetap harga normal ("harga asli").
+  @Column('decimal', {
+    name: 'promo_price',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
+  promoPrice: number | null;
+
+  @Column({ name: 'promo_until', type: 'date', nullable: true })
+  promoUntil: string | null;
+
+  // Biaya admin owner Multi Klinik selama promo (null = ownerFee biasa).
+  @Column('decimal', {
+    name: 'promo_owner_fee',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
+  promoOwnerFee: number | null;
 }

@@ -7,7 +7,6 @@ import {
   redactSyncError,
 } from './entities/satusehat-sync-log.entity';
 import { SyncOrchestratorService } from './sync-orchestrator.service';
-import { SATUSEHAT_FEATURE } from '../satusehat-access';
 import { FeaturesService } from '../../features/features.service';
 
 const MAX_RETRY_ATTEMPTS = 5;
@@ -52,15 +51,8 @@ export class SyncQueueService {
       });
 
       for (const item of items) {
-        // Faskes yang belum diaktifkan dilewati tanpa menghabiskan jatah retry
-        if (
-          !(await this.features.isClinicFeatureOn(
-            item.clinicId,
-            SATUSEHAT_FEATURE,
-          ))
-        ) {
-          continue;
-        }
+        // Faskes yang belum aktif dilewati tanpa menghabiskan jatah retry
+        if (!(await this.features.isSatusehatActive(item.clinicId))) continue;
         if ((item.retryCount ?? 0) >= MAX_RETRY_ATTEMPTS) {
           await this.syncLogRepo.update(item.id, {
             status: SyncLogStatus.FAILED,

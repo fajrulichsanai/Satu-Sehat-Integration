@@ -35,6 +35,8 @@ import { Audit } from '../audit-log/decorators/audit.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
 import { AuditActionType } from '../audit-log/entities/audit-log.entity';
 import { RequireFeature } from '../features/require-feature.decorator';
+import { StockOpnameService } from './stock-opname.service';
+import { CreateStockOpnameDto } from './dto/stock-opname.dto';
 
 @ApiTags('gudang')
 @ApiBearerAuth('JWT-auth')
@@ -43,7 +45,10 @@ import { RequireFeature } from '../features/require-feature.decorator';
 @RequireFeature('gudang')
 @Controller('gudang')
 export class GudangController {
-  constructor(private readonly gudangService: GudangService) {}
+  constructor(
+    private readonly gudangService: GudangService,
+    private readonly stockOpnameService: StockOpnameService,
+  ) {}
 
   // ── Barang ──────────────────────────────────────────────────────────────
 
@@ -138,6 +143,47 @@ export class GudangController {
     @CurrentUser() user: any,
   ) {
     const data = await this.gudangService.createTransaksi(
+      clinicId,
+      dto,
+      user.userId,
+    );
+    return { success: true, data };
+  }
+
+  // ── Stock Opname ───────────────────────────────────────────────────────
+
+  @Get('opname')
+  @ApiOperation({ summary: 'Riwayat stock opname' })
+  async listOpname(@ClinicId() clinicId: number) {
+    return {
+      success: true,
+      data: await this.stockOpnameService.list(clinicId),
+    };
+  }
+
+  @Get('opname/:id')
+  @ApiOperation({ summary: 'Detail stock opname (berita acara)' })
+  async getOpname(
+    @ClinicId() clinicId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return {
+      success: true,
+      data: await this.stockOpnameService.findOne(clinicId, id),
+    };
+  }
+
+  @Post('opname')
+  @Audit('StockOpname', AuditActionType.CREATE)
+  @ApiOperation({
+    summary: 'Simpan stock opname & sesuaikan stok sesuai hitungan fisik',
+  })
+  async createOpname(
+    @ClinicId() clinicId: number,
+    @Body() dto: CreateStockOpnameDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.stockOpnameService.create(
       clinicId,
       dto,
       user.userId,

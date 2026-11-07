@@ -188,6 +188,120 @@ describe('PatientsService', () => {
     });
   });
 
+  describe('findAll kategori', () => {
+    it('filters babies only when kategori=bayi (positive)', async () => {
+      const qb = buildQb();
+      patientRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll(clinicId, {
+        page: 1,
+        limit: 20,
+        kategori: 'bayi',
+      } as any);
+
+      const clauses = qb.andWhere.mock.calls.map((c: unknown[]) => c[0]);
+      expect(clauses).toContainEqual(
+        expect.stringMatching(/^\(\(p\.nik IS NULL/),
+      );
+    });
+
+    it('excludes babies when kategori=umum and keeps gender filter (positive)', async () => {
+      const qb = buildQb();
+      patientRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll(clinicId, {
+        page: 1,
+        limit: 20,
+        gender: 'male',
+        kategori: 'umum',
+      } as any);
+
+      const clauses = qb.andWhere.mock.calls.map((c: unknown[]) => c[0]);
+      expect(clauses).toContain('p.gender = :gender');
+      expect(clauses).toContainEqual(
+        expect.stringMatching(/^NOT \(\(p\.nik IS NULL/),
+      );
+    });
+
+    it('adds no category clause when kategori is omitted (edge)', async () => {
+      const qb = buildQb();
+      patientRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll(clinicId, { page: 1, limit: 20 } as any);
+
+      expect(qb.andWhere).not.toHaveBeenCalled();
+      expect(qb.skip).toHaveBeenCalledWith(0);
+      expect(qb.take).toHaveBeenCalledWith(20);
+    });
+
+    it('ignores a whitespace-only search (edge)', async () => {
+      const qb = buildQb();
+      patientRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll(clinicId, {
+        page: 1,
+        limit: 20,
+        search: '   ',
+      } as any);
+
+      expect(qb.andWhere).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getStats', () => {
+    it('returns numeric counts from the aggregate row (positive)', async () => {
+      const qb = buildQb({
+        getRawOne: jest.fn().mockResolvedValue({
+          total: '250',
+          male: '120',
+          female: '110',
+          baby: '20',
+        }),
+      });
+      patientRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const result = await service.getStats(clinicId, undefined);
+
+      expect(result).toEqual({ total: 250, male: 120, female: 110, baby: 20 });
+      expect(qb.where).toHaveBeenCalledWith('p.clinicId = :clinicId', {
+        clinicId,
+      });
+    });
+
+    it('returns zeros for an empty clinic (SUM is NULL) (edge)', async () => {
+      const qb = buildQb({
+        getRawOne: jest.fn().mockResolvedValue({
+          total: '0',
+          male: null,
+          female: null,
+          baby: null,
+        }),
+      });
+      patientRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await expect(service.getStats(clinicId, undefined)).resolves.toEqual({
+        total: 0,
+        male: 0,
+        female: 0,
+        baby: 0,
+      });
+    });
+
+    it('applies the same search filter as the list (positive)', async () => {
+      const qb = buildQb({
+        getRawOne: jest.fn().mockResolvedValue({ total: '1' }),
+      });
+      patientRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.getStats(clinicId, ' Budi ');
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('p.name LIKE'),
+        { search: '%Budi%', nikHash: hashNik('Budi') },
+      );
+    });
+  });
+
   describe('findOne', () => {
     it('returns the patient when found (positive)', async () => {
       patientRepo.findOne.mockResolvedValue({ id: 1, clinicId });
@@ -318,7 +432,7 @@ describe('PatientsService', () => {
       const qb = buildQb({ getOne: jest.fn().mockResolvedValue(null) });
       patientRepo.createQueryBuilder.mockReturnValue(qb);
 
-      const result = await service.update(1, clinicId, { name: 'B' } as any);
+      const result = await service.update(1, clinicId, { name: 'B' });
 
       expect(result.name).toBe('B');
       expect(patientRepo.createQueryBuilder).not.toHaveBeenCalled();
@@ -422,7 +536,7 @@ describe('PatientsService', () => {
         },
       ]);
       const r = await service.searchSatusehatPatients(
-        { nik: '9271060312000001' } as any,
+        { nik: '9271060312000001' },
         clinicId,
       );
       expect(r.results[0]).toMatchObject({
@@ -563,6 +677,64 @@ describe('PatientsService', () => {
 
       expect(result.bySource[0].count).toBe(5);
       expect(result.byReferrer[0].referralCount).toBe(2);
+    });
+  });
+
+  describe('getBirthdays', () => {
+    const run = async (
+      range: 'today' | 'week' | 'month',
+      now: string,
+      rows: any[] = [],
+      month?: number,
+    ) => {
+      const query = jest.fn().mockResolvedValue(rows);
+      (patientRepo as any).query = query;
+      const data = await service.getBirthdays(1, range, month, new Date(now));
+      return {
+        data,
+        sql: query.mock.calls[0][0] as string,
+        params: query.mock.calls[0][1],
+      };
+    };
+
+    it('bulan tertentu memakai MONTH(birth_date)', async () => {
+      const { sql, params } = await run('month', '2026-10-15T03:00:00Z', [], 3);
+      expect(sql).toContain('MONTH(p.birth_date) = ?');
+      expect(params).toEqual([1, 3]);
+    });
+
+    it('hari ini memakai tanggal WIB', async () => {
+      // 23:30 UTC tgl 14 = 06:30 WIB tgl 15
+      const { params } = await run('today', '2026-10-14T23:30:00Z');
+      expect(params).toEqual([1, '10-15']);
+    });
+
+    it('7 hari ke depan melewati pergantian tahun & usia bertambah', async () => {
+      const { params, data } = await run('week', '2026-12-29T03:00:00Z', [
+        { id: 1, name: 'A', birthDate: '1990-01-02', consentMarketing: 1 },
+        { id: 2, name: 'B', birthDate: '1990-12-29', consentMarketing: 0 },
+      ]);
+      expect(params).toEqual([
+        1,
+        '12-29',
+        '12-30',
+        '12-31',
+        '01-01',
+        '01-02',
+        '01-03',
+        '01-04',
+      ]);
+      expect(data[0].turning).toBe(37); // ulang tahun Jan 2027
+      expect(data[1]).toMatchObject({
+        turning: 36,
+        isToday: true,
+        consentMarketing: false,
+      });
+    });
+
+    it('lahir 29 Feb ikut dirayakan 28 Feb pada tahun biasa', async () => {
+      const { params } = await run('today', '2026-02-28T03:00:00Z');
+      expect(params).toEqual([1, '02-28', '02-29']);
     });
   });
 });

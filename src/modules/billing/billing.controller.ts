@@ -24,6 +24,7 @@ import {
   CreateBillingDto,
   CreatePaymentDto,
   UpdateBillingDto,
+  UpdatePaymentDto,
 } from './dto/billing.dto';
 import { CreateTarifDto, TarifQueryDto, UpdateTarifDto } from './dto/tarif.dto';
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
@@ -177,7 +178,9 @@ export class BillingController {
 
   @Patch('billings/:id/cancel')
   @Audit('Invoice', AuditActionType.UPDATE, { labelField: 'invoiceNumber' })
-  @ApiOperation({ summary: 'Batalkan billing (belum ada pembayaran) dan kembalikan stok BOM' })
+  @ApiOperation({
+    summary: 'Batalkan billing (belum ada pembayaran) dan kembalikan stok BOM',
+  })
   async cancelBilling(
     @Param('id', ParseIntPipe) id: number,
     @ClinicId() clinicId: number,
@@ -193,7 +196,9 @@ export class BillingController {
 
   @Post('billings/:id/payments')
   @Audit('Payment', AuditActionType.CREATE)
-  @Notify(NotificationType.PAYMENT_NEW, 'Pembayaran baru diterima', { labelField: 'amount' })
+  @Notify(NotificationType.PAYMENT_NEW, 'Pembayaran baru diterima', {
+    labelField: 'amount',
+  })
   @ApiOperation({ summary: 'Record payment for billing' })
   async createPayment(
     @Param('id', ParseIntPipe) id: number,
@@ -203,6 +208,28 @@ export class BillingController {
   ) {
     const data = await this.paymentsService.createPayment(
       id,
+      clinicId,
+      dto,
+      user.userId,
+    );
+    return { success: true, data };
+  }
+
+  @Patch('billings/:id/payments/:paymentId')
+  @Audit('Payment', AuditActionType.UPDATE)
+  @ApiOperation({
+    summary: 'Perbaiki pembayaran yang salah input (jumlah/metode/catatan)',
+  })
+  async updatePayment(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('paymentId', ParseIntPipe) paymentId: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: UpdatePaymentDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.paymentsService.updatePayment(
+      id,
+      paymentId,
       clinicId,
       dto,
       user.userId,

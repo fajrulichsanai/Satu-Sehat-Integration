@@ -21,6 +21,8 @@ export enum ContentLayout {
   STACK = 'stack',
   /** Before on the left, after on the right. */
   SPLIT = 'split',
+  /** 3+ photos, from content_photos — a case series, not just before/after. */
+  SERIES = 'series',
 }
 
 export enum ContentBackground {
@@ -37,6 +39,23 @@ export interface ContentPhotoFrame {
   rot?: number;
   /** Mirrored horizontally (intraoral photos taken with a mirror). */
   flip?: boolean;
+}
+
+/** Gaya layout "series" (semua opsional; kosong = tampilan bawaan). */
+export interface SeriesStyle {
+  /** rows = baris bersusun, columns = kolom berdampingan, grid = kisi, hero = satu foto besar + sisanya kecil. */
+  arrangement?: 'rows' | 'columns' | 'grid' | 'hero';
+  /** Jarak antar foto, px pada kanvas 1080 lebar. */
+  gap?: number;
+  /** Radius sudut foto, px. */
+  radius?: number;
+  captionStyle?: 'chip' | 'bar' | 'none';
+  captionPosition?: 'top' | 'bottom';
+  /** Nomor urut (1, 2, 3…) di tiap foto. */
+  showNumbers?: boolean;
+  /** #rrggbb; kosong = ikut tema. */
+  bgColor?: string;
+  accentColor?: string;
 }
 
 /** Everything on the story that isn't a column of its own. */
@@ -64,6 +83,8 @@ export interface ContentSettings {
   visits?: number;
   /** False once the caption was typed by hand instead of built from the fields above. */
   autoCaption?: boolean;
+  /** Gaya layout series. */
+  series?: SeriesStyle;
 }
 
 /**

@@ -2,11 +2,13 @@ import {
   IsArray,
   IsDateString,
   IsEnum,
+  IsBoolean,
   IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Min,
   ValidateNested,
   Max,
@@ -116,9 +118,28 @@ export class UpdateBillingDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Konfirmasi: bila total baru lebih kecil dari yang sudah dibayar, kembalikan selisihnya ke pasien (mengurangi pembayaran terbaru).',
+  })
+  @IsOptional()
+  @IsBoolean()
+  refundExcess?: boolean;
 }
 
 export class BillingQueryDto {
+  @ApiPropertyOptional({
+    description:
+      'Bulan (YYYY-MM) berdasarkan tanggal invoice dibuat. Respons memuat `days` (tanggal berisi transaksi) saat diisi.',
+    example: '2026-10',
+  })
+  @IsOptional()
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, {
+    message: 'month harus berformat YYYY-MM, mis. 2026-10',
+  })
+  month?: string;
+
   @ApiPropertyOptional({ enum: BillingStatus })
   @IsOptional()
   @IsEnum(BillingStatus)
@@ -168,6 +189,27 @@ export class CreatePaymentDto {
   @IsNumber()
   @Min(0)
   amount: number | undefined;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+export class UpdatePaymentDto {
+  @ApiPropertyOptional({
+    description:
+      'Jumlah dibayar yang benar — perbaikan salah input, bukan pembayaran baru',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  amount?: number;
+
+  @ApiPropertyOptional({ enum: PaymentMethod })
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  method?: PaymentMethod;
 
   @ApiPropertyOptional()
   @IsOptional()

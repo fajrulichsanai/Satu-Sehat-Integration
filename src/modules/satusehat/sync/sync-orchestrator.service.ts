@@ -49,11 +49,6 @@ import {
   resumeGroupOf,
 } from '../fhir/fhir-mapper';
 import { readableFhirError } from '../fhir/fhir-error';
-import {
-  SATUSEHAT_DISABLED_MESSAGE,
-  SATUSEHAT_FEATURE,
-} from '../satusehat-access';
-import { FeaturesService } from '../../features/features.service';
 
 export interface SyncStep {
   /** Nama langkah sesuai playbook, mis. "07. Diagnosis" */
@@ -73,6 +68,9 @@ export interface SyncResult {
 }
 
 class StepError extends Error {}
+
+const SATUSEHAT_INACTIVE =
+  'SATUSEHAT tidak aktif untuk klinik ini (dimatikan klinik atau belum dibuka di platform)';
 
 /** localType link untuk satu diagnosis SOAP (unik per kode di satu catatan) */
 const diagnosisLinkType = (dx: SoapDiagnosis) =>
@@ -152,13 +150,7 @@ export class SyncOrchestratorService {
     private readonly ssOrgRepo: Repository<SatusehatOrganization>,
     @InjectRepository(Immunization)
     private readonly immunizationRepo: Repository<Immunization>,
-    private readonly features: FeaturesService,
   ) {}
-
-  /** Integrasi SATUSEHAT menyala untuk faskes ini? (diatur super admin) */
-  private satusehatOn(clinicId: number): Promise<boolean> {
-    return this.features.isClinicFeatureOn(clinicId, SATUSEHAT_FEATURE);
-  }
 
   /**
    * Dipanggil di latar belakang setiap kunjungan dibuat atau statusnya
@@ -169,9 +161,8 @@ export class SyncOrchestratorService {
     encounterId: number,
     clinicId: number,
   ): Promise<void> {
-    // Belum diaktifkan untuk faskes ini: tidak ada pembacaan data klinis maupun panggilan keluar
-    if (!(await this.satusehatOn(clinicId))) return;
     try {
+      if (!(await this.satusehatClient.isActiveFor(clinicId))) return;
       const clinic = withEffectiveCredentials(
         await this.clinicRepo.findOne({ where: { id: clinicId } }),
       );
@@ -219,21 +210,21 @@ export class SyncOrchestratorService {
     clinicId: number,
   ): Promise<{ success: boolean; steps: SyncStep[] }> {
     const steps: SyncStep[] = [];
-    const clinic = withEffectiveCredentials(
-      await this.clinicRepo.findOne({ where: { id: clinicId } }),
-    );
-    if (!(await this.satusehatOn(clinicId))) {
+    if (!(await this.satusehatClient.isActiveFor(clinicId))) {
       steps.push(
         this.fail(
           '00. Konfigurasi',
           'Organization',
           'clinic',
           clinicId,
-          SATUSEHAT_DISABLED_MESSAGE,
+          SATUSEHAT_INACTIVE,
         ),
       );
       return { success: false, steps };
     }
+    const clinic = withEffectiveCredentials(
+      await this.clinicRepo.findOne({ where: { id: clinicId } }),
+    );
     if (!clinic || !this.isConfigured(clinic)) {
       steps.push(
         this.fail(
@@ -746,12 +737,12 @@ export class SyncOrchestratorService {
     localId: number,
     clinicId: number,
   ): Promise<SyncResult> {
+    if (!(await this.satusehatClient.isActiveFor(clinicId))) {
+      return { success: false, error: SATUSEHAT_INACTIVE };
+    }
     const clinic = withEffectiveCredentials(
       await this.clinicRepo.findOne({ where: { id: clinicId } }),
     );
-    if (!(await this.satusehatOn(clinicId))) {
-      return { success: false, error: SATUSEHAT_DISABLED_MESSAGE };
-    }
     if (!clinic || !this.isConfigured(clinic)) {
       return {
         success: false,

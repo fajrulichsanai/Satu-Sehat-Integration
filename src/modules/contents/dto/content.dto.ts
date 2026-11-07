@@ -6,6 +6,7 @@ import {
   IsBoolean,
   IsInt,
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -47,6 +48,54 @@ export class ContentPhotoFrameDto {
   @IsOptional()
   @IsBoolean()
   flip?: boolean;
+}
+
+export const SERIES_ARRANGEMENTS = ['rows', 'columns', 'grid', 'hero'] as const;
+export const SERIES_CAPTION_STYLES = ['chip', 'bar', 'none'] as const;
+export const SERIES_CAPTION_POSITIONS = ['top', 'bottom'] as const;
+
+/**
+ * Gaya tampilan layout "series" — semuanya opsional; tanpa nilai, story
+ * tampil seperti sebelumnya (baris bersusun, keterangan chip di atas).
+ */
+export class SeriesStyleDto {
+  @IsOptional()
+  @IsIn(SERIES_ARRANGEMENTS as unknown as string[])
+  arrangement?: (typeof SERIES_ARRANGEMENTS)[number];
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(48)
+  gap?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(80)
+  radius?: number;
+
+  @IsOptional()
+  @IsIn(SERIES_CAPTION_STYLES as unknown as string[])
+  captionStyle?: (typeof SERIES_CAPTION_STYLES)[number];
+
+  @IsOptional()
+  @IsIn(SERIES_CAPTION_POSITIONS as unknown as string[])
+  captionPosition?: (typeof SERIES_CAPTION_POSITIONS)[number];
+
+  @IsOptional()
+  @IsBoolean()
+  showNumbers?: boolean;
+
+  /** Warna latar kustom (#rrggbb); kosong = ikut tema Terang/Navy. */
+  @IsOptional()
+  @Matches(/^(#[0-9a-fA-F]{6})?$/, { message: 'Warna harus format #rrggbb' })
+  bgColor?: string;
+
+  /** Warna aksen kustom (#rrggbb); kosong = ikut tema. */
+  @IsOptional()
+  @Matches(/^(#[0-9a-fA-F]{6})?$/, { message: 'Warna harus format #rrggbb' })
+  accentColor?: string;
 }
 
 export class ContentSettingsDto {
@@ -123,6 +172,11 @@ export class ContentSettingsDto {
   @IsOptional()
   @IsBoolean()
   autoCaption?: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SeriesStyleDto)
+  series?: SeriesStyleDto;
 }
 
 /** Fields shared by create and update; every one is optional on update. */

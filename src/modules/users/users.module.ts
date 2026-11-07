@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
+import { UsersMailService } from './users-mail.service';
 import { User } from './entities/user.entity';
 import { Practitioner } from '../practitioners/entities/practitioner.entity';
 import { AuditLogModule } from '../audit-log/audit-log.module';
@@ -14,7 +15,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     NotificationsModule,
   ],
   controllers: [UsersController],
-  providers: [UsersService],
+  providers: [UsersService, UsersMailService],
   exports: [UsersService],
 })
 export class UsersModule {}

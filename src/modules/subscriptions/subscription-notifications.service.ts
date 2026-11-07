@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Resend } from 'resend';
 import {
   ClinicSubscription,
@@ -11,6 +11,16 @@ import { SubscriptionPlanTier } from './entities/subscription-plan.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { User } from '../users/entities/user.entity';
 import { UserRole } from '../../enums';
+import {
+  BranchBillingMode,
+  OwnerClinicLink,
+  OwnerClinicLinkStatus,
+} from '../multi-clinic/entities/owner-clinic-link.entity';
+import type { SubscriptionPayment } from './entities/subscription-payment.entity';
+
+function rupiah(value: number | string): string {
+  return `Rp${Number(value || 0).toLocaleString('id-ID')}`;
+}
 
 function daysBetween(a: Date, b: Date): number {
   const MS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -18,7 +28,7 @@ function daysBetween(a: Date, b: Date): number {
 }
 
 /**
- * Sends the H-7 / H-1 "your subscription is about to expire" email to a
+ * Sends the H-7 / H-3 / H-1 "your subscription is about to expire" email to a
  * clinic's owner(s). In-app warning (the renew popup, H-7 through expiry)
  * is handled entirely on the frontend from the subscription's endDate —
  * this service only covers the out-of-band email channel.
@@ -36,12 +46,16 @@ export class SubscriptionNotificationsService {
     private readonly clinicRepository: Repository<Clinic>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @Optional()
+    @InjectRepository(OwnerClinicLink)
+    private readonly linkRepository?: Repository<OwnerClinicLink>,
   ) {
     this.resend = new Resend(this.configService.get<string>('RESEND_API_KEY'));
   }
 
   async sendUpcomingExpiryReminders(): Promise<{
     h7Sent: number;
+    h3Sent: number;
     h1Sent: number;
   }> {
     const today = new Date(new Date().toDateString());
@@ -60,6 +74,7 @@ export class SubscriptionNotificationsService {
     }
 
     let h7Sent = 0;
+    let h3Sent = 0;
     let h1Sent = 0;
 
     for (const sub of latestByClinic.values()) {
@@ -71,6 +86,12 @@ export class SubscriptionNotificationsService {
           await this.clinicSubscriptionRepository.save(sub);
           h7Sent += 1;
         }
+      } else if (daysLeft === 3 && !sub.notifiedH3At) {
+        if (await this.notifyClinic(sub, 3)) {
+          sub.notifiedH3At = new Date();
+          await this.clinicSubscriptionRepository.save(sub);
+          h3Sent += 1;
+        }
       } else if (daysLeft === 1 && !sub.notifiedH1At) {
         if (await this.notifyClinic(sub, 1)) {
           sub.notifiedH1At = new Date();
@@ -80,12 +101,12 @@ export class SubscriptionNotificationsService {
       }
     }
 
-    return { h7Sent, h1Sent };
+    return { h7Sent, h3Sent, h1Sent };
   }
 
   /**
    * Trial-specific reminder sequence per PRD bagian 7 — dipicu berdasarkan
-   * hari sejak trial dimulai (7/13/15 dari 15 hari), yang secara matematis
+   * hari sejak trial dimulai (6/12/14 dari 14 hari), yang secara matematis
    * sama dengan sisa hari 8/2/0 sebelum trial berakhir. Terpisah dari
    * sendUpcomingExpiryReminders karena copy-nya beda (ajak upgrade, bukan
    * "perpanjang") dan hanya menyasar baris berstatus trial.
@@ -163,7 +184,11 @@ export class SubscriptionNotificationsService {
     const [clinic, owners] = await Promise.all([
       this.clinicRepository.findOne({ where: { id: sub.clinicId } }),
       this.userRepository.find({
-        where: { clinicId: sub.clinicId, role: UserRole.OWNER, isActive: true },
+        where: {
+          clinicId: sub.clinicId,
+          role: In([UserRole.OWNER, UserRole.MANAJER_CABANG]),
+          isActive: true,
+        },
       }),
     ]);
 
@@ -189,7 +214,8 @@ export class SubscriptionNotificationsService {
           <h2>Free Trial ApexRecord</h2>
           <p>Halo,</p>
           <p>${message}</p>
-          <p>Klinik <strong>${clinic?.name ?? ''}</strong> sedang menjalani masa Free Trial 15 hari (berakhir ${sub.endDate}).</p>
+          <p>Klinik <strong>${clinic?.name ?? ''}</strong> sedang menjalani masa Free Trial ${sub.plan?.durationDays ?? 14} hari (berakhir ${sub.endDate}).</p>
+          <p>Minggu pertama masa coba memakai batas paket Starter (5 akun); minggu kedua otomatis naik ke batas Pro (25 akun) agar Anda bisa mencoba semuanya. Storage masa coba maks. 100 MB.</p>
           <a href="${appUrl}/langganan" style="display: inline-block; padding: 10px 20px; background-color: #4F7EF8; color: white; text-decoration: none; border-radius: 5px;">
             Upgrade Sekarang
           </a>
@@ -208,18 +234,42 @@ export class SubscriptionNotificationsService {
     }
   }
 
+  /**
+   * A branch paid by its Multi-Klinik Owner gets its renewal reminder sent to
+   * that owner (PRD alur E) — the branch's own owner doesn't pay for it.
+   */
+  private async billingOwnerFor(clinicId: number): Promise<User | null> {
+    const link = await this.linkRepository?.findOne({
+      where: {
+        clinicId,
+        status: OwnerClinicLinkStatus.APPROVED,
+        billingMode: BranchBillingMode.OWNER,
+      },
+      relations: { owner: true },
+    });
+    return link?.owner?.isActive ? link.owner : null;
+  }
+
   private async notifyClinic(
     sub: ClinicSubscription,
     daysLeft: number,
   ): Promise<boolean> {
-    const [clinic, owners] = await Promise.all([
+    const [clinic, owners, billingOwner] = await Promise.all([
       this.clinicRepository.findOne({ where: { id: sub.clinicId } }),
       this.userRepository.find({
-        where: { clinicId: sub.clinicId, role: UserRole.OWNER, isActive: true },
+        where: {
+          clinicId: sub.clinicId,
+          role: In([UserRole.OWNER, UserRole.MANAJER_CABANG]),
+          isActive: true,
+        },
       }),
+      this.billingOwnerFor(sub.clinicId),
     ]);
 
-    const recipients = owners.map((o) => o.email).filter(Boolean);
+    const recipients = billingOwner
+      ? [billingOwner.email].filter(Boolean)
+      : owners.map((o) => o.email).filter(Boolean);
+    const renewPath = billingOwner ? '/multi-klinik/langganan' : '/langganan';
     if (recipients.length === 0) {
       this.logger.warn(
         `No active owner email found for clinic ${sub.clinicId} — skipping H-${daysLeft} reminder`,
@@ -242,7 +292,7 @@ export class SubscriptionNotificationsService {
           <p>Halo,</p>
           <p>Langganan ApexRecord untuk klinik <strong>${clinic?.name ?? ''}</strong> akan berakhir dalam <strong>${daysLeft} hari</strong> (${sub.endDate}).</p>
           <p>Segera perpanjang agar tidak kehilangan akses untuk menambah, mengubah, atau menghapus data.</p>
-          <a href="${appUrl}/langganan" style="display: inline-block; padding: 10px 20px; background-color: #4F7EF8; color: white; text-decoration: none; border-radius: 5px;">
+          <a href="${appUrl}${renewPath}" style="display: inline-block; padding: 10px 20px; background-color: #4F7EF8; color: white; text-decoration: none; border-radius: 5px;">
             Perpanjang Sekarang
           </a>
           <p>Salam,<br>Tim ApexRecord</p>
@@ -255,6 +305,94 @@ export class SubscriptionNotificationsService {
     } catch (error) {
       this.logger.error(
         `Failed to send H-${daysLeft} reminder for clinic ${sub.clinicId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Kuitansi setelah Super Admin mengonfirmasi pembayaran (PRD Multi-Klinik
+   * SA-02). Owner payment → the Multi-Klinik Owner, listing every branch the
+   * payment extended; clinic payment → the clinic's owner(s). Never throws.
+   */
+  async sendPaymentReceipt(
+    payment: SubscriptionPayment,
+    attachment?: { fileName: string; pdf: Buffer },
+  ): Promise<boolean> {
+    try {
+      const clinicIds = payment.ownerId
+        ? (payment.coveredClinicIds ?? [])
+        : payment.clinicId
+          ? [payment.clinicId]
+          : [];
+      const [clinics, recipients, planRows] = await Promise.all([
+        clinicIds.length
+          ? this.clinicRepository.find({ where: { id: In(clinicIds) } })
+          : Promise.resolve([] as Clinic[]),
+        payment.ownerId
+          ? this.userRepository
+              .find({ where: { id: payment.ownerId } })
+              .then((rows) => rows.map((u) => u.email))
+          : this.userRepository
+              .find({
+                where: {
+                  clinicId: payment.clinicId as number,
+                  role: UserRole.OWNER,
+                  isActive: true,
+                },
+              })
+              .then((rows) => rows.map((u) => u.email)),
+        this.clinicSubscriptionRepository.manager.query(
+          'SELECT name FROM subscription_plans WHERE id = ? LIMIT 1',
+          [payment.planId],
+        ),
+      ]);
+      const to = recipients.filter(Boolean);
+      if (to.length === 0) return false;
+
+      const planName = (planRows as { name: string }[])[0]?.name ?? 'Langganan';
+      const number = `APX-${String(payment.id).padStart(6, '0')}`;
+      const paidAt = (payment.confirmedAt ?? new Date()).toLocaleDateString(
+        'id-ID',
+        {
+          dateStyle: 'long',
+        },
+      );
+      const clinicList = clinics
+        .map((c) => `<li>${c.name.replace(/</g, '&lt;')}</li>`)
+        .join('');
+
+      await this.resend.emails.send({
+        from: 'noreply@send.finarch.my.id',
+        to,
+        subject: `Kuitansi ${number} — pembayaran ApexRecord diterima`,
+        ...(attachment
+          ? {
+              attachments: [
+                { filename: attachment.fileName, content: attachment.pdf },
+              ],
+            }
+          : {}),
+        html: `
+          <h2>Kuitansi pembayaran</h2>
+          <p>Terima kasih, pembayaran Anda sudah kami terima.</p>
+          <table cellpadding="6" style="border-collapse: collapse;">
+            <tr><td>No. kuitansi</td><td><strong>${number}</strong></td></tr>
+            <tr><td>Tanggal</td><td>${paidAt}</td></tr>
+            <tr><td>Paket</td><td>${planName}${payment.quantity > 1 ? ` × ${payment.quantity} klinik` : ''}${(payment.months ?? 1) > 1 ? ` · ${payment.months} bulan` : ''}</td></tr>
+            ${Number(payment.promoDiscount) > 0 ? `<tr><td>Potongan promo</td><td>− ${rupiah(payment.promoDiscount)}</td></tr>` : ''}
+            ${Number(payment.durationDiscount) > 0 ? `<tr><td>Diskon ${payment.months} bulan</td><td>− ${rupiah(payment.durationDiscount)}</td></tr>` : ''}
+            ${Number(payment.extraStorageGb) > 0 ? `<tr><td>Storage tambahan</td><td>${payment.extraStorageGb} GB · ${rupiah(payment.storageAmount)}</td></tr>` : ''}
+            <tr><td>Jumlah</td><td><strong>${rupiah(payment.amount)}</strong></td></tr>
+          </table>
+          ${clinicList ? `<p>Langganan diperpanjang untuk:</p><ul>${clinicList}</ul>` : ''}
+          <p>Salam,<br>Tim ApexRecord</p>
+        `,
+      });
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `Gagal mengirim kuitansi pembayaran #${payment.id}: ${error instanceof Error ? error.message : String(error)}`,
       );
       return false;
     }

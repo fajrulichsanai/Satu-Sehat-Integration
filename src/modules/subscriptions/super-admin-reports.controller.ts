@@ -24,4 +24,13 @@ export class SuperAdminReportsController {
   summary(@Query() query: SuperAdminReportQueryDto) {
     return this.reportsService.summary(query);
   }
+
+  @Get('queue')
+  @ApiOperation({
+    summary:
+      'Antrian kerja Super Admin: pembayaran menunggu, permintaan data, langganan habis ≤7 hari, jadwal hapus data',
+  })
+  queue() {
+    return this.reportsService.queue();
+  }
 }

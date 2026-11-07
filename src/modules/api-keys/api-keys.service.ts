@@ -14,7 +14,12 @@ import { In, IsNull, MoreThanOrEqual, Repository } from 'typeorm';
 import { ApiKey, ApiKeyType } from './entities/api-key.entity';
 import { ApiUsageDaily } from './entities/api-usage-daily.entity';
 import { CreateApiKeyDto, UpdateApiKeyDto } from './dto/api-key.dto';
-import { ApiPlanLimit, limitsForTier, MAX_ACTIVE_KEYS_PER_CLINIC } from './api-plan-limits';
+import {
+  ApiPlanLimit,
+  limitsForTier,
+  MAX_ACTIVE_KEYS_PER_CLINIC,
+} from './api-plan-limits';
+import { trialStage } from '../subscriptions/limits/plan-limits';
 import { ClinicSubscriptionsService } from '../subscriptions/clinic-subscriptions.service';
 
 const CACHE_TTL_MS = 60_000;
@@ -34,12 +39,17 @@ export interface ApiUsageSnapshot {
 }
 
 function apiError(status: number, code: string, message: string) {
-  return new HttpException({ success: false, error: { code, message } }, status);
+  return new HttpException(
+    { success: false, error: { code, message } },
+    status,
+  );
 }
 
 /** Today's date in the clinics' timezone — quotas reset at 00:00 WIB. */
 export function jakartaDate(d = new Date()): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(d);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(
+    d,
+  );
 }
 
 export function hashKey(rawKey: string): string {
@@ -63,13 +73,28 @@ export function normalizeOrigin(origin: string): string {
 export class ApiKeysService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ApiKeysService.name);
 
-  private readonly keyCache = new Map<string, { apiKey: ApiKey | null; at: number }>();
-  private readonly planCache = new Map<number, { limits: ApiPlanLimit; active: boolean; at: number }>();
-  private readonly minuteWindows = new Map<number, { minute: number; count: number }>();
+  private readonly keyCache = new Map<
+    string,
+    { apiKey: ApiKey | null; at: number }
+  >();
+  private readonly planCache = new Map<
+    number,
+    { limits: ApiPlanLimit; active: boolean; at: number }
+  >();
+  private readonly minuteWindows = new Map<
+    number,
+    { minute: number; count: number }
+  >();
   /** clinicId → requests already stored for `date` (loaded once per day). */
-  private readonly dailyBase = new Map<number, { date: string; count: number }>();
+  private readonly dailyBase = new Map<
+    number,
+    { date: string; count: number }
+  >();
   /** apiKeyId → requests not yet flushed. */
-  private readonly pending = new Map<number, { clinicId: number; date: string; count: number }>();
+  private readonly pending = new Map<
+    number,
+    { clinicId: number; date: string; count: number }
+  >();
   private flushTimer?: NodeJS.Timeout;
 
   constructor(
@@ -82,7 +107,10 @@ export class ApiKeysService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    this.flushTimer = setInterval(() => void this.flushUsage(), FLUSH_INTERVAL_MS);
+    this.flushTimer = setInterval(
+      () => void this.flushUsage(),
+      FLUSH_INTERVAL_MS,
+    );
     this.flushTimer.unref?.();
   }
 
@@ -101,13 +129,23 @@ export class ApiKeysService implements OnModuleInit, OnModuleDestroy {
   }
 
   async create(clinicId: number, dto: CreateApiKeyDto, actorId: number | null) {
-    const active = await this.apiKeyRepository.count({ where: { clinicId, revokedAt: IsNull() } });
+    const active = await this.apiKeyRepository.count({
+      where: { clinicId, revokedAt: IsNull() },
+    });
     if (active >= MAX_ACTIVE_KEYS_PER_CLINIC) {
-      throw apiError(400, 'API_KEY_LIMIT', `Maksimal ${MAX_ACTIVE_KEYS_PER_CLINIC} API key aktif per klinik. Cabut key yang tidak dipakai dulu.`);
+      throw apiError(
+        400,
+        'API_KEY_LIMIT',
+        `Maksimal ${MAX_ACTIVE_KEYS_PER_CLINIC} API key aktif per klinik. Cabut key yang tidak dipakai dulu.`,
+      );
     }
     const origins = this.cleanOrigins(dto.allowedOrigins);
     if (dto.type === ApiKeyType.PUBLISHABLE && origins.length === 0) {
-      throw apiError(400, 'ORIGIN_REQUIRED', 'Publishable key wajib punya minimal satu domain website yang diizinkan.');
+      throw apiError(
+        400,
+        'ORIGIN_REQUIRED',
+        'Publishable key wajib punya minimal satu domain website yang diizinkan.',
+      );
     }
     const { rawKey, keyHash, keyPrefix } = this.generateKey(dto.type);
     const apiKey = await this.apiKeyRepository.save(
@@ -129,11 +167,19 @@ export class ApiKeysService implements OnModuleInit, OnModuleDestroy {
     if (dto.name !== undefined) apiKey.name = dto.name.trim();
     if (dto.allowedOrigins !== undefined) {
       if (apiKey.type !== ApiKeyType.PUBLISHABLE) {
-        throw apiError(400, 'ORIGINS_NOT_APPLICABLE', 'Domain hanya berlaku untuk publishable key.');
+        throw apiError(
+          400,
+          'ORIGINS_NOT_APPLICABLE',
+          'Domain hanya berlaku untuk publishable key.',
+        );
       }
       const origins = this.cleanOrigins(dto.allowedOrigins);
       if (origins.length === 0) {
-        throw apiError(400, 'ORIGIN_REQUIRED', 'Publishable key wajib punya minimal satu domain website yang diizinkan.');
+        throw apiError(
+          400,
+          'ORIGIN_REQUIRED',
+          'Publishable key wajib punya minimal satu domain website yang diizinkan.',
+        );
       }
       apiKey.allowedOrigins = origins;
     }
@@ -155,7 +201,8 @@ export class ApiKeysService implements OnModuleInit, OnModuleDestroy {
   /** Issues a new secret for the key (same name, type and domains) and revokes the old one. */
   async rotate(id: number, clinicId: number, actorId: number | null) {
     const old = await this.findOwned(id, clinicId);
-    if (old.revokedAt) throw apiError(400, 'API_KEY_REVOKED', 'Key ini sudah dicabut.');
+    if (old.revokedAt)
+      throw apiError(400, 'API_KEY_REVOKED', 'Key ini sudah dicabut.');
     const { rawKey, keyHash, keyPrefix } = this.generateKey(old.type);
     const apiKey = await this.apiKeyRepository.save(
       this.apiKeyRepository.create({
@@ -209,47 +256,84 @@ export class ApiKeysService implements OnModuleInit, OnModuleDestroy {
    * against the per-minute and per-day limits. Throws 401/403/429 errors
    * with a machine-readable code.
    */
-  async authenticate(rawKey: string | undefined, origin: string | undefined): Promise<AuthenticatedApiKey & { usage: ApiUsageSnapshot }> {
+  async authenticate(
+    rawKey: string | undefined,
+    origin: string | undefined,
+  ): Promise<AuthenticatedApiKey & { usage: ApiUsageSnapshot }> {
     if (!rawKey) {
-      throw apiError(401, 'API_KEY_MISSING', 'Sertakan API key di header X-Api-Key.');
+      throw apiError(
+        401,
+        'API_KEY_MISSING',
+        'Sertakan API key di header X-Api-Key.',
+      );
     }
     const apiKey = await this.lookupKey(rawKey.trim());
     if (!apiKey || apiKey.revokedAt) {
-      throw apiError(401, 'API_KEY_INVALID', 'API key tidak valid atau sudah dicabut.');
+      throw apiError(
+        401,
+        'API_KEY_INVALID',
+        'API key tidak valid atau sudah dicabut.',
+      );
     }
 
     if (apiKey.type === ApiKeyType.PUBLISHABLE) {
       const allowed = (apiKey.allowedOrigins ?? []).map(normalizeOrigin);
       if (!origin || !allowed.includes(normalizeOrigin(origin))) {
-        throw apiError(403, 'ORIGIN_NOT_ALLOWED', 'Domain ini tidak terdaftar untuk API key tersebut. Tambahkan di Pengaturan → API.');
+        throw apiError(
+          403,
+          'ORIGIN_NOT_ALLOWED',
+          'Domain ini tidak terdaftar untuk API key tersebut. Tambahkan di Pengaturan → API.',
+        );
       }
     } else if (origin) {
       // A browser sends Origin on cross-site requests: a secret key there
       // means it has been embedded in a web page, where anyone can copy it.
-      throw apiError(403, 'SECRET_KEY_IN_BROWSER', 'Secret key tidak boleh dipakai dari browser. Gunakan publishable key untuk website.');
+      throw apiError(
+        403,
+        'SECRET_KEY_IN_BROWSER',
+        'Secret key tidak boleh dipakai dari browser. Gunakan publishable key untuk website.',
+      );
     }
 
     const { limits, active } = await this.planFor(apiKey.clinicId);
     if (!active) {
-      throw apiError(403, 'SUBSCRIPTION_INACTIVE', 'Langganan klinik tidak aktif, API dinonaktifkan sementara.');
+      throw apiError(
+        403,
+        'SUBSCRIPTION_INACTIVE',
+        'Langganan klinik tidak aktif, API dinonaktifkan sementara.',
+      );
     }
 
     const usage = await this.meter(apiKey, limits);
     return { apiKey, limits, usage };
   }
 
-  private async meter(apiKey: ApiKey, limits: ApiPlanLimit): Promise<ApiUsageSnapshot> {
+  private async meter(
+    apiKey: ApiKey,
+    limits: ApiPlanLimit,
+  ): Promise<ApiUsageSnapshot> {
     const minute = Math.floor(Date.now() / 60_000);
     const window = this.minuteWindows.get(apiKey.id);
-    const usedThisMinute = window && window.minute === minute ? window.count : 0;
+    const usedThisMinute =
+      window && window.minute === minute ? window.count : 0;
     if (usedThisMinute >= limits.perMinute) {
-      throw apiError(HttpStatus.TOO_MANY_REQUESTS, 'RATE_LIMITED', `Batas ${limits.perMinute} request per menit terlampaui. Coba lagi sebentar.`);
+      throw apiError(
+        HttpStatus.TOO_MANY_REQUESTS,
+        'RATE_LIMITED',
+        `Batas ${limits.perMinute} request per menit terlampaui. Coba lagi sebentar.`,
+      );
     }
 
     const date = jakartaDate();
-    const usedToday = (await this.baseCount(apiKey.clinicId, date)) + this.pendingFor(apiKey.clinicId, date);
+    const usedToday =
+      (await this.baseCount(apiKey.clinicId, date)) +
+      this.pendingFor(apiKey.clinicId, date);
     if (usedToday >= limits.perDay) {
-      throw apiError(HttpStatus.TOO_MANY_REQUESTS, 'QUOTA_EXCEEDED', `Kuota ${limits.perDay.toLocaleString('id-ID')} request per hari (paket ${limits.label}) sudah habis. Kuota direset pukul 00:00 WIB.`);
+      throw apiError(
+        HttpStatus.TOO_MANY_REQUESTS,
+        'QUOTA_EXCEEDED',
+        `Kuota ${limits.perDay.toLocaleString('id-ID')} request per hari (paket ${limits.label}) sudah habis. Kuota direset pukul 00:00 WIB.`,
+      );
     }
 
     this.minuteWindows.set(apiKey.id, { minute, count: usedThisMinute + 1 });
@@ -257,7 +341,11 @@ export class ApiKeysService implements OnModuleInit, OnModuleDestroy {
     if (p && p.date === date) p.count++;
     else {
       if (p) void this.flushUsage();
-      this.pending.set(apiKey.id, { clinicId: apiKey.clinicId, date, count: 1 });
+      this.pending.set(apiKey.id, {
+        clinicId: apiKey.clinicId,
+        date,
+        count: 1,
+      });
     }
     return {
       limitPerMinute: limits.perMinute,
@@ -282,7 +370,10 @@ export class ApiKeysService implements OnModuleInit, OnModuleDestroy {
         const base = this.dailyBase.get(clinicId);
         if (base && base.date === date) base.count += count;
       }
-      await this.apiKeyRepository.update({ id: In(batch.map(([id]) => id)) }, { lastUsedAt: new Date() });
+      await this.apiKeyRepository.update(
+        { id: In(batch.map(([id]) => id)) },
+        { lastUsedAt: new Date() },
+      );
     } catch (err) {
       // Put the counts back so they are retried on the next flush.
       for (const [apiKeyId, entry] of batch) {
@@ -290,7 +381,9 @@ export class ApiKeysService implements OnModuleInit, OnModuleDestroy {
         if (cur && cur.date === entry.date) cur.count += entry.count;
         else this.pending.set(apiKeyId, entry);
       }
-      this.logger.error(`Gagal menyimpan pemakaian API: ${(err as Error).message}`);
+      this.logger.error(
+        `Gagal menyimpan pemakaian API: ${(err as Error).message}`,
+      );
     }
   }
 
@@ -311,7 +404,8 @@ export class ApiKeysService implements OnModuleInit, OnModuleDestroy {
 
   private pendingFor(clinicId: number, date: string): number {
     let n = 0;
-    for (const p of this.pending.values()) if (p.clinicId === clinicId && p.date === date) n += p.count;
+    for (const p of this.pending.values())
+      if (p.clinicId === clinicId && p.date === date) n += p.count;
     return n;
   }
 
@@ -330,10 +424,15 @@ export class ApiKeysService implements OnModuleInit, OnModuleDestroy {
 
   private async planFor(clinicId: number, fresh = false) {
     const cached = this.planCache.get(clinicId);
-    if (!fresh && cached && Date.now() - cached.at < CACHE_TTL_MS) return cached;
-    const sub = await this.clinicSubscriptionsService.getCurrentForClinic(clinicId);
+    if (!fresh && cached && Date.now() - cached.at < CACHE_TTL_MS)
+      return cached;
+    const sub =
+      await this.clinicSubscriptionsService.getCurrentForClinic(clinicId);
     const graceDays = parseInt(
-      this.configService.get<string>('SUBSCRIPTION_GRACE_PERIOD_DAYS', String(DEFAULT_GRACE_PERIOD_DAYS)),
+      this.configService.get<string>(
+        'SUBSCRIPTION_GRACE_PERIOD_DAYS',
+        String(DEFAULT_GRACE_PERIOD_DAYS),
+      ),
       10,
     );
     let active = false;
@@ -342,14 +441,32 @@ export class ApiKeysService implements OnModuleInit, OnModuleDestroy {
       deadline.setDate(deadline.getDate() + graceDays);
       active = deadline >= new Date(new Date().toDateString());
     }
-    const entry = { limits: limitsForTier(sub?.plan?.tier), active, at: Date.now() };
+    // Batas API mengikuti paket yang berlaku hari ini (bukan periode di muka).
+    const inEffect =
+      (await this.clinicSubscriptionsService.getInEffectForClinic(clinicId)) ??
+      sub;
+    const stage = inEffect?.startDate ? trialStage(inEffect.startDate) : undefined;
+    const entry = {
+      limits: limitsForTier(inEffect?.plan?.tier, stage),
+      active,
+      at: Date.now(),
+    };
     this.planCache.set(clinicId, entry);
     return entry;
   }
 
   private async findOwned(id: number, clinicId: number) {
-    const apiKey = await this.apiKeyRepository.findOne({ where: { id, clinicId } });
-    if (!apiKey) throw new NotFoundException({ success: false, error: { code: 'API_KEY_NOT_FOUND', message: 'API key tidak ditemukan' } });
+    const apiKey = await this.apiKeyRepository.findOne({
+      where: { id, clinicId },
+    });
+    if (!apiKey)
+      throw new NotFoundException({
+        success: false,
+        error: {
+          code: 'API_KEY_NOT_FOUND',
+          message: 'API key tidak ditemukan',
+        },
+      });
     return apiKey;
   }
 

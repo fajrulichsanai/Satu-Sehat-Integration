@@ -18,7 +18,7 @@ import {
 } from '../satusehat-credentials';
 import { SatusehatMonitorService } from '../monitor/satusehat-monitor.service';
 import { FeaturesService } from '../../features/features.service';
-import { SATUSEHAT_FEATURE } from '../satusehat-access';
+import { SATUSEHAT_FEATURE } from '../../features/feature-catalog';
 
 /** Hitungan total & terhubung per klinik (satu query per jenis data) */
 type Counts = Map<number, { total: number; linked: number; failed: number }>;
@@ -146,6 +146,12 @@ export class SatusehatAdminService {
   }
 
   /** Detail satu klinik: ringkasan per resource + kegagalan terbaru */
+  /** Status aktivasi: diaktifkan admin untuk faskes ini + saklar global platform */
+  private async integration(clinicId: number) {
+    const s = await this.features.clinicSatusehat(clinicId);
+    return { integrationEnabled: s.enabled, globalEnabled: s.globalEnabled };
+  }
+
   async clinicDetail(clinicId: number) {
     const clinic = await this.clinicRepo.findOne({ where: { id: clinicId } });
     if (!clinic) throw new NotFoundException('Klinik tidak ditemukan');
@@ -175,10 +181,7 @@ export class SatusehatAdminService {
       ]);
     return {
       clinic: { id: clinic.id, name: clinic.name, city: clinic.city ?? null },
-      integrationEnabled: await this.features.isClinicFeatureOn(
-        clinicId,
-        SATUSEHAT_FEATURE,
-      ),
+      ...(await this.integration(clinicId)),
       credentialSource: credentialSource(clinic),
       verifiedName: clinic.satusehatOrgName ?? null,
       profile: clinic.satusehatProfile ?? null,

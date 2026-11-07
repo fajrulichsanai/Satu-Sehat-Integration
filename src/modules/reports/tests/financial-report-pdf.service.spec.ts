@@ -12,189 +12,184 @@ jest.mock('pdfmake', () => ({
 
 import { FinancialReportPdfService } from '../financial-report-pdf.service';
 import { Clinic } from '../../clinics/entities/clinic.entity';
-import { ReportsService } from '../reports.service';
+import { ProfitLossService, type ProfitLoss } from '../profit-loss.service';
 
-function baseFinancialData(overrides: Partial<Record<string, any>> = {}) {
+function pl(overrides: Partial<ProfitLoss> = {}): ProfitLoss {
   return {
-    summary: { totalPaid: 10000000, totalOutstanding: 500000 },
-    ringkasan: { pengeluaran: 3000000, labaBersih: 6500000, marginPersen: 65 },
-    labaKotor: 9500000,
-    monthlyTrend: [
-      {
-        month: '2026-01',
-        revenue: 10000000,
-        expense: 3000000,
-        netProfit: 6500000,
-      },
-    ],
-    tindakanTerlaris: [
-      {
-        namaTindakan: 'Tambal',
-        frekuensi: 10,
-        modal: 500000,
-        totalDiskon: 0,
-        labaBersih: 4500000,
-      },
-    ],
-    byDoctorProfit: [
-      {
-        practitionerName: 'Dr. A',
-        revenue: 5000000,
-        doctorFeeShare: 1000000,
-        labaBersih: 4000000,
-      },
-    ],
-    stockReport: {
-      totalInventoryValue: 2000000,
-      totalActiveItems: 15,
-      usage: [
-        { barangName: 'Kapas', qtyUsed: 5, satuan: 'box', totalCost: 50000 },
-      ],
+    periode: { dateFrom: '2026-01-01', dateTo: '2026-01-31' },
+    pendapatan: {
+      tindakanBruto: 10500000,
+      diskonTindakan: 300000,
+      diskonTagihan: 200000,
+      biayaTambahan: 0,
+      bersih: 10000000,
+      jumlahTagihan: 12,
     },
+    hpp: { modalBahan: 1000000, biayaLab: 500000, total: 1500000 },
+    labaKotor: 8500000,
+    beban: {
+      shareFeeDokter: 2000000,
+      gaji: 3000000,
+      operasional: [{ kategori: 'listrik', label: 'Listrik', total: 500000 }],
+      totalOperasional: 500000,
+      total: 5500000,
+    },
+    labaBersih: 3000000,
+    marginPersen: 30,
+    belanja: {
+      rincian: [
+        { kategori: 'alat_dental', label: 'Beli Alat Dental', total: 750000 },
+      ],
+      total: 750000,
+    },
+    kas: {
+      masuk: 9000000,
+      perMetode: [{ method: 'cash', amount: 9000000 }],
+      keluar: 6250000,
+      selisih: 2750000,
+      piutang: 1000000,
+      refund: 0,
+    },
+    dokter: [
+      {
+        practitionerId: 1,
+        nama: 'drg. A',
+        tindakan: 10,
+        pendapatan: 10000000,
+        biayaLab: 500000,
+        dasarFee: 6500000,
+        shareFee: 2000000,
+        bankName: 'BCA',
+        bankAccount: '123',
+        bankHolder: 'drg. A',
+      },
+    ],
+    tindakan: [
+      {
+        tarifId: 1,
+        nama: 'Crown',
+        kategori: 'Prostodonti',
+        qty: 2,
+        hargaRata: 1500000,
+        bruto: 3000000,
+        diskon: 0,
+        pendapatan: 3000000,
+        modal: 400000,
+        biayaLab: 500000,
+        shareFee: 750000,
+        laba: 1350000,
+      },
+    ],
+    pengeluaran: [
+      {
+        tanggal: '2026-01-05',
+        kategori: 'listrik',
+        label: 'Listrik',
+        deskripsi: 'PLN',
+        nominal: 500000,
+      },
+    ],
+    stokPerluBeli: [
+      {
+        nama: 'Kapas',
+        satuan: 'pcs',
+        stok: 2,
+        minimum: 10,
+        saranBeli: 18,
+        estimasi: 18000,
+        supplier: null,
+      },
+    ],
+    payroll: null,
     ...overrides,
   };
 }
 
+const flatten = (node: unknown): string =>
+  JSON.stringify(node, (_k, v) => (typeof v === 'function' ? undefined : v));
+
 describe('FinancialReportPdfService', () => {
   let service: FinancialReportPdfService;
-  let clinicRepo: { findOne: jest.Mock };
-  let reportsService: { getFinancialReportPro: jest.Mock };
+  let profitLoss: { compute: jest.Mock; trend: jest.Mock };
 
   beforeEach(async () => {
     createPdfMock.mockClear();
     createPdfMock.mockReturnValue({
       getBuffer: jest.fn().mockResolvedValue(Buffer.from('pdf-bytes')),
     });
-    clinicRepo = {
-      findOne: jest.fn().mockResolvedValue({ id: 1, name: 'Klinik A' }),
+    profitLoss = {
+      compute: jest.fn().mockResolvedValue(pl()),
+      trend: jest.fn().mockResolvedValue([
+        {
+          month: '2026-01',
+          revenue: 10000000,
+          modal: 1500000,
+          labaKotor: 8500000,
+          expense: 5500000,
+          netProfit: 3000000,
+        },
+      ]),
     };
-    reportsService = { getFinancialReportPro: jest.fn() };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         FinancialReportPdfService,
-        { provide: getRepositoryToken(Clinic), useValue: clinicRepo },
-        { provide: ReportsService, useValue: reportsService },
+        {
+          provide: getRepositoryToken(Clinic),
+          useValue: {
+            findOne: jest
+              .fn()
+              .mockResolvedValue({ id: 1, name: 'Klinik A', city: 'Depok' }),
+          },
+        },
+        { provide: ProfitLossService, useValue: profitLoss },
       ],
     }).compile();
-
-    service = module.get<FinancialReportPdfService>(FinancialReportPdfService);
+    service = module.get(FinancialReportPdfService);
   });
 
-  it('should be defined', () => expect(service).toBeDefined());
+  const query = { dateFrom: '2026-01-01', dateTo: '2026-01-31' } as any;
 
-  it('generates a PDF buffer for a period with full data (positive)', async () => {
-    reportsService.getFinancialReportPro.mockResolvedValue({
-      data: baseFinancialData(),
-    });
-
-    const result = await service.generate(1, {
-      dateFrom: '2026-01-01',
-      dateTo: '2026-01-31',
-    } as any);
-
+  it('menghasilkan buffer PDF', async () => {
+    const result = await service.generate(1, query);
     expect(result).toBeInstanceOf(Buffer);
-  });
-
-  it('renders the requested date range in the period line (positive)', async () => {
-    reportsService.getFinancialReportPro.mockResolvedValue({
-      data: baseFinancialData(),
-    });
-
-    await service.generate(1, {
-      dateFrom: '2026-01-01',
-      dateTo: '2026-01-31',
-    } as any);
-
-    const doc = createPdfMock.mock.calls[0][0];
-    const periodLine = doc.content.find((c: any) => c.style === 'periodLine');
-    expect(periodLine.text).toContain('01 Januari 2026');
-    expect(periodLine.text).toContain('31 Januari 2026');
-  });
-
-  it('shows a fallback row when there are no top procedures yet (negative/edge)', async () => {
-    reportsService.getFinancialReportPro.mockResolvedValue({
-      data: baseFinancialData({ tindakanTerlaris: [] }),
-    });
-
-    await service.generate(1, {
-      dateFrom: '2026-01-01',
-      dateTo: '2026-01-31',
-    } as any);
-
-    const doc = createPdfMock.mock.calls[0][0];
-    expect(JSON.stringify(doc)).toContain('Belum ada data tindakan');
-  });
-
-  it('shows a fallback row when there is no doctor profit data yet (negative/edge)', async () => {
-    reportsService.getFinancialReportPro.mockResolvedValue({
-      data: baseFinancialData({ byDoctorProfit: [] }),
-    });
-
-    await service.generate(1, {
-      dateFrom: '2026-01-01',
-      dateTo: '2026-01-31',
-    } as any);
-
-    const doc = createPdfMock.mock.calls[0][0];
-    expect(JSON.stringify(doc)).toContain('Belum ada data dokter');
-  });
-
-  it('shows a fallback row when there is no material usage yet (negative/edge)', async () => {
-    reportsService.getFinancialReportPro.mockResolvedValue({
-      data: baseFinancialData({
-        stockReport: { ...baseFinancialData().stockReport, usage: [] },
-      }),
-    });
-
-    await service.generate(1, {
-      dateFrom: '2026-01-01',
-      dateTo: '2026-01-31',
-    } as any);
-
-    const doc = createPdfMock.mock.calls[0][0];
-    expect(JSON.stringify(doc)).toContain(
-      'Belum ada pemakaian bahan pada periode ini',
+    expect(profitLoss.compute).toHaveBeenCalledWith(
+      1,
+      '2026-01-01',
+      '2026-01-31',
     );
+    expect(profitLoss.trend).toHaveBeenCalledWith(1, '2026-01-31', 6);
   });
 
-  it('caps the rendered material usage rows at 10 (edge)', async () => {
-    const usage = Array.from({ length: 15 }, (_, i) => ({
-      barangName: `Bahan ${i}`,
-      qtyUsed: 1,
-      satuan: 'pcs',
-      totalCost: 1000,
-    }));
-    reportsService.getFinancialReportPro.mockResolvedValue({
-      data: baseFinancialData({
-        stockReport: { ...baseFinancialData().stockReport, usage },
+  it('memuat laba rugi, share fee + rekening dokter, stok perlu dibeli', async () => {
+    await service.generate(1, query);
+    const doc = flatten(createPdfMock.mock.calls[0][0]);
+    expect(doc).toContain('LABA BERSIH');
+    expect(doc).toContain('Rp 3.000.000');
+    expect(doc).toContain('drg. A');
+    expect(doc).toContain('BCA 123');
+    expect(doc).toContain('Kapas');
+    expect(doc).toContain('Biaya lab');
+  });
+
+  it('menampilkan laba bersih negatif dalam kurung', async () => {
+    profitLoss.compute.mockResolvedValue(pl({ labaBersih: -250000 }));
+    await service.generate(1, query);
+    expect(flatten(createPdfMock.mock.calls[0][0])).toContain('(Rp 250.000)');
+  });
+
+  it('tetap jalan saat periode kosong', async () => {
+    profitLoss.compute.mockResolvedValue(
+      pl({
+        dokter: [],
+        tindakan: [],
+        pengeluaran: [],
+        stokPerluBeli: [],
+        belanja: { rincian: [], total: 0 },
       }),
-    });
-
-    await service.generate(1, {
-      dateFrom: '2026-01-01',
-      dateTo: '2026-01-31',
-    } as any);
-
-    const doc = createPdfMock.mock.calls[0][0];
-    const stockTable = doc.content.find(
-      (c: any) => c.table?.widths?.length === 3,
     );
-    expect(stockTable.table.body).toHaveLength(11); // header + 10 rows
-  });
-
-  it('falls back to a generic clinic name when the clinic record is missing (negative/edge)', async () => {
-    clinicRepo.findOne.mockResolvedValue(null);
-    reportsService.getFinancialReportPro.mockResolvedValue({
-      data: baseFinancialData(),
-    });
-
-    await service.generate(1, {
-      dateFrom: '2026-01-01',
-      dateTo: '2026-01-31',
-    } as any);
-
-    const doc = createPdfMock.mock.calls[0][0];
-    expect(doc.content[0].stack[0].text).toBe('Klinik');
+    await expect(service.generate(1, query)).resolves.toBeInstanceOf(Buffer);
+    const doc = flatten(createPdfMock.mock.calls[0][0]);
+    expect(doc).toContain('Semua stok aman');
+    expect(doc).toContain('Tidak ada share fee');
   });
 });

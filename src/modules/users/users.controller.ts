@@ -33,6 +33,7 @@ import {
   RoleItemDto,
   InviteUserDto,
   UpdateUserDto,
+  UserSearchQueryDto,
 } from './dto/user.dto';
 import { Audit } from '../audit-log/decorators/audit.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
@@ -67,6 +68,25 @@ export class UsersController {
     const result = await this.usersService.findAll(user);
     this.logger.log(`[GET /users] Response dikirim`);
     return result;
+  }
+
+  @Get('search')
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({
+    summary:
+      'Super Admin: semua pengguna dengan filter role, klinik, pencarian, dan paginasi',
+  })
+  async search(@Query() query: UserSearchQueryDto) {
+    return this.usersService.searchAll(query);
+  }
+
+  @Get('quota')
+  @Roles(UserRole.OWNER, UserRole.SUPER_ADMIN)
+  @ApiOperation({
+    summary: 'Akun aktif terhadap batas paket (atau jatah bersama multiklinik)',
+  })
+  getQuota(@CurrentUser() user: any) {
+    return this.usersService.getAccountQuota(user);
   }
 
   @Get('roles')

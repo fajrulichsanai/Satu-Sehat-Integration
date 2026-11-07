@@ -15,6 +15,8 @@ import {
   MaxLength,
   ValidateIf,
   ValidateNested,
+  Min,
+  Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { FAMILY_RELATIONSHIP_CODES } from '../family-history';
@@ -351,16 +353,54 @@ export class CreatePatientDto {
 
 export class UpdatePatientDto extends PartialType(CreatePatientDto) {}
 
+export enum PatientCategory {
+  BAYI = 'bayi',
+  UMUM = 'umum',
+}
+
 export class PatientQueryDto extends PaginationDto {
   @ApiPropertyOptional({ description: 'Search by name, NIK, or No. RM' })
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   search?: string;
 
   @ApiPropertyOptional({ enum: Gender })
   @IsOptional()
   @IsEnum(Gender)
   gender?: Gender;
+
+  @ApiPropertyOptional({
+    enum: PatientCategory,
+    description:
+      'bayi = belum punya NIK sendiri (terdaftar via NIK ibu); umum = selain bayi',
+  })
+  @IsOptional()
+  @IsEnum(PatientCategory)
+  kategori?: PatientCategory;
+}
+
+export class BirthdayQueryDto {
+  @ApiPropertyOptional({ enum: ['today', 'week', 'month'], default: 'month' })
+  @IsOptional()
+  @IsIn(['today', 'week', 'month'])
+  range?: 'today' | 'week' | 'month' = 'month';
+
+  @ApiPropertyOptional({ description: 'Bulan 1-12 (untuk range=month)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  month?: number;
+}
+
+export class PatientStatsQueryDto {
+  @ApiPropertyOptional({ description: 'Search by name, NIK, or No. RM' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  search?: string;
 }
 
 export class PatientResponseDto {
@@ -420,4 +460,32 @@ export class SearchSatusehatPatientDto {
   @IsOptional()
   @Matches(/^[A-Za-z0-9-]{3,64}$/, { message: 'ID SATUSEHAT tidak valid' })
   ihsId?: string;
+}
+
+/** Riwayat kunjungan/transaksi satu pasien: filter bulan + pagination. */
+export class PatientHistoryQueryDto {
+  @ApiPropertyOptional({
+    description: 'Bulan (YYYY-MM). Kosong = semua bulan.',
+    example: '2026-10',
+  })
+  @IsOptional()
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, {
+    message: 'month harus berformat YYYY-MM, mis. 2026-10',
+  })
+  month?: string;
+
+  @ApiPropertyOptional({ default: 1, minimum: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page: number = 1;
+
+  @ApiPropertyOptional({ default: 10, minimum: 1, maximum: 50 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit: number = 10;
 }

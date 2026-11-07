@@ -7,13 +7,14 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
 import { Billing, BillingStatus } from './entities/billing.entity';
 import {
   BillingItem,
   DiscountType,
 } from '../billing-item/entities/billing-item.entity';
 import { Tarif } from '../tarif/entities/tarif.entity';
+import { Payment } from '../payments/entities/payment.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import { GudangService } from '../gudang/gudang.service';
 import { PatientRecallsService } from '../recalls/patient-recalls.service';
@@ -44,29 +45,41 @@ export class BillingsService {
 
   async findAll(clinicId: number, query: BillingQueryDto) {
     this.logger.log(
-      `[GET-ALL] Mengambil daftar billing | clinicId=${clinicId}, status=${query.status || 'all'}`,
+      `[GET-ALL] Mengambil daftar billing | clinicId=${clinicId}, status=${query.status || 'all'}, month=${query.month || '-'}`,
     );
-    const qb = this.billingRepository
-      .createQueryBuilder('b')
-      .leftJoinAndSelect('b.patient', 'patient')
-      .where('b.clinicId = :clinicId', { clinicId });
+    // Periode (bulan/rentang tanggal/pasien) dipakai bersama oleh daftar,
+    // ringkasan, dan kalender tanggal; status hanya menyaring daftar.
+    const applyPeriod = (qb: SelectQueryBuilder<Billing>) => {
+      qb.where('b.clinicId = :clinicId', { clinicId });
+      if (query.month) {
+        qb.andWhere("DATE_FORMAT(b.created_at, '%Y-%m') = :month", {
+          month: query.month,
+        });
+      }
+      if (query.dateFrom) {
+        qb.andWhere('DATE(b.createdAt) >= :dateFrom', {
+          dateFrom: query.dateFrom,
+        });
+      }
+      if (query.dateTo) {
+        qb.andWhere('DATE(b.createdAt) <= :dateTo', { dateTo: query.dateTo });
+      }
+      if (query.patientId) {
+        qb.andWhere('b.patientId = :patientId', { patientId: query.patientId });
+      }
+      return qb;
+    };
 
+    const qb = applyPeriod(
+      this.billingRepository
+        .createQueryBuilder('b')
+        .leftJoinAndSelect('b.patient', 'patient'),
+    );
     if (query.status) {
       qb.andWhere('b.status = :status', { status: query.status });
     }
-    if (query.dateFrom) {
-      qb.andWhere('DATE(b.createdAt) >= :dateFrom', {
-        dateFrom: query.dateFrom,
-      });
-    }
-    if (query.dateTo) {
-      qb.andWhere('DATE(b.createdAt) <= :dateTo', { dateTo: query.dateTo });
-    }
-    if (query.patientId) {
-      qb.andWhere('b.patientId = :patientId', { patientId: query.patientId });
-    }
 
-    qb.orderBy('b.createdAt', 'DESC');
+    qb.orderBy('b.createdAt', 'DESC').addOrderBy('b.id', 'DESC');
 
     const page = query.page || 1;
     const limit = query.limit || 20;
@@ -74,6 +87,40 @@ export class BillingsService {
       .skip((page - 1) * limit)
       .take(limit)
       .getManyAndCount();
+
+    // Kartu statistik: dihitung di server untuk seluruh periode (bukan hanya
+    // halaman yang sedang tampil) dan tidak terpengaruh filter status.
+    const byStatus = await applyPeriod(
+      this.billingRepository.createQueryBuilder('b'),
+    )
+      .select('b.status', 'status')
+      .addSelect('COUNT(*)', 'count')
+      .addSelect('COALESCE(SUM(b.paid_amount), 0)', 'paid')
+      .groupBy('b.status')
+      .getRawMany<{ status: string; count: string; paid: string }>();
+    const summary = {
+      count: 0,
+      totalPaid: 0,
+      byStatus: { paid: 0, partial: 0, unpaid: 0 } as Record<string, number>,
+    };
+    for (const row of byStatus) {
+      summary.count += Number(row.count);
+      summary.totalPaid += Number(row.paid);
+      summary.byStatus[row.status] = Number(row.count);
+    }
+
+    let days: { date: string; count: number }[] | undefined;
+    if (query.month) {
+      const rows = await applyPeriod(
+        this.billingRepository.createQueryBuilder('b'),
+      )
+        .select("DATE_FORMAT(b.created_at, '%Y-%m-%d')", 'date')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('date')
+        .orderBy('date', 'ASC')
+        .getRawMany<{ date: string; count: string }>();
+      days = rows.map((r) => ({ date: r.date, count: Number(r.count) }));
+    }
 
     return {
       data: items.map((b) => ({
@@ -88,6 +135,8 @@ export class BillingsService {
         createdAt: b.createdAt,
       })),
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+      summary,
+      ...(days ? { days } : {}),
     };
   }
 
@@ -290,9 +339,43 @@ export class BillingsService {
 
       let subtotal = Number(billing.subtotal);
       if (dto.items) {
-        const processed = await this.processItems(manager, clinicId, dto.items);
+        const oldItems = await manager.find(BillingItem, {
+          where: { billingId: billing.id },
+        });
+        const previousCosts = new Map<
+          number,
+          { hargaPokok: number | null; biayaLab: number | null }
+        >();
+        for (const old of oldItems) {
+          if (old.tarifId && !previousCosts.has(old.tarifId)) {
+            previousCosts.set(old.tarifId, {
+              hargaPokok:
+                old.hargaPokok === null ? null : Number(old.hargaPokok),
+              biayaLab: old.biayaLab === null ? null : Number(old.biayaLab),
+            });
+          }
+        }
+        const processed = await this.processItems(
+          manager,
+          clinicId,
+          dto.items,
+          previousCosts,
+        );
         subtotal = processed.subtotal;
 
+        // Koreksi transaksi: kembalikan stok bahan dari tindakan lama, lalu
+        // potong ulang sesuai tindakan baru (sebelumnya stok tidak ikut).
+        for (const old of oldItems) {
+          if (old.tarifId) {
+            await this.gudangService.restoreForTindakan(
+              manager,
+              clinicId,
+              old.tarifId,
+              old.quantity,
+              userId,
+            );
+          }
+        }
         await manager.delete(BillingItem, { billingId: billing.id });
         await manager.save(
           BillingItem,
@@ -302,6 +385,17 @@ export class BillingsService {
             createdBy: userId,
           })),
         );
+        for (const item of processed.processedItems) {
+          if (item.tarifId) {
+            await this.gudangService.deductForTindakan(
+              manager,
+              clinicId,
+              item.tarifId,
+              item.quantity,
+              userId,
+            );
+          }
+        }
       }
 
       const totalDiscountInput =
@@ -316,13 +410,23 @@ export class BillingsService {
       const additionalFee = dto.additionalFee ?? Number(billing.additionalFee);
       const grandTotal = subtotal - totalDiscountNominal + additionalFee;
 
-      // Lowering the bill below what the patient already paid would mark it
-      // paid and silently lose the overpayment.
+      // Menurunkan tagihan di bawah jumlah yang sudah dibayar berarti ada
+      // kelebihan bayar. Tidak boleh hilang diam-diam: harus dikonfirmasi
+      // (refundExcess), lalu selisihnya dikembalikan ke pasien dengan
+      // mengurangi pembayaran terbaru. Tiap pembayaran yang dikoreksi diberi
+      // catatan, dan nilai sebelum/sesudah tercatat di log aktivitas.
       const alreadyPaid = Number(billing.paidAmount);
+      let refundedAmount = 0;
       if (grandTotal < alreadyPaid) {
-        throw new BadRequestException(
-          `Total baru (Rp ${Math.round(grandTotal).toLocaleString('id-ID')}) lebih kecil dari yang sudah dibayar (Rp ${Math.round(alreadyPaid).toLocaleString('id-ID')}). Kurangi pembayaran lewat refund terlebih dahulu.`,
-        );
+        const excess = Math.round((alreadyPaid - grandTotal) * 100) / 100;
+        if (!dto.refundExcess) {
+          throw new BadRequestException(
+            `Total baru (Rp ${Math.round(grandTotal).toLocaleString('id-ID')}) lebih kecil dari yang sudah dibayar (Rp ${Math.round(alreadyPaid).toLocaleString('id-ID')}). Konfirmasi pengembalian selisih Rp ${Math.round(excess).toLocaleString('id-ID')} ke pasien untuk melanjutkan.`,
+          );
+        }
+        await this.returnExcessPayments(manager, billing.id, excess);
+        billing.paidAmount = grandTotal;
+        refundedAmount = excess;
       }
 
       billing.subtotal = subtotal;
@@ -349,17 +453,55 @@ export class BillingsService {
       this.logger.log(
         `[UPDATE] Billing berhasil diperbarui | id=${billing.id}, clinicId=${clinicId}`,
       );
-      return manager.findOne(Billing, {
+      const saved = await manager.findOne(Billing, {
         where: { id: billing.id },
         relations: { patient: true, items: true, payments: true },
       });
+      return saved && refundedAmount > 0
+        ? Object.assign(saved, { refundedAmount })
+        : saved;
     });
+  }
+
+  /**
+   * Kurangi pembayaran dari yang terbaru ke yang lama sebesar `excess`
+   * (dikembalikan ke pasien). Baris pembayaran tidak dihapus supaya nomor
+   * kuitansi tetap ada; jumlahnya diturunkan dan diberi catatan koreksi.
+   */
+  private async returnExcessPayments(
+    manager: any,
+    billingId: number,
+    excess: number,
+  ): Promise<void> {
+    const payments: Payment[] = await manager.find(Payment, {
+      where: { billingId },
+      order: { paidAt: 'DESC', id: 'DESC' },
+    });
+    const today = new Date().toISOString().slice(0, 10);
+    let remaining = excess;
+    for (const payment of payments) {
+      if (remaining <= 0) break;
+      const current = Number(payment.amount);
+      const cut = Math.min(current, remaining);
+      if (cut <= 0) continue;
+      const rupiah = (n: number) => Math.round(n).toLocaleString('id-ID');
+      const line = `[Koreksi ${today}] Rp ${rupiah(cut)} dikembalikan ke pasien karena total tagihan direvisi (semula Rp ${rupiah(current)})`;
+      payment.amount = Math.round((current - cut) * 100) / 100;
+      payment.note = payment.note ? `${payment.note}\n${line}` : line;
+      await manager.save(Payment, payment);
+      remaining = Math.round((remaining - cut) * 100) / 100;
+    }
   }
 
   private async processItems(
     manager: any,
     clinicId: number,
     items: BillingItemDto[],
+    /** Snapshot lama per tarif (saat edit) agar koreksi tidak mengubah modal historis. */
+    previousCosts: Map<
+      number,
+      { hargaPokok: number | null; biayaLab: number | null }
+    > = new Map(),
   ): Promise<{
     processedItems: Array<{
       tarifId?: number;
@@ -369,6 +511,8 @@ export class BillingsService {
       discount: number;
       discountType: DiscountType;
       subtotal: number;
+      hargaPokok: number | null;
+      biayaLab: number | null;
     }>;
     subtotal: number;
   }> {
@@ -381,12 +525,16 @@ export class BillingsService {
       discount: number;
       discountType: DiscountType;
       subtotal: number;
+      hargaPokok: number | null;
+      biayaLab: number | null;
     }> = [];
 
     for (const item of items) {
       const qty = item.quantity || 1;
       const discountType = item.discountType || DiscountType.NOMINAL;
       const discountValue = item.discount || 0;
+      let hargaPokok: number | null = null;
+      let biayaLab: number | null = null;
 
       if (item.tarifId) {
         const tarif = await manager.findOne(Tarif, {
@@ -413,6 +561,9 @@ export class BillingsService {
             `Diskon % untuk '${tarif.name}' melebihi batas maksimal`,
           );
         }
+        const previous = previousCosts.get(item.tarifId);
+        hargaPokok = previous?.hargaPokok ?? Number(tarif.hargaPokok ?? 0);
+        biayaLab = previous?.biayaLab ?? Number(tarif.biayaLab ?? 0);
       }
 
       const discountNominal =
@@ -431,6 +582,8 @@ export class BillingsService {
         discount: discountValue,
         discountType,
         subtotal: itemSubtotal,
+        hargaPokok,
+        biayaLab,
       });
     }
 

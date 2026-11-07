@@ -113,7 +113,11 @@ describe('SatusehatAdminService (pantauan super admin)', () => {
       ) as any,
       { getSummary: jest.fn().mockResolvedValue({ resources: [] }) } as any,
       {
-        isClinicFeatureOn: jest.fn(async (id: number) => id === 1),
+        clinicSatusehat: jest.fn(async (id: number) => ({
+          enabled: id === 1,
+          globalEnabled: true,
+          active: id === 1,
+        })),
         clinicIdsWithFeatureOn: jest.fn(async () => new Set([1])),
       } as any,
     );

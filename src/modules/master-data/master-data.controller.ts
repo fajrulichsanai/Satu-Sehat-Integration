@@ -16,7 +16,6 @@ import { ApiResponse } from '../../common/response/api-response';
 import { KfaService } from '../satusehat/kfa/kfa.service';
 import { FeaturesService } from '../features/features.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { SATUSEHAT_FEATURE } from '../satusehat/satusehat-access';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../../enums/user-role.enum';
@@ -36,10 +35,10 @@ export class MasterDataController {
     private readonly features: FeaturesService,
   ) {}
 
-  /** Pencarian live ke KFA hanya untuk faskes yang SATUSEHAT-nya diaktifkan admin. */
+  /** Pencarian live ke KFA hanya untuk faskes yang SATUSEHAT-nya aktif. */
   private async liveKfa(user?: { clinicId?: number | null }): Promise<boolean> {
     if (!user?.clinicId) return true; // super admin / tanpa klinik
-    return this.features.isClinicFeatureOn(user.clinicId, SATUSEHAT_FEATURE);
+    return this.features.isSatusehatActive(user.clinicId);
   }
 
   // SatuSehat's masterdata API replies with its own envelope

@@ -44,6 +44,19 @@ export class ClinicSubscriptionsController {
     return this.clinicSubscriptionsService.getCurrentForClinic(clinicId);
   }
 
+  @Get('in-effect')
+  @ApiOperation({
+    summary:
+      'Paket yang berlaku hari ini dan tanggal akhir masa aktif (untuk naik/turun paket)',
+  })
+  async getInEffect(@ClinicId() clinicId: number) {
+    const [subscription, paidUntil] = await Promise.all([
+      this.clinicSubscriptionsService.getInEffectForClinic(clinicId),
+      this.clinicSubscriptionsService.paidUntil(clinicId),
+    ]);
+    return { subscription, paidUntil };
+  }
+
   @Get()
   @Roles(UserRole.SUPER_ADMIN)
   @ApiOperation({

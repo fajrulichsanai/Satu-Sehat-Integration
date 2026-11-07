@@ -2,7 +2,9 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
  * - Role "perawat" (aksesnya sama dengan dokter)
- * - Kontrol fitur: per klinik (super admin), per user (owner), dan fitur custom
+ * - Kontrol fitur: per klinik (super admin) dan per user (owner)
+ *   (tabel fitur custom dulu dibuat di sini; sudah dihapus — lihat
+ *   1790130000000-HapusFiturCustomPengaturanPlatform)
  * Idempotent (scripts/apply-security-schema.js).
  */
 export class RolePerawatDanFitur1790040000000 implements MigrationInterface {
@@ -26,18 +28,6 @@ export class RolePerawatDanFitur1790040000000 implements MigrationInterface {
       \`created_at\` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
       \`updated_at\` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)`;
 
-    if (!(await queryRunner.hasTable('custom_features'))) {
-      await queryRunner.query(`
-        CREATE TABLE \`custom_features\` (
-          \`id\` INT NOT NULL AUTO_INCREMENT,
-          \`key\` VARCHAR(60) NOT NULL,
-          \`name\` VARCHAR(120) NOT NULL,
-          \`description\` VARCHAR(500) NULL,
-          ${audit},
-          PRIMARY KEY (\`id\`),
-          UNIQUE INDEX \`UQ_custom_features_key\` (\`key\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
-    }
     if (!(await queryRunner.hasTable('clinic_features'))) {
       await queryRunner.query(`
         CREATE TABLE \`clinic_features\` (

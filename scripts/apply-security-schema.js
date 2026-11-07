@@ -32,6 +32,17 @@ const MIGRATIONS = [
   '1790100000000-Rujukan',
   '1790110000000-DataNakes',
   '1790120000000-SambungAkunNakes',
+  '1790130000000-HapusFiturCustomPengaturanPlatform',
+  '1790140000000-AbsensiPegawai',
+  '1790150000000-MultiKlinikPersetujuan',
+  '1790160000000-ManajerCabangPasswordStorage',
+  '1790170000000-BatasAkunStorageTambahan',
+  '1790180000000-BonusStorageMasaCoba',
+  '1790190000000-PromoDanDiskonDurasi',
+  '1790200000000-RetensiDataMasaCoba14',
+  '1790210000000-PromoMultiNaikPaketCatatanKlinik',
+  '1790220000000-BiayaLabPayrollTemplateOpname',
+  '1790230000000-ClinicalPhotoFolders',
 ];
 
 async function main() {

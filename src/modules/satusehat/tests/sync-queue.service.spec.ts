@@ -21,7 +21,7 @@ describe('SyncQueueService', () => {
         { provide: SyncOrchestratorService, useValue: orchestrator },
         {
           provide: FeaturesService,
-          useValue: { isClinicFeatureOn: jest.fn().mockResolvedValue(true) },
+          useValue: { isSatusehatActive: jest.fn().mockResolvedValue(true) },
         },
       ],
     }).compile();

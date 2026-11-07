@@ -54,6 +54,45 @@ export class SubscriptionPayment extends BaseEntity {
   @Column({ name: 'covered_clinic_ids', type: 'json', nullable: true })
   coveredClinicIds: number[] | null;
 
+  // Storage tambahan yang ikut ditagih (PRD Super Admin BL-06): snapshot
+  // saat klaim, sudah termasuk dalam `amount`.
+  @Column({ name: 'extra_storage_gb', type: 'int', default: 0 })
+  extraStorageGb: number;
+
+  @Column('decimal', {
+    name: 'storage_amount',
+    precision: 12,
+    scale: 2,
+    default: 0,
+  })
+  storageAmount: number;
+
+  // 'new' = beli/perpanjang (menambah masa aktif); 'upgrade' = naik paket
+  // dengan membayar selisih sisa hari (masa aktif tidak berubah).
+  @Column({ type: 'varchar', length: 20, default: 'new' })
+  kind: 'new' | 'upgrade';
+
+  // Lama langganan yang dibayar (bulan); konfirmasi memperpanjang sebanyak ini.
+  @Column({ type: 'int', default: 1 })
+  months: number;
+
+  // Rincian potongan, sudah termasuk dalam `amount`.
+  @Column('decimal', {
+    name: 'promo_discount',
+    precision: 12,
+    scale: 2,
+    default: 0,
+  })
+  promoDiscount: number;
+
+  @Column('decimal', {
+    name: 'duration_discount',
+    precision: 12,
+    scale: 2,
+    default: 0,
+  })
+  durationDiscount: number;
+
   @Column('decimal', { precision: 12, scale: 2 })
   amount: number;
 

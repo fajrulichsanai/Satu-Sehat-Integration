@@ -9,13 +9,14 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { User } from '../users/entities/user.entity';
 import { RevokedToken } from './entities/revoked-token.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
+import { OwnerClinicLink } from '../multi-clinic/entities/owner-clinic-link.entity';
 import { OwnerCodeModule } from '../owner-code/owner-code.module';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Clinic, RevokedToken]),
+    TypeOrmModule.forFeature([User, Clinic, RevokedToken, OwnerClinicLink]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

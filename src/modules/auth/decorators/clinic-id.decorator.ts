@@ -1,8 +1,5 @@
-import {
-  createParamDecorator,
-  ExecutionContext,
-  ForbiddenException,
-} from '@nestjs/common';
+import { createParamDecorator, ExecutionContext } from '@nestjs/common';
+import { noClinicError } from '../branch-context';
 
 interface ClinicIdOptions {
   /**
@@ -29,13 +26,9 @@ export const ClinicId = createParamDecorator(
       request.clinicId || request.user?.clinicId;
     if (clinicId) return clinicId;
     if (options?.optional) return null;
-    throw new ForbiddenException({
-      success: false,
-      error: {
-        code: 'NO_CLINIC_ASSIGNED',
-        message:
-          'Fitur ini hanya untuk akun klinik. Masuk sebagai owner klinik (impersonate) untuk membuka data klinik.',
-      },
-    });
+    throw noClinicError(
+      request.user,
+      'Fitur ini hanya untuk akun klinik. Masuk sebagai owner klinik (impersonate) untuk membuka data klinik.',
+    );
   },
 );

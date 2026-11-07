@@ -12,7 +12,6 @@ import { Brackets, Repository } from 'typeorm';
 import { KfaProductEntity } from './entities/kfa-product.entity';
 import { SatusehatEnvironment } from '../../../enums/satusehat-environment.enum';
 import { SatusehatGlobalOauthService } from '../satusehat-global-oauth.service';
-import { SATUSEHAT_FEATURE } from '../satusehat-access';
 import { FeaturesService } from '../../features/features.service';
 
 /**
@@ -377,10 +376,8 @@ export class KfaService {
   @Cron(CronExpression.EVERY_DAY_AT_2AM)
   async scheduledCatalogSync(): Promise<void> {
     if (!this.scheduledSync) return;
-    // Tidak ada faskes yang diaktifkan: tidak perlu menarik katalog dari KFA
-    if (!(await this.features.clinicIdsWithFeatureOn(SATUSEHAT_FEATURE)).size) {
-      return;
-    }
+    // Tidak ada faskes yang aktif: tidak perlu menarik katalog dari KFA
+    if (!(await this.features.isSatusehatActiveAnywhere())) return;
     try {
       const { saved } = await this.syncCatalog();
       this.logger.log(`Sinkron katalog KFA: ${saved} produk diperbarui`);

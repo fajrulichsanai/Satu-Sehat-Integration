@@ -33,6 +33,9 @@ export const STANDARD_FEATURES = [
   { key: 'konten', label: 'Konten', toggleable: true },
   { key: 'satusehat', label: 'SATUSEHAT', toggleable: true },
   { key: 'imunisasi', label: 'Imunisasi / Vaksin', toggleable: true },
+  { key: 'absensi', label: 'Absensi Pegawai', toggleable: true },
+  { key: 'payroll', label: 'Penggajian', toggleable: true },
+  { key: 'ulang-tahun', label: 'Promo Ulang Tahun', toggleable: true },
   { key: 'info-klinik', label: 'Info Klinik', toggleable: false },
   { key: 'user-management', label: 'Manajemen User', toggleable: false },
   { key: 'langganan', label: 'Langganan', toggleable: false },
@@ -58,9 +61,12 @@ export const STANDARD_FEATURE_KEYS: string[] = STANDARD_FEATURES.map(
  */
 export const OPT_IN_FEATURES = new Set<string>(['imunisasi', 'satusehat']);
 
-/** Fitur custom dikenali dari awalan kunci */
-export const CUSTOM_PREFIX = 'custom:';
-export const isCustomFeature = (key: string) => key.startsWith(CUSTOM_PREFIX);
+/**
+ * SATUSEHAT: aktif hanya bila saklar global platform menyala (super admin,
+ * lihat PlatformSettingsService) DAN super admin sudah mengaktifkannya untuk
+ * faskes itu (opt-in per klinik). Owner klinik hanya bisa melihat statusnya.
+ */
+export const SATUSEHAT_FEATURE = 'satusehat';
 
 const FULL_ACCESS: string[] = [
   'dashboard',
@@ -88,6 +94,9 @@ const FULL_ACCESS: string[] = [
   'konten',
   'satusehat',
   'imunisasi',
+  'absensi',
+  'payroll',
+  'ulang-tahun',
 ];
 
 const CLINICIAN = [
@@ -99,6 +108,7 @@ const CLINICIAN = [
   'share-fee-saya',
   'tampilan',
   'imunisasi',
+  'absensi',
 ];
 
 /** Fitur bawaan tiap role (cerminan lib/permissions.ts di frontend) */
@@ -106,6 +116,8 @@ export const ROLE_DEFAULT_FEATURES: Record<UserRole, string[]> = {
   [UserRole.SUPER_ADMIN]: ['api', 'user-management', 'tampilan'],
   [UserRole.MULTI_CLINIC_OWNER]: ['tampilan'],
   [UserRole.OWNER]: [...FULL_ACCESS, 'onboarding', 'data-privasi'],
+  // Manajer Cabang acts with the owner's rights (see JwtStrategy).
+  [UserRole.MANAJER_CABANG]: [...FULL_ACCESS, 'onboarding', 'data-privasi'],
   [UserRole.ADMIN]: [
     'pasien',
     'reservasi',
@@ -120,10 +132,12 @@ export const ROLE_DEFAULT_FEATURES: Record<UserRole, string[]> = {
     'info-klinik',
     'tarif',
     'referral',
+    'ulang-tahun',
     'langganan',
     'konten',
     'tampilan',
     'satusehat',
+    'absensi',
   ],
   [UserRole.DOKTER]: CLINICIAN,
   [UserRole.PERAWAT]: CLINICIAN,

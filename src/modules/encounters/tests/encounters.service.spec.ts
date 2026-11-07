@@ -14,13 +14,18 @@ import { EncounterStatus } from '../../../enums';
 import { ReservationStatus } from '../../../enums/reservation-status.enum';
 import { UserRole } from '../../../enums/user-role.enum';
 
-function buildQb(result: [any[], number] = [[], 0]) {
+function buildQb(result: [any[], number] = [[], 0], rawRows: any[] = []) {
   return {
     leftJoinAndSelect: jest.fn().mockReturnThis(),
     leftJoin: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
+    addOrderBy: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    groupBy: jest.fn().mockReturnThis(),
+    getRawMany: jest.fn().mockResolvedValue(rawRows),
     skip: jest.fn().mockReturnThis(),
     take: jest.fn().mockReturnThis(),
     getManyAndCount: jest.fn().mockResolvedValue(result),
@@ -147,6 +152,98 @@ describe('EncountersService', () => {
       expect(qb.andWhere).toHaveBeenCalledWith('DATE(e.arrivedTime) = :date', {
         date: '2026-01-01',
       });
+    });
+  });
+
+  describe('findAll (penelusuran per bulan)', () => {
+    it('filters the whole month instead of defaulting to today (positive)', async () => {
+      const qb = buildQb();
+      encounterRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll(1, { month: '2026-10' }, admin);
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining("DATE_FORMAT(e.arrived_time, '%Y-%m')"),
+        { month: '2026-10' },
+      );
+      const todayCalls = qb.andWhere.mock.calls.filter(
+        (c: any[]) => c[0] === 'DATE(e.arrivedTime) = :date',
+      );
+      expect(todayCalls).toHaveLength(0);
+    });
+
+    it('returns per-status counts for the whole period and the days that have visits (positive)', async () => {
+      const qb = buildQb(
+        [[], 25],
+        [
+          { status: 'finished', count: '20', date: '2026-10-03' },
+          { status: 'cancelled', count: '5' },
+        ],
+      );
+      qb.getRawMany
+        .mockResolvedValueOnce([
+          { status: 'finished', count: '20' },
+          { status: 'cancelled', count: '5' },
+        ])
+        .mockResolvedValueOnce([{ date: '2026-10-03', count: '4' }]);
+      encounterRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const r: any = await service.findAll(1, { month: '2026-10' }, admin);
+
+      expect(r.counts).toEqual({
+        total: 25,
+        arrived: 0,
+        in_progress: 0,
+        finished: 20,
+        cancelled: 5,
+      });
+      expect(r.days).toEqual([{ date: '2026-10-03', count: 4 }]);
+      expect(r.meta.total).toBe(25);
+    });
+
+    it('keeps the dokter scope on the counts and days queries too (negative)', async () => {
+      const qb = buildQb();
+      encounterRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll(1, { month: '2026-10' }, dokter);
+
+      const scoped = qb.andWhere.mock.calls.filter((c: any[]) =>
+        String(c[0]).includes('practitioners WHERE user_id'),
+      );
+      // daftar + hitungan status + kalender tanggal
+      expect(scoped).toHaveLength(3);
+    });
+
+    it('active=true limits to arrived + in_progress without forcing today (edge)', async () => {
+      const qb = buildQb();
+      encounterRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll(1, { active: true }, admin);
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'e.status IN (:...activeStatuses)',
+        {
+          activeStatuses: [
+            EncounterStatus.ARRIVED,
+            EncounterStatus.IN_PROGRESS,
+          ],
+        },
+      );
+      const todayCalls = qb.andWhere.mock.calls.filter(
+        (c: any[]) => c[0] === 'DATE(e.arrivedTime) = :date',
+      );
+      expect(todayCalls).toHaveLength(0);
+    });
+
+    it('does not run the extra summary queries for the plain today list (edge)', async () => {
+      const qb = buildQb();
+      encounterRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const r: any = await service.findAll(1, {}, admin);
+
+      expect(qb.getRawMany).not.toHaveBeenCalled();
+      expect(r.counts).toBeUndefined();
+      expect(r.days).toBeUndefined();
     });
   });
 
