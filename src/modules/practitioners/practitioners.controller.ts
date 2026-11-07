@@ -36,6 +36,7 @@ import {
   UpdatePractitionerAccountDto,
 } from './dto/practitioner.dto';
 import { Audit } from '../audit-log/decorators/audit.decorator';
+import { RequireFeature } from '../features/require-feature.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
 import { AuditActionType } from '../audit-log/entities/audit-log.entity';
 
@@ -148,6 +149,7 @@ export class PractitionersController {
   }
 
   @Post(':id/match-satusehat')
+  @RequireFeature('satusehat')
   @Audit('Staff', AuditActionType.UPDATE)
   @Roles(UserRole.OWNER, UserRole.ADMIN)
   @ApiOperation({
@@ -201,6 +203,7 @@ export class PractitionersController {
   }
 
   @Post('search-satusehat')
+  @RequireFeature('satusehat')
   @Roles(UserRole.OWNER, UserRole.ADMIN)
   @ApiOperation({
     summary:

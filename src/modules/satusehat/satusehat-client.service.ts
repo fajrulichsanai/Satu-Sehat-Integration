@@ -13,6 +13,7 @@ import { Repository } from 'typeorm';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { SatusehatEnvironment } from '../../enums/satusehat-environment.enum';
 import { decrypt, encrypt } from '../../common/utils/crypto.util';
+import { assertSatusehatEnabled } from './satusehat-platform';
 
 const SATUSEHAT_BASE: Record<SatusehatEnvironment, string> = {
   [SatusehatEnvironment.SANDBOX]: 'https://api-satusehat-stg.dto.kemkes.go.id',
@@ -223,6 +224,8 @@ export class SatusehatClientService {
   }
 
   private async loadConfiguredClinic(clinicId: number): Promise<Clinic> {
+    // Pintu pertama semua panggilan keluar (token, FHIR, SSRME, KYC)
+    assertSatusehatEnabled();
     const clinic = withEffectiveCredentials(
       await this.clinicRepository.findOne({
         where: { id: clinicId },

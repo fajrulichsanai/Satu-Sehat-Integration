@@ -20,6 +20,7 @@ jobs:
           S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
           S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
           S3_REGION: ${{ secrets.S3_REGION }}
+          SATUSEHAT_ENABLED: ${{ secrets.SATUSEHAT_ENABLED }}
           SATUSEHAT_ENVIRONMENT: ${{ secrets.SATUSEHAT_ENVIRONMENT }}
           SATUSEHAT_ORGANIZATION_ID: ${{ secrets.SATUSEHAT_ORGANIZATION_ID }}
           SATUSEHAT_CLIENT_ID: ${{ secrets.SATUSEHAT_CLIENT_ID }}
@@ -29,7 +30,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT }}
-          envs: S3_ENDPOINT,S3_BUCKET,S3_ACCESS_KEY,S3_SECRET_KEY,S3_REGION,SATUSEHAT_ENVIRONMENT,SATUSEHAT_ORGANIZATION_ID,SATUSEHAT_CLIENT_ID,SATUSEHAT_CLIENT_SECRET
+          envs: S3_ENDPOINT,S3_BUCKET,S3_ACCESS_KEY,S3_SECRET_KEY,S3_REGION,SATUSEHAT_ENABLED,SATUSEHAT_ENVIRONMENT,SATUSEHAT_ORGANIZATION_ID,SATUSEHAT_CLIENT_ID,SATUSEHAT_CLIENT_SECRET
           script: |
             set -e
 
@@ -45,7 +46,7 @@ jobs:
             touch .env
             chmod 600 .env
             for KEY in S3_ENDPOINT S3_BUCKET S3_ACCESS_KEY S3_SECRET_KEY S3_REGION \
-                       SATUSEHAT_ENVIRONMENT SATUSEHAT_ORGANIZATION_ID SATUSEHAT_CLIENT_ID SATUSEHAT_CLIENT_SECRET; do
+                       SATUSEHAT_ENABLED SATUSEHAT_ENVIRONMENT SATUSEHAT_ORGANIZATION_ID SATUSEHAT_CLIENT_ID SATUSEHAT_CLIENT_SECRET; do
               VALUE="${!KEY}"
               if [ -n "$VALUE" ]; then
                 # Tanpa sed: nilai secret boleh berisi karakter apa pun (|, &, /)

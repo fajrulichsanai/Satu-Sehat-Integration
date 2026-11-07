@@ -23,6 +23,7 @@ import {
   OPT_IN_FEATURES,
 } from './feature-catalog';
 import { CreateCustomFeatureDto } from './dto/features.dto';
+import { satusehatPlatformEnabled } from '../satusehat/satusehat-platform';
 
 export interface FeatureActor {
   userId: number;
@@ -62,11 +63,17 @@ export class FeaturesService {
   // ── Fitur efektif ─────────────────────────────────────────────────────
 
   async effectiveFor(actor: FeatureActor) {
-    const roleDefaults = ROLE_DEFAULT_FEATURES[actor.role] ?? [];
+    // Saklar platform: selama SATUSEHAT belum aktif, fitur ini hilang untuk semua
+    const satusehat = satusehatPlatformEnabled();
+    const platform = { satusehat };
+    const roleDefaults = (ROLE_DEFAULT_FEATURES[actor.role] ?? []).filter(
+      (k) => satusehat || k !== 'satusehat',
+    );
     if (!actor.clinicId || !CLINIC_ROLES.includes(actor.role)) {
       return {
         features: [...roleDefaults],
         custom: [] as { key: string; name: string }[],
+        platform,
       };
     }
     const [clinic, user, customs] = await Promise.all([
@@ -81,6 +88,7 @@ export class FeaturesService {
         if (def) features.add(f.key);
         continue;
       }
+      if (f.key === 'satusehat' && !satusehat) continue;
       if (clinic.get(f.key) === false) continue;
       if (OPT_IN_FEATURES.has(f.key) && clinic.get(f.key) !== true) continue;
       if (user.get(f.key) ?? def) features.add(f.key);
@@ -93,7 +101,7 @@ export class FeaturesService {
         custom.push({ key: c.key, name: c.name });
       }
     }
-    return { features: [...features], custom };
+    return { features: [...features], custom, platform };
   }
 
   /**
@@ -104,6 +112,7 @@ export class FeaturesService {
     actor: FeatureActor,
     key: string,
   ): Promise<boolean> {
+    if (key === 'satusehat' && !satusehatPlatformEnabled()) return true;
     if (!actor.clinicId || !CLINIC_ROLES.includes(actor.role)) return false;
     const clinic = await this.clinicSettings(actor.clinicId);
     if (isCustomFeature(key)) {

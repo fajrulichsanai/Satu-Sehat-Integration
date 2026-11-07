@@ -49,6 +49,10 @@ import {
   resumeGroupOf,
 } from '../fhir/fhir-mapper';
 import { readableFhirError } from '../fhir/fhir-error';
+import {
+  SATUSEHAT_DISABLED_MESSAGE,
+  satusehatPlatformEnabled,
+} from '../satusehat-platform';
 
 export interface SyncStep {
   /** Nama langkah sesuai playbook, mis. "07. Diagnosis" */
@@ -158,6 +162,8 @@ export class SyncOrchestratorService {
     encounterId: number,
     clinicId: number,
   ): Promise<void> {
+    // Saklar platform mati: tidak ada pembacaan DB maupun panggilan keluar
+    if (!satusehatPlatformEnabled()) return;
     try {
       const clinic = withEffectiveCredentials(
         await this.clinicRepo.findOne({ where: { id: clinicId } }),
@@ -209,6 +215,18 @@ export class SyncOrchestratorService {
     const clinic = withEffectiveCredentials(
       await this.clinicRepo.findOne({ where: { id: clinicId } }),
     );
+    if (!satusehatPlatformEnabled()) {
+      steps.push(
+        this.fail(
+          '00. Konfigurasi',
+          'Organization',
+          'clinic',
+          clinicId,
+          SATUSEHAT_DISABLED_MESSAGE,
+        ),
+      );
+      return { success: false, steps };
+    }
     if (!clinic || !this.isConfigured(clinic)) {
       steps.push(
         this.fail(
@@ -724,6 +742,9 @@ export class SyncOrchestratorService {
     const clinic = withEffectiveCredentials(
       await this.clinicRepo.findOne({ where: { id: clinicId } }),
     );
+    if (!satusehatPlatformEnabled()) {
+      return { success: false, error: SATUSEHAT_DISABLED_MESSAGE };
+    }
     if (!clinic || !this.isConfigured(clinic)) {
       return {
         success: false,

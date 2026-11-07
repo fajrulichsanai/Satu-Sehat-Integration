@@ -27,6 +27,7 @@ import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { IsString } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Audit } from '../audit-log/decorators/audit.decorator';
+import { RequireFeature } from '../features/require-feature.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
 import { AuditActionType } from '../audit-log/entities/audit-log.entity';
 import { Notify } from '../notifications/decorators/notify.decorator';
@@ -73,6 +74,7 @@ export class PatientsController {
   }
 
   @Get('search-satusehat')
+  @RequireFeature('satusehat')
   @ApiOperation({ summary: 'Search patient by NIK via SATUSEHAT API' })
   async searchSatusehat(
     @Query('nik') nik: string,
@@ -83,6 +85,7 @@ export class PatientsController {
   }
 
   @Post('search-satusehat')
+  @RequireFeature('satusehat')
   @HttpCode(200)
   @ApiOperation({
     summary:

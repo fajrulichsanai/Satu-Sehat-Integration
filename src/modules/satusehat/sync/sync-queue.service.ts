@@ -7,6 +7,7 @@ import {
   redactSyncError,
 } from './entities/satusehat-sync-log.entity';
 import { SyncOrchestratorService } from './sync-orchestrator.service';
+import { satusehatPlatformEnabled } from '../satusehat-platform';
 
 const MAX_RETRY_ATTEMPTS = 5;
 const BASE_DELAY_MS = 60_000; // 1 minute
@@ -28,6 +29,9 @@ export class SyncQueueService {
     succeeded: number;
     failed: number;
   }> {
+    if (!satusehatPlatformEnabled()) {
+      return { processed: 0, succeeded: 0, failed: 0 };
+    }
     if (this.processing) {
       this.logger.log('Sync queue already processing, skipping');
       return { processed: 0, succeeded: 0, failed: 0 };

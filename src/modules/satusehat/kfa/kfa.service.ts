@@ -12,6 +12,10 @@ import { Brackets, Repository } from 'typeorm';
 import { KfaProductEntity } from './entities/kfa-product.entity';
 import { SatusehatEnvironment } from '../../../enums/satusehat-environment.enum';
 import { SatusehatGlobalOauthService } from '../satusehat-global-oauth.service';
+import {
+  assertSatusehatEnabled,
+  satusehatPlatformEnabled,
+} from '../satusehat-platform';
 
 /**
  * Kamus Farmasi & Alat Kesehatan (KFA) SATUSEHAT.
@@ -219,6 +223,14 @@ export class KfaService {
         params.size ?? 20,
       );
     }
+    if (!satusehatPlatformEnabled()) {
+      return {
+        total: 0,
+        page: params.page ?? 1,
+        size: params.size ?? 20,
+        items: [],
+      };
+    }
     const qs = new URLSearchParams({
       page: String(params.page ?? 1),
       size: String(params.size ?? 20),
@@ -353,7 +365,7 @@ export class KfaService {
   /** Sinkron harian 02:00, aktif bila KFA_CATALOG_SYNC=true */
   @Cron(CronExpression.EVERY_DAY_AT_2AM)
   async scheduledCatalogSync(): Promise<void> {
-    if (!this.scheduledSync) return;
+    if (!this.scheduledSync || !satusehatPlatformEnabled()) return;
     try {
       const { saved } = await this.syncCatalog();
       this.logger.log(`Sinkron katalog KFA: ${saved} produk diperbarui`);
@@ -403,6 +415,7 @@ export class KfaService {
   }
 
   private async get(path: string): Promise<any> {
+    assertSatusehatEnabled();
     const token = await this.oauth.getAccessToken(this.environment);
     let response: Response;
     try {
