@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -66,6 +67,14 @@ export class CreateReservationDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Tetap buat reservasi baru walau pasien ini sudah punya reservasi aktif (bawaan: ditolak agar tidak dobel)',
+  })
+  @IsOptional()
+  @IsBoolean()
+  allowDuplicate?: boolean;
 }
 
 export class PublicCreateReservationDto extends CreateReservationDto {

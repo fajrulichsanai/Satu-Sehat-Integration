@@ -183,8 +183,47 @@ describe('PatientsService', () => {
 
       expect(qb.andWhere).toHaveBeenCalledWith(
         expect.stringContaining('p.name LIKE'),
-        { search: '%Budi%', nikHash: hashNik('Budi') },
+        { search: '%Budi%' },
       );
+    });
+  });
+
+  describe('findAll search robustness', () => {
+    it('matches an exact 16-digit NIK through its hash (positive)', async () => {
+      const qb = buildQb();
+      patientRepo.createQueryBuilder.mockReturnValue(qb);
+      await service.findAll(clinicId, { page: 1, limit: 10, search: '3171010101010001' } as any);
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('p.nikHash = :nikHash'),
+        { search: '%3171010101010001%', nikHash: hashNik('3171010101010001') },
+      );
+    });
+
+    it('treats % and _ as plain text and never uses an ESCAPE clause (edge)', async () => {
+      const qb = buildQb();
+      patientRepo.createQueryBuilder.mockReturnValue(qb);
+      await service.findAll(clinicId, { page: 1, limit: 10, search: '50%_x' } as any);
+      const [sql, params] = qb.andWhere.mock.calls.pop();
+      expect(sql).not.toContain('ESCAPE');
+      expect(params.search).toBe('%50\\%\\_x%');
+    });
+
+    it('still searches by name when the NIK hash key is missing (negative)', async () => {
+      const saved = process.env.PATIENT_DATA_ENCRYPTION_KEY;
+      delete process.env.PATIENT_DATA_ENCRYPTION_KEY;
+      try {
+        const qb = buildQb();
+        patientRepo.createQueryBuilder.mockReturnValue(qb);
+        await expect(
+          service.findAll(clinicId, { page: 1, limit: 10, search: '3171010101010001' } as any),
+        ).resolves.toBeDefined();
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          expect.not.stringContaining('nikHash'),
+          { search: '%3171010101010001%' },
+        );
+      } finally {
+        process.env.PATIENT_DATA_ENCRYPTION_KEY = saved;
+      }
     });
   });
 
@@ -297,7 +336,7 @@ describe('PatientsService', () => {
 
       expect(qb.andWhere).toHaveBeenCalledWith(
         expect.stringContaining('p.name LIKE'),
-        { search: '%Budi%', nikHash: hashNik('Budi') },
+        { search: '%Budi%' },
       );
     });
   });

@@ -10,6 +10,7 @@ import { ReservationsService } from '../reservations.service';
 import { Reservation } from '../entities/reservation.entity';
 import { Clinic } from '../../clinics/entities/clinic.entity';
 import { Patient } from '../../patients/entities/patient.entity';
+import { PatientRecall } from '../../recalls/entities/patient-recall.entity';
 import { ReservationSource, ReservationStatus } from '../../../enums';
 
 function buildQb(overrides: Partial<Record<string, any>> = {}) {
@@ -44,10 +45,12 @@ describe('ReservationsService', () => {
   let reservationRepo: {
     createQueryBuilder: jest.Mock;
     findOne: jest.Mock;
+    find: jest.Mock;
     create: jest.Mock;
     save: jest.Mock;
     remove: jest.Mock;
   };
+  let recallRepo: { update: jest.Mock };
   let clinicRepo: { findOne: jest.Mock };
   let patientRepo: { findOne: jest.Mock };
   let manager: ReturnType<typeof buildManager>;
@@ -59,12 +62,14 @@ describe('ReservationsService', () => {
     reservationRepo = {
       createQueryBuilder: jest.fn(() => buildQb()),
       findOne: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
       create: jest.fn((data) => data),
       save: jest.fn((data) => Promise.resolve({ id: 1, ...data })),
       remove: jest.fn().mockResolvedValue(undefined),
     };
     clinicRepo = { findOne: jest.fn() };
     patientRepo = { findOne: jest.fn() };
+    recallRepo = { update: jest.fn().mockResolvedValue(undefined) };
     manager = buildManager();
     dataSource = {
       transaction: jest.fn((cb: (manager: unknown) => unknown) => cb(manager)),
@@ -76,6 +81,7 @@ describe('ReservationsService', () => {
         { provide: getRepositoryToken(Reservation), useValue: reservationRepo },
         { provide: getRepositoryToken(Clinic), useValue: clinicRepo },
         { provide: getRepositoryToken(Patient), useValue: patientRepo },
+        { provide: getRepositoryToken(PatientRecall), useValue: recallRepo },
         { provide: DataSource, useValue: dataSource },
       ],
     }).compile();
@@ -135,6 +141,82 @@ describe('ReservationsService', () => {
       await expect(service.findOne(999, clinicId)).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('create: tanpa data dobel', () => {
+    const soon = '2099-01-10';
+    const existing = {
+      id: 9,
+      patientId: 3,
+      patientName: 'Budi Santoso',
+      patientPhone: '0812-3456',
+      reservationDate: soon,
+      jamSlot: '10:00:00',
+      status: ReservationStatus.CONFIRMED,
+    };
+
+    it('rejects a second active reservation for the same patient (negative)', async () => {
+      patientRepo.findOne.mockResolvedValue({ id: 3, clinicId, phone: '0812-3456' });
+      reservationRepo.find.mockResolvedValue([existing]);
+      await expect(
+        service.create(clinicId, {
+          patientId: 3,
+          patientName: 'Budi Santoso',
+          reservationDate: '2099-01-12',
+        } as any),
+      ).rejects.toThrow(ConflictException);
+      expect(reservationRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('allows it when staff explicitly choose allowDuplicate (positive)', async () => {
+      patientRepo.findOne.mockResolvedValue({ id: 3, clinicId, phone: '0812-3456' });
+      reservationRepo.find.mockResolvedValue([existing]);
+      const saved = await service.create(clinicId, {
+        patientId: 3,
+        patientName: 'Budi Santoso',
+        reservationDate: '2099-01-12',
+        allowDuplicate: true,
+      } as any);
+      expect(saved.id).toBe(1);
+    });
+
+    it('does not treat a family member on the same phone as a duplicate (edge)', async () => {
+      reservationRepo.find.mockResolvedValue([{ ...existing, patientId: undefined }]);
+      const saved = await service.create(clinicId, {
+        patientName: 'Siti Santoso',
+        patientPhone: '081-23456',
+        reservationDate: '2099-01-12',
+      } as any);
+      expect(saved.id).toBe(1);
+    });
+
+    it('treats 0812 and +62812 as the same phone for the same name (edge)', async () => {
+      reservationRepo.find.mockResolvedValue([
+        { ...existing, patientId: undefined, patientPhone: '0812345' },
+      ]);
+      const hits = await service.findActiveForPerson(clinicId, {
+        phone: '+62 812 345',
+        name: '  budi   santoso ',
+      });
+      expect(hits).toHaveLength(1);
+    });
+
+    it('marks the patient’s open recalls as booked after creating (positive)', async () => {
+      patientRepo.findOne.mockResolvedValue({ id: 3, clinicId, phone: '0899' });
+      await service.create(clinicId, {
+        patientId: 3,
+        patientName: 'Budi',
+        reservationDate: '2099-01-12',
+      } as any);
+      expect(recallRepo.update).toHaveBeenCalledWith(
+        expect.objectContaining({ clinicId, patientId: 3 }),
+        { status: 'sudah_booking_ulang' },
+      );
+    });
+
+    it('returns nothing without a patientId or phone+name (negative)', async () => {
+      expect(await service.findActiveForPerson(clinicId, { phone: '0812' })).toEqual([]);
     });
   });
 
