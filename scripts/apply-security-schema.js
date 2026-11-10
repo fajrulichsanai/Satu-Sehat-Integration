@@ -44,6 +44,7 @@ const MIGRATIONS = [
   '1790220000000-BiayaLabPayrollTemplateOpname',
   '1790230000000-ClinicalPhotoFolders',
   '1790240000000-ContentPhotoUploadFrame',
+  '1790250000000-PatientPhotoWithoutEncounter',
 ];
 
 async function main() {

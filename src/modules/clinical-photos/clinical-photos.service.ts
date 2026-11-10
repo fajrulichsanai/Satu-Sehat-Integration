@@ -29,7 +29,9 @@ function toApiUrl(photo: PatientPhoto): PatientPhoto {
   if (!photo.fileUrl) return photo;
   return {
     ...photo,
-    fileUrl: `/encounters/${photo.encounterId}/photos/${photo.id}/file`,
+    fileUrl: photo.encounterId
+      ? `/encounters/${photo.encounterId}/photos/${photo.id}/file`
+      : `/patients/${photo.patientId}/photos/${photo.id}/file`,
   } as PatientPhoto;
 }
 
@@ -231,6 +233,47 @@ export class ClinicalPhotosService {
     file: Express.Multer.File | undefined,
   ): Promise<PatientPhoto> {
     const encounter = await this.assertEncounter(encounterId, clinicId);
+    return this.store(
+      encounter.patientId,
+      encounterId,
+      clinicId,
+      userId,
+      templateId,
+      originalSizeBytes,
+      file,
+    );
+  }
+
+  /** Unggah langsung ke pasien — tidak perlu ada kunjungan. */
+  async uploadForPatient(
+    patientId: number,
+    clinicId: number,
+    userId: number,
+    templateId: number | undefined,
+    originalSizeBytes: number | undefined,
+    file: Express.Multer.File | undefined,
+  ): Promise<PatientPhoto> {
+    await this.assertPatient(patientId, clinicId);
+    return this.store(
+      patientId,
+      null,
+      clinicId,
+      userId,
+      templateId,
+      originalSizeBytes,
+      file,
+    );
+  }
+
+  private async store(
+    patientId: number,
+    encounterId: number | null,
+    clinicId: number,
+    userId: number,
+    templateId: number | undefined,
+    originalSizeBytes: number | undefined,
+    file: Express.Multer.File | undefined,
+  ): Promise<PatientPhoto> {
     if (templateId) {
       const template = await this.templateRepo.findOne({
         where: { id: templateId },
@@ -253,7 +296,7 @@ export class ClinicalPhotosService {
       throw error;
     }
     const photo = this.photoRepo.create({
-      patientId: encounter.patientId,
+      patientId,
       encounterId,
       templateId: templateId ?? null,
       fileUrl,
@@ -271,6 +314,38 @@ export class ClinicalPhotosService {
       file?.size ?? 0,
     );
     return toApiUrl(saved);
+  }
+
+  async removeForPatient(
+    patientId: number,
+    clinicId: number,
+    photoId: number,
+  ): Promise<void> {
+    await this.assertPatient(patientId, clinicId);
+    const photo = await this.photoRepo.findOne({
+      where: { id: photoId, patientId },
+    });
+    if (!photo) throw new NotFoundException('Foto tidak ditemukan');
+    await this.photoRepo.delete({ id: photoId });
+    this.deleteFile(photo.fileUrl);
+    await this.storageQuota?.forget(StorageKind.PATIENT_PHOTO, photo.fileUrl);
+  }
+
+  async getFilePathForPatient(
+    patientId: number,
+    clinicId: number,
+    photoId: number,
+  ): Promise<{ absolutePath: string; originalName: string | null }> {
+    await this.assertPatient(patientId, clinicId);
+    const photo = await this.photoRepo.findOne({
+      where: { id: photoId, patientId },
+    });
+    if (!photo) throw new NotFoundException('Foto tidak ditemukan');
+    const absolutePath = join(process.cwd(), photo.fileUrl.replace(/^\//, ''));
+    if (!existsSync(absolutePath)) {
+      throw new NotFoundException('File foto tidak ditemukan');
+    }
+    return { absolutePath, originalName: photo.originalName };
   }
 
   /** Foto-foto kontrol ini saja (dipakai saat mengisi slot di encounter). */

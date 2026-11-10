@@ -188,6 +188,26 @@ describe('ClinicalPhotosService', () => {
     });
   });
 
+  describe('uploadForPatient (tanpa kunjungan)', () => {
+    it('stores a photo without an encounter and serves it from the patient route (positive)', async () => {
+      patientRepo.findOne.mockResolvedValue({ id: 10, clinicId: 5 });
+      const result = await service.uploadForPatient(10, 5, 9, undefined, 3000, {
+        filename: 'x.jpg',
+        size: 900,
+      } as any);
+      expect(result.patientId).toBe(10);
+      expect(result.encounterId).toBeNull();
+      expect(result.fileUrl).toBe('/patients/10/photos/1/file');
+    });
+
+    it('rejects a patient outside the clinic (negative)', async () => {
+      patientRepo.findOne.mockResolvedValue(null);
+      await expect(
+        service.uploadForPatient(99, 5, 9, undefined, undefined, { filename: 'x.jpg' } as any),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
   describe('setConsent / isConsented', () => {
     it('records who/when consent changed (positive)', async () => {
       patientRepo.findOne.mockResolvedValue({ id: 10, clinicId: 5 });

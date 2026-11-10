@@ -26,8 +26,9 @@ export class PatientPhoto {
   @Column({ name: 'patient_id' })
   patientId: number;
 
-  @Column({ name: 'encounter_id' })
-  encounterId: number;
+  /** Null = diunggah langsung ke pasien, tanpa kunjungan. */
+  @Column({ name: 'encounter_id', type: 'int', nullable: true })
+  encounterId: number | null;
 
   @Column({ name: 'template_id', type: 'int', nullable: true })
   templateId: number | null;
@@ -57,9 +58,9 @@ export class PatientPhoto {
   @JoinColumn({ name: 'patient_id' })
   patient: Patient;
 
-  @ManyToOne(() => Encounter, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Encounter, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'encounter_id' })
-  encounter: Encounter;
+  encounter: Encounter | null;
 
   @ManyToOne(() => PhotoTemplate, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'template_id' })

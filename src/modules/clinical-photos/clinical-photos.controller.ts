@@ -115,6 +115,60 @@ export class ClinicalPhotosController {
     return { success: true, data };
   }
 
+  @Post('patients/:patientId/photos')
+  @UseInterceptors(FileInterceptor('photo', patientPhotoUploadOptions))
+  @Audit('MedicalRecord', AuditActionType.CREATE)
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Unggah foto klinis langsung ke pasien (tanpa kunjungan)',
+  })
+  async uploadForPatient(
+    @Param('patientId', ParseIntPipe) patientId: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: UploadPatientPhotoDto,
+    @CurrentUser() user: any,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    const data = await this.service.uploadForPatient(
+      patientId,
+      clinicId,
+      user.userId,
+      dto.templateId,
+      dto.originalSizeBytes,
+      file,
+    );
+    return { success: true, data };
+  }
+
+  @Audit('PatientPhoto', AuditActionType.VIEW)
+  @Get('patients/:patientId/photos/:photoId/file')
+  @ApiOperation({ summary: 'Streaming file foto klinis pasien' })
+  async getPatientFile(
+    @Param('patientId', ParseIntPipe) patientId: number,
+    @Param('photoId', ParseIntPipe) photoId: number,
+    @ClinicId() clinicId: number,
+    @Res() res: Response,
+  ) {
+    const { absolutePath } = await this.service.getFilePathForPatient(
+      patientId,
+      clinicId,
+      photoId,
+    );
+    res.sendFile(absolutePath);
+  }
+
+  @Delete('patients/:patientId/photos/:photoId')
+  @Audit('MedicalRecord', AuditActionType.DELETE)
+  @ApiOperation({ summary: 'Hapus foto klinis pasien' })
+  async removeForPatient(
+    @Param('patientId', ParseIntPipe) patientId: number,
+    @Param('photoId', ParseIntPipe) photoId: number,
+    @ClinicId() clinicId: number,
+  ) {
+    await this.service.removeForPatient(patientId, clinicId, photoId);
+    return { success: true };
+  }
+
   @Patch('patients/:patientId/photo-consent')
   @Audit('Patient', AuditActionType.UPDATE)
   @ApiOperation({
