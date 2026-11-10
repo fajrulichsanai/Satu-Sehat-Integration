@@ -57,7 +57,9 @@ export class PatientImportService {
         c.note || '-',
       ]);
     }
-    [22, 10, 55].forEach((w, i) => (instructionsSheet.getColumn(i + 1).width = w));
+    [22, 10, 55].forEach(
+      (w, i) => (instructionsSheet.getColumn(i + 1).width = w),
+    );
 
     return Buffer.from(await workbook.xlsx.writeBuffer());
   }
@@ -80,7 +82,10 @@ export class PatientImportService {
     if (!headerRow) return [];
 
     const headerToField = new Map(
-      PATIENT_IMPORT_COLUMNS.map((c) => [c.header.trim().toLowerCase(), c.field]),
+      PATIENT_IMPORT_COLUMNS.map((c) => [
+        c.header.trim().toLowerCase(),
+        c.field,
+      ]),
     );
     const columnFields = headerRow.map((h) =>
       headerToField.get(h.trim().toLowerCase()),

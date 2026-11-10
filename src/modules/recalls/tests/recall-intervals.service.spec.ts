@@ -48,7 +48,12 @@ describe('RecallIntervalsService', () => {
       repo.findOne.mockResolvedValue(null);
       await service.upsert(1, 5, { intervalDays: 180 } as any, 9);
       expect(repo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ clinicId: 1, tarifId: 5, intervalDays: 180, createdBy: 9 }),
+        expect.objectContaining({
+          clinicId: 1,
+          tarifId: 5,
+          intervalDays: 180,
+          createdBy: 9,
+        }),
       );
     });
   });

@@ -1,3 +1,4 @@
+import { SyncOrchestratorService } from '../satusehat/sync/sync-orchestrator.service';
 import {
   BadRequestException,
   ForbiddenException,
@@ -6,11 +7,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Encounter } from './entities/encounter.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { Billing, BillingStatus } from '../billing/entities/billing.entity';
-import { EncounterStatus, ServiceType } from '../../enums';
+import { EncounterStatus, ServiceType, isClinician } from '../../enums';
+import { ClinicalAccessService } from '../clinical-access/clinical-access.service';
 import { ReservationStatus } from '../../enums/reservation-status.enum';
 import { UserRole } from '../../enums/user-role.enum';
 import {
@@ -41,34 +43,58 @@ export class EncountersService {
     private readonly encounterRepository: Repository<Encounter>,
     @InjectRepository(Reservation)
     private readonly reservationRepository: Repository<Reservation>,
+    private readonly syncOrchestrator: SyncOrchestratorService,
+    private readonly clinicalAccess: ClinicalAccessService,
   ) {}
 
   async findAll(clinicId: number, query: EncounterListQueryDto, user: any) {
     this.logger.log(
-      `[GET-ALL] Mengambil daftar encounter | clinicId=${clinicId}, date=${query.date || 'today'}`,
+      `[GET-ALL] Mengambil daftar encounter | clinicId=${clinicId}, date=${query.date || 'today'}, month=${query.month || '-'}`,
     );
-    const qb = this.encounterRepository
-      .createQueryBuilder('e')
-      .leftJoinAndSelect('e.patient', 'patient')
-      .leftJoinAndSelect('e.practitioner', 'practitioner')
-      .where('e.clinicId = :clinicId', { clinicId });
+    // Cakupan akses yang sama untuk daftar, hitungan, dan kalender tanggal:
+    // klinik ini + (dokter hanya kunjungannya sendiri / filter dokter).
+    const applyScope = (qb: SelectQueryBuilder<Encounter>) => {
+      qb.where('e.clinicId = :clinicId', { clinicId });
+      // Dokter only sees own encounters
+      if (isClinician(user.role)) {
+        qb.andWhere(
+          'e.practitionerId = (SELECT id FROM practitioners WHERE user_id = :uid LIMIT 1)',
+          {
+            uid: user.userId,
+          },
+        );
+      } else if (query.practitionerId) {
+        qb.andWhere('e.practitionerId = :practitionerId', {
+          practitionerId: query.practitionerId,
+        });
+      }
+      return qb;
+    };
+    const applyPeriod = (qb: SelectQueryBuilder<Encounter>) => {
+      if (query.month) {
+        qb.andWhere("DATE_FORMAT(e.arrived_time, '%Y-%m') = :month", {
+          month: query.month,
+        });
+      }
+      if (query.date) {
+        qb.andWhere('DATE(e.arrivedTime) = :date', { date: query.date });
+      }
+      return qb;
+    };
 
-    // Dokter only sees own encounters
-    if (user.role === UserRole.DOKTER) {
-      qb.andWhere(
-        'e.practitionerId = (SELECT id FROM practitioners WHERE user_id = :uid LIMIT 1)',
-        {
-          uid: user.userId,
-        },
-      );
-    } else if (query.practitionerId) {
-      qb.andWhere('e.practitionerId = :practitionerId', {
-        practitionerId: query.practitionerId,
-      });
-    }
+    const qb = applyScope(
+      this.encounterRepository
+        .createQueryBuilder('e')
+        .leftJoinAndSelect('e.patient', 'patient')
+        .leftJoinAndSelect('e.practitioner', 'practitioner'),
+    );
 
     if (query.status) {
       qb.andWhere('e.status = :status', { status: query.status });
+    } else if (query.active) {
+      qb.andWhere('e.status IN (:...activeStatuses)', {
+        activeStatuses: [EncounterStatus.ARRIVED, EncounterStatus.IN_PROGRESS],
+      });
     }
 
     if (query.unbilled) {
@@ -91,21 +117,31 @@ export class EncountersService {
       query.status === EncounterStatus.ARRIVED ||
       query.status === EncounterStatus.IN_PROGRESS;
 
-    if (query.date) {
-      qb.andWhere('DATE(e.arrivedTime) = :date', { date: query.date });
-    } else if (!isOpenStatusQuery && !query.unbilled) {
+    if (query.month || query.date) {
+      applyPeriod(qb);
+    } else if (!isOpenStatusQuery && !query.active && !query.unbilled) {
       const date = todayInClinicTimezone();
       qb.andWhere('DATE(e.arrivedTime) = :date', { date });
     }
 
-    qb.orderBy('e.arrivedTime', 'DESC');
+    qb.orderBy('e.arrivedTime', 'DESC').addOrderBy('e.id', 'DESC');
 
     const page = query.page || 1;
     const limit = query.limit || 20;
     const skip = (page - 1) * limit;
     const [items, total] = await qb.skip(skip).take(limit).getManyAndCount();
 
-    return {
+    const result: {
+      data: unknown[];
+      meta: {
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+      };
+      days?: { date: string; count: number }[];
+      counts?: Record<string, number>;
+    } = {
       data: items.map((e) => ({
         encounterId: e.id,
         patientId: e.patientId,
@@ -122,6 +158,50 @@ export class EncountersService {
       })),
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
+
+    // Penelusuran per bulan/tanggal: ringkasan status untuk kartu statistik
+    // (di seluruh periode, bukan hanya halaman ini) dan tanggal yang berisi
+    // kunjungan untuk navigasi.
+    if (query.month || query.date) {
+      const byStatus = await applyPeriod(
+        applyScope(this.encounterRepository.createQueryBuilder('e')),
+      )
+        .select('e.status', 'status')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('e.status')
+        .getRawMany<{ status: string; count: string }>();
+      const counts: Record<string, number> = {
+        total: 0,
+        arrived: 0,
+        in_progress: 0,
+        finished: 0,
+        cancelled: 0,
+      };
+      for (const row of byStatus) {
+        counts[row.status] = Number(row.count);
+        counts.total += Number(row.count);
+      }
+      result.counts = counts;
+    }
+    if (query.month) {
+      const days = await applyScope(
+        this.encounterRepository.createQueryBuilder('e'),
+      )
+        .andWhere("DATE_FORMAT(e.arrived_time, '%Y-%m') = :month", {
+          month: query.month,
+        })
+        .select("DATE_FORMAT(e.arrived_time, '%Y-%m-%d')", 'date')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('date')
+        .orderBy('date', 'ASC')
+        .getRawMany<{ date: string; count: string }>();
+      result.days = days.map((d) => ({
+        date: d.date,
+        count: Number(d.count),
+      }));
+    }
+
+    return result;
   }
 
   async findOne(id: number, clinicId: number, user?: any): Promise<Encounter> {
@@ -144,17 +224,17 @@ export class EncountersService {
       throw new NotFoundException(`Encounter dengan ID ${id} tidak ditemukan`);
     }
 
-    if (user?.role === UserRole.DOKTER) {
-      const isOwn = await this.isDokterOwn(
-        encounter.practitionerId,
-        user.userId,
-      );
-      if (!isOwn) {
-        throw new ForbiddenException('Akses ditolak: bukan kunjungan Anda');
+    // Dokter/perawat: kunjungan sendiri bisa diubah; kunjungan dokter lain
+    // hanya bisa dibaca bila pasiennya juga pasien Anda (riwayat bersama).
+    let canEdit = true;
+    if (isClinician(user?.role)) {
+      canEdit = await this.isDokterOwn(encounter.practitionerId, user.userId);
+      if (!canEdit) {
+        await this.clinicalAccess.assertPatient(user, encounter.patientId);
       }
     }
 
-    return encounter;
+    return Object.assign(encounter, { canEdit });
   }
 
   async create(
@@ -205,6 +285,9 @@ export class EncountersService {
       });
     }
 
+    // Encounter "arrived" dikirim sejak pasien datang (Playbook RME Rawat Jalan langkah 2)
+    void this.syncOrchestrator.syncEncounterInBackground(saved.id, clinicId);
+
     return saved;
   }
 
@@ -227,7 +310,7 @@ export class EncountersService {
       throw new NotFoundException(`Encounter dengan ID ${id} tidak ditemukan`);
     }
 
-    if (user.role === UserRole.DOKTER) {
+    if (isClinician(user.role)) {
       const isOwn = await this.isDokterOwn(
         encounter.practitionerId,
         user.userId,
@@ -259,6 +342,10 @@ export class EncountersService {
     this.logger.log(
       `[STATUS-UPDATE] Status encounter berhasil diperbarui | id=${id}, status=${dto.status}`,
     );
+
+    // Kirim ke SATUSEHAT di latar belakang (hanya bila klinik sudah dikonfigurasi):
+    // arrived → POST, in-progress & finished → PUT, sesuai playbook rawat jalan
+    void this.syncOrchestrator.syncEncounterInBackground(id, clinicId);
     return result;
   }
 
@@ -278,7 +365,7 @@ export class EncountersService {
       throw new NotFoundException(`Encounter dengan ID ${id} tidak ditemukan`);
     }
 
-    if (user.role === UserRole.DOKTER) {
+    if (isClinician(user.role)) {
       const isOwn = await this.isDokterOwn(
         encounter.practitionerId,
         user.userId,

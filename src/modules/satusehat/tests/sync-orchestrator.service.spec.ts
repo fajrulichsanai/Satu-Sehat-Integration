@@ -1,35 +1,96 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { SyncOrchestratorService } from '../sync/sync-orchestrator.service';
-import { Encounter } from '../../encounters/entities/encounter.entity';
-import { Patient } from '../../patients/entities/patient.entity';
-import { Clinic } from '../../clinics/entities/clinic.entity';
-import { SatusehatSyncLog } from '../sync/entities/satusehat-sync-log.entity';
-import { SatusehatClientService } from '../satusehat-client.service';
 
-describe('SyncOrchestratorService (deprecated stub)', () => {
+/**
+ * Alur lengkap diuji end-to-end terhadap database sungguhan dengan SATUSEHAT
+ * tiruan; di sini dicakup jalur awal yang tidak butuh data klinis.
+ */
+describe('SyncOrchestratorService', () => {
+  const repo = () => ({
+    findOne: jest.fn(),
+    find: jest.fn(),
+    update: jest.fn(),
+    save: jest.fn(),
+  });
+  let clinicRepo: ReturnType<typeof repo>;
+  let encounterRepo: ReturnType<typeof repo>;
+  let client: { isActiveFor: jest.Mock };
   let service: SyncOrchestratorService;
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        SyncOrchestratorService,
-        { provide: getRepositoryToken(Encounter), useValue: {} },
-        { provide: getRepositoryToken(Patient), useValue: {} },
-        { provide: getRepositoryToken(Clinic), useValue: {} },
-        { provide: getRepositoryToken(SatusehatSyncLog), useValue: {} },
-        { provide: SatusehatClientService, useValue: {} },
-      ],
-    }).compile();
-
-    service = module.get<SyncOrchestratorService>(SyncOrchestratorService);
+  beforeEach(() => {
+    clinicRepo = repo();
+    encounterRepo = repo();
+    const others = Array.from({ length: 11 }, repo);
+    client = { isActiveFor: jest.fn().mockResolvedValue(true) };
+    service = new (SyncOrchestratorService as any)(
+      encounterRepo,
+      others[0], // patient
+      clinicRepo,
+      ...others.slice(1),
+      client, // SatusehatClientService
+      {} as any, // KfaService
+      repo(), // ToothCondition
+      repo(), // DentalBridge
+      repo(), // PatientRecall
+      repo(), // LabOrder
+      repo(), // RadiologyOrder
+      {} as any, // ClinicalCatalogService
+      repo(), // PrescriptionReview
+      repo(), // SatusehatOrganization
+      repo(), // Immunization
+      { isClinicFeatureOn: jest.fn().mockResolvedValue(true) } as any, // FeaturesService
+    );
   });
 
-  it('should be defined', () => expect(service).toBeDefined());
-
-  it('always reports failure since the integration is deprecated (negative)', async () => {
-    const result = await service.syncResource('Encounter', 1, 1);
+  it('refuses to send when the clinic has no SATUSEHAT configuration (negative)', async () => {
+    clinicRepo.findOne.mockResolvedValue({ id: 1, satusehatOrgId: null });
+    const result = await service.syncEncounterFull(5, 1);
     expect(result.success).toBe(false);
-    expect(result.error).toContain('deprecated');
+    expect(result.steps[0].message).toContain('Kredensial SATUSEHAT');
+    expect(encounterRepo.findOne).not.toHaveBeenCalled();
+  });
+
+  it('skips a cancelled encounter that was never sent (edge)', async () => {
+    clinicRepo.findOne.mockResolvedValue({
+      id: 1,
+      satusehatOrgId: '100',
+      satusehatClientId: 'c',
+      satusehatClientSecret: 's',
+    });
+    encounterRepo.findOne.mockResolvedValue({
+      id: 5,
+      status: 'cancelled',
+      satusehatEncounterId: null,
+    });
+    const result = await service.syncEncounterFull(5, 1);
+    expect(result).toEqual({
+      success: true,
+      steps: [
+        expect.objectContaining({
+          status: 'skipped',
+          resourceType: 'Encounter',
+        }),
+      ],
+    });
+  });
+
+  it('background auto-sync does nothing for an unconfigured clinic (negative)', async () => {
+    clinicRepo.findOne.mockResolvedValue({ id: 1 });
+    await service.syncEncounterInBackground(5, 1);
+    expect(encounterRepo.findOne).not.toHaveBeenCalled();
+  });
+
+  it('sends nothing while SATUSEHAT is switched off for the clinic (negative)', async () => {
+    client.isActiveFor.mockResolvedValue(false);
+    clinicRepo.findOne.mockResolvedValue({
+      id: 1,
+      satusehatOrgId: '100',
+      satusehatClientId: 'c',
+      satusehatClientSecret: 's',
+    });
+    await service.syncEncounterInBackground(5, 1);
+    const result = await service.syncEncounterFull(5, 1);
+    expect(result.success).toBe(false);
+    expect(result.steps[0].message).toContain('tidak aktif');
+    expect(encounterRepo.findOne).not.toHaveBeenCalled();
   });
 });

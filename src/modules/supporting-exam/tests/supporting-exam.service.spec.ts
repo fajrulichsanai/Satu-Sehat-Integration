@@ -11,6 +11,8 @@ jest.mock('fs', () => ({
 import { existsSync, unlinkSync } from 'fs';
 import { SupportingExamService } from '../supporting-exam.service';
 import { SupportingExamImage } from '../entities/supporting-exam-image.entity';
+import { StorageQuotaService } from '../../storage-quota/storage-quota.service';
+import { ForbiddenException } from '@nestjs/common';
 import { Encounter } from '../../encounters/entities/encounter.entity';
 
 describe('SupportingExamService', () => {
@@ -23,6 +25,12 @@ describe('SupportingExamService', () => {
     delete: jest.Mock;
   };
   let encounterRepo: { findOne: jest.Mock };
+
+  const storageQuota = {
+    assertRoom: jest.fn().mockResolvedValue(undefined),
+    record: jest.fn().mockResolvedValue(undefined),
+    forget: jest.fn().mockResolvedValue(undefined),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -43,6 +51,7 @@ describe('SupportingExamService', () => {
           useValue: imageRepo,
         },
         { provide: getRepositoryToken(Encounter), useValue: encounterRepo },
+        { provide: StorageQuotaService, useValue: storageQuota },
       ],
     }).compile();
 
@@ -83,6 +92,23 @@ describe('SupportingExamService', () => {
         '/encounters/1/supporting-exam-images/1/file',
       );
       expect(result.createdBy).toBe(9);
+    });
+
+    it('meters the stored file and rejects (and deletes) an upload over the quota (positive/negative)', async () => {
+      encounterRepo.findOne.mockResolvedValue({ id: 1, clinicId: 1 });
+      const file = { filename: 'y.jpg', originalname: 'y.jpg', size: 2048 } as any;
+      await service.create(1, 1, { imageType: 'photo' } as any, file, 9);
+      expect(storageQuota.assertRoom).toHaveBeenCalledWith(1, 2048);
+      expect(storageQuota.record).toHaveBeenCalledWith(1, 'supporting-exam', '/uploads/supporting-exam/y.jpg', 2048);
+
+      storageQuota.assertRoom.mockRejectedValueOnce(new ForbiddenException('penuh'));
+      (unlinkSync as jest.Mock).mockClear();
+      imageRepo.save.mockClear();
+      await expect(
+        service.create(1, 1, { imageType: 'photo' } as any, file, 9),
+      ).rejects.toThrow(ForbiddenException);
+      expect(unlinkSync).toHaveBeenCalled();
+      expect(imageRepo.save).not.toHaveBeenCalled();
     });
 
     it('throws BadRequestException when no file is uploaded (negative)', async () => {

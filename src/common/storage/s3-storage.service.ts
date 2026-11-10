@@ -4,8 +4,12 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { mkdir, readFile, writeFile } from 'fs/promises';
+import {
+  DeleteObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { dirname, join, normalize, sep } from 'path';
 
 /** Where public files land when S3 isn't configured; served by FilesController. */
@@ -114,8 +118,36 @@ export class S3StorageService {
       const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
       return res.ok ? Buffer.from(await res.arrayBuffer()) : null;
     } catch (err) {
-      this.logger.warn(`Gagal membaca file dari S3 | url=${url} | ${String(err)}`);
+      this.logger.warn(
+        `Gagal membaca file dari S3 | url=${url} | ${String(err)}`,
+      );
       return null;
+    }
+  }
+
+  /** Deletes a file returned by uploadBuffer (local disk or S3). Never throws. */
+  async deleteUploaded(url: string): Promise<boolean> {
+    try {
+      if (url.startsWith(LOCAL_PUBLIC_PREFIX)) {
+        const path = resolveLocalPublicPath(
+          url.slice(LOCAL_PUBLIC_PREFIX.length),
+        );
+        if (!path) return false;
+        await unlink(path);
+        return true;
+      }
+      if (!this.isS3Configured() || !url.startsWith(`${this.publicBaseUrl}/`)) {
+        return false;
+      }
+      const key = url.slice(this.publicBaseUrl.length + 1);
+      if (!key || key.includes('..')) return false;
+      await this.getClient().send(
+        new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
+      );
+      return true;
+    } catch (err) {
+      this.logger.warn(`Gagal menghapus file | url=${url} | ${String(err)}`);
+      return false;
     }
   }
 

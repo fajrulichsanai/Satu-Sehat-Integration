@@ -10,15 +10,39 @@ export interface ApiPlanLimit {
 
 /** API limits per subscription tier. Trial clinics get the Starter limits. */
 export const API_PLAN_LIMITS: Record<SubscriptionPlanTier, ApiPlanLimit> = {
-  [SubscriptionPlanTier.TRIAL]: { label: 'Starter', perDay: 1_000, perMinute: 60 },
-  [SubscriptionPlanTier.BASIC]: { label: 'Starter', perDay: 1_000, perMinute: 60 },
+  [SubscriptionPlanTier.TRIAL]: {
+    label: 'Starter',
+    perDay: 1_000,
+    perMinute: 60,
+  },
+  [SubscriptionPlanTier.BASIC]: {
+    label: 'Starter',
+    perDay: 1_000,
+    perMinute: 60,
+  },
   [SubscriptionPlanTier.PRO]: { label: 'Pro', perDay: 10_000, perMinute: 300 },
-  [SubscriptionPlanTier.MULTI_KLINIK]: { label: 'Multi Klinik', perDay: 1_000_000, perMinute: 2_000 },
+  [SubscriptionPlanTier.MULTI_KLINIK]: {
+    label: 'Multi Klinik',
+    perDay: 1_000_000,
+    perMinute: 2_000,
+  },
 };
 
-/** Plans created before tiers existed have no tier: treat them as Starter. */
-export function limitsForTier(tier: SubscriptionPlanTier | null | undefined): ApiPlanLimit {
-  return API_PLAN_LIMITS[tier ?? SubscriptionPlanTier.BASIC] ?? API_PLAN_LIMITS[SubscriptionPlanTier.BASIC];
+/**
+ * Plans created before tiers existed have no tier: treat them as Starter.
+ * Masa coba minggu kedua (`trialStage` 'pro') mendapat batas Pro.
+ */
+export function limitsForTier(
+  tier: SubscriptionPlanTier | null | undefined,
+  trialStage?: 'starter' | 'pro',
+): ApiPlanLimit {
+  if (tier === SubscriptionPlanTier.TRIAL && trialStage === 'pro') {
+    return API_PLAN_LIMITS[SubscriptionPlanTier.PRO];
+  }
+  return (
+    API_PLAN_LIMITS[tier ?? SubscriptionPlanTier.BASIC] ??
+    API_PLAN_LIMITS[SubscriptionPlanTier.BASIC]
+  );
 }
 
 /** Keys a clinic may have active at once. */

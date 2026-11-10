@@ -1,4 +1,10 @@
 import {
+  ENV_SECRET_MARKER,
+  envCredentials,
+  withEffectiveCredentials,
+} from './satusehat-credentials';
+import {
+  ForbiddenException,
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -7,6 +13,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { SatusehatEnvironment } from '../../enums/satusehat-environment.enum';
+import { decrypt, encrypt } from '../../common/utils/crypto.util';
+import { FeaturesService } from '../features/features.service';
 
 const SATUSEHAT_BASE: Record<SatusehatEnvironment, string> = {
   [SatusehatEnvironment.SANDBOX]: 'https://api-satusehat-stg.dto.kemkes.go.id',
@@ -20,6 +28,28 @@ const AUTH_URL: Record<SatusehatEnvironment, string> = {
     'https://api-satusehat.kemkes.go.id/oauth2/v1/accesstoken',
 };
 
+/** Token diperbarui bila sisa masa berlakunya < 5 menit. */
+const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000;
+
+/** Kunci enkripsi client secret — sama dengan kunci data pasien (NIK). */
+function secretKey(): string {
+  const key = process.env.PATIENT_DATA_ENCRYPTION_KEY;
+  if (!key) {
+    throw new ServiceUnavailableException(
+      'PATIENT_DATA_ENCRYPTION_KEY belum di-set di server',
+    );
+  }
+  return key;
+}
+
+export function encryptClientSecret(secret: string): string {
+  return encrypt(secret, secretKey());
+}
+
+/**
+ * Koneksi FHIR ke SATUSEHAT memakai kredensial masing-masing klinik
+ * (Organization ID + client id/secret dari portal SATUSEHAT).
+ */
 @Injectable()
 export class SatusehatClientService {
   private readonly logger = new Logger(SatusehatClientService.name);
@@ -27,12 +57,39 @@ export class SatusehatClientService {
   constructor(
     @InjectRepository(Clinic)
     private readonly clinicRepository: Repository<Clinic>,
+    private readonly features: FeaturesService,
   ) {}
 
+  /**
+   * SATUSEHAT menyala untuk klinik ini (saklar global platform + saklar
+   * klinik). Pengiriman di latar belakang memeriksa ini sebelum mulai.
+   */
+  isActiveFor(clinicId: number): Promise<boolean> {
+    return this.features.isSatusehatActive(clinicId);
+  }
+
   async getAccessToken(clinicId: number): Promise<string> {
-    throw new ServiceUnavailableException(
-      'SATUSEHAT integration has been deprecated and is no longer available',
-    );
+    const clinic = await this.loadConfiguredClinic(clinicId);
+    if (
+      clinic.satusehatToken &&
+      clinic.satusehatTokenExpiresAt &&
+      clinic.satusehatTokenExpiresAt.getTime() - Date.now() >
+        TOKEN_REFRESH_MARGIN_MS
+    ) {
+      return clinic.satusehatToken;
+    }
+    return this.refreshToken(clinic);
+  }
+
+  /** Paksa minta token baru — dipakai "Test koneksi". */
+  async testConnection(clinicId: number): Promise<{ expiresAt: Date }> {
+    const clinic = await this.loadConfiguredClinic(clinicId);
+    await this.refreshToken(clinic);
+    const refreshed = await this.clinicRepository.findOne({
+      where: { id: clinicId },
+      select: { id: true, satusehatTokenExpiresAt: true },
+    });
+    return { expiresAt: refreshed!.satusehatTokenExpiresAt as Date };
   }
 
   async sendFhirResource(
@@ -41,20 +98,217 @@ export class SatusehatClientService {
     path: string,
     body: object,
   ): Promise<{ status: number; data: any }> {
-    throw new ServiceUnavailableException(
-      'SATUSEHAT integration has been deprecated and is no longer available',
-    );
+    return this.request(clinicId, method, path, body);
   }
 
+  /** POST Bundle transaction ke base FHIR (mis. Bundle rujukan). */
+  async postBundle(
+    clinicId: number,
+    bundle: object,
+  ): Promise<{ status: number; data: any }> {
+    return this.request(clinicId, 'POST', '', bundle);
+  }
+
+  /** GET ke FHIR SATUSEHAT, mis. `Practitioner?identifier=...` */
+  async getFhir(
+    clinicId: number,
+    pathAndQuery: string,
+  ): Promise<{ status: number; data: any }> {
+    return this.request(clinicId, 'GET', pathAndQuery);
+  }
+
+  /** Cari Patient (Master Patient Index) berdasarkan NIK — Bundle FHIR. */
   async searchPatientByNik(clinicId: number, nik: string): Promise<any> {
-    throw new ServiceUnavailableException(
-      'SATUSEHAT integration has been deprecated and is no longer available',
+    const { data } = await this.getFhir(
+      clinicId,
+      `Patient?identifier=${encodeURIComponent(`https://fhir.kemkes.go.id/id/nik|${nik}`)}`,
     );
+    return data;
+  }
+
+  /** Cari Practitioner (SISDMK) berdasarkan NIK — Bundle FHIR. */
+  async searchPractitionerByNik(clinicId: number, nik: string): Promise<any> {
+    const { data } = await this.getFhir(
+      clinicId,
+      `Practitioner?identifier=${encodeURIComponent(`https://fhir.kemkes.go.id/id/nik|${nik}`)}`,
+    );
+    return data;
+  }
+
+  /**
+   * SATUSEHAT Rekam Medis Elektronik (SSRME) — POST /ssrme/v2/ntl/{chl|shl}.
+   * Body & respons tidak dicatat di log (berisi identitas pasien dan URL
+   * akses yang sensitif).
+   */
+  async postSsrme(
+    clinicId: number,
+    endpoint: 'chl' | 'shl',
+    body: object,
+  ): Promise<{ status: number; data: any }> {
+    const clinic = await this.loadConfiguredClinic(clinicId);
+    const token = await this.getAccessToken(clinicId);
+    try {
+      const response = await fetch(
+        `${SATUSEHAT_BASE[clinic.satusehatEnvironment]}/ssrme/v2/ntl/${endpoint}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        },
+      );
+      const data = await response.json().catch(() => ({}));
+      return { status: response.status, data };
+    } catch (err) {
+      this.logger.error(`SSRME ${endpoint} gagal: ${(err as Error).message}`);
+      throw new ServiceUnavailableException('Koneksi ke SATUSEHAT gagal');
+    }
+  }
+
+  /**
+   * KYC Verifikasi Profil SATUSEHAT Mobile — POST /kyc/v1/{generate-url|challenge-code}.
+   * Body dan respons berupa teks terenkripsi (-----BEGIN ENCRYPTED MESSAGE-----),
+   * jadi dikembalikan apa adanya untuk didekripsi KycService.
+   */
+  async postKyc(
+    clinicId: number,
+    endpoint: 'generate-url' | 'challenge-code',
+    encryptedBody: string,
+    headers: Record<string, string> = {},
+  ): Promise<{ status: number; text: string }> {
+    const clinic = await this.loadConfiguredClinic(clinicId);
+    const token = await this.getAccessToken(clinicId);
+    try {
+      const response = await fetch(
+        `${SATUSEHAT_BASE[clinic.satusehatEnvironment]}/kyc/v1/${endpoint}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'text/plain',
+            ...headers,
+          },
+          body: encryptedBody,
+        },
+      );
+      return { status: response.status, text: await response.text() };
+    } catch (err) {
+      this.logger.error(`KYC ${endpoint} gagal: ${(err as Error).message}`);
+      throw new ServiceUnavailableException('Koneksi ke SATUSEHAT gagal');
+    }
+  }
+
+  private async request(
+    clinicId: number,
+    method: 'GET' | 'POST' | 'PUT',
+    path: string,
+    body?: object,
+  ): Promise<{ status: number; data: any }> {
+    const clinic = await this.loadConfiguredClinic(clinicId);
+    const token = await this.getAccessToken(clinicId);
+    const baseUrl = SATUSEHAT_BASE[clinic.satusehatEnvironment];
+    try {
+      // Bundle transaction dikirim ke base URL tanpa garis miring di akhir
+      const url = path
+        ? `${baseUrl}/fhir-r4/v1/${path}`
+        : `${baseUrl}/fhir-r4/v1`;
+      const response = await fetch(url, {
+        method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await response.json().catch(() => ({}));
+      return { status: response.status, data };
+    } catch (err) {
+      // Jangan log URL lengkap: query bisa memuat NIK
+      this.logger.error(
+        `SATUSEHAT ${method} ${path.split('?')[0] || 'Bundle'} gagal: ${(err as Error).message}`,
+      );
+      throw new ServiceUnavailableException('Koneksi ke SATUSEHAT gagal');
+    }
+  }
+
+  private async loadConfiguredClinic(clinicId: number): Promise<Clinic> {
+    // Semua permintaan ke SATUSEHAT lewat sini: saat saklar mati, tidak ada
+    // satu pun data klinik yang keluar.
+    if (!(await this.isActiveFor(clinicId))) {
+      throw new ForbiddenException({
+        success: false,
+        error: {
+          code: 'SATUSEHAT_DISABLED',
+          message: 'SATUSEHAT tidak aktif untuk klinik ini',
+        },
+      });
+    }
+    const clinic = withEffectiveCredentials(
+      await this.clinicRepository.findOne({
+        where: { id: clinicId },
+      }),
+    );
+    if (
+      !clinic?.satusehatOrgId ||
+      !clinic.satusehatClientId ||
+      !clinic.satusehatClientSecret
+    ) {
+      throw new ServiceUnavailableException(
+        'Kredensial SATUSEHAT belum diatur — isi SATUSEHAT_ORGANIZATION_ID, SATUSEHAT_CLIENT_ID, SATUSEHAT_CLIENT_SECRET di env server (atau Konfigurasi klinik)',
+      );
+    }
+    return clinic;
   }
 
   private async refreshToken(clinic: Clinic): Promise<string> {
-    throw new ServiceUnavailableException(
-      'SATUSEHAT integration has been deprecated and is no longer available',
-    );
+    let clientSecret: string;
+    try {
+      clientSecret =
+        clinic.satusehatClientSecret === ENV_SECRET_MARKER
+          ? (envCredentials()?.clientSecret as string)
+          : decrypt(clinic.satusehatClientSecret as string, secretKey());
+    } catch (err) {
+      if (err instanceof ServiceUnavailableException) throw err;
+      throw new ServiceUnavailableException(
+        'Client secret SATUSEHAT tidak bisa dibaca — simpan ulang konfigurasi',
+      );
+    }
+
+    const params = new URLSearchParams({
+      client_id: clinic.satusehatClientId as string,
+      client_secret: clientSecret,
+    });
+
+    try {
+      const response = await fetch(
+        `${AUTH_URL[clinic.satusehatEnvironment]}?grant_type=client_credentials`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString(),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`Auth failed: ${response.status}`);
+      }
+      const data: any = await response.json();
+      const expiresAt = new Date(
+        Date.now() + parseInt(data.expires_in || '3599', 10) * 1000,
+      );
+      await this.clinicRepository.update(clinic.id, {
+        satusehatToken: data.access_token,
+        satusehatTokenExpiresAt: expiresAt,
+      });
+      return data.access_token;
+    } catch (err) {
+      this.logger.error(
+        `Token SATUSEHAT klinik ${clinic.id} gagal: ${(err as Error).message}`,
+      );
+      throw new ServiceUnavailableException(
+        'Gagal mendapatkan token SATUSEHAT — periksa Client ID, Client Secret, dan environment',
+      );
+    }
   }
 }

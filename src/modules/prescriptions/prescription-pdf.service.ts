@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as path from 'path';
 import { PrescriptionItem } from './entities/prescription-item.entity';
+import { PrescriptionSignature } from './entities/prescription-signature.entity';
+import { rxLine, toRoman } from './roman';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import { PhysicalExamination } from '../physical-examination/entities/physical-examination.entity';
 // pdfmake's server build exports one process-wide singleton configured via
@@ -51,6 +53,8 @@ export class PrescriptionPdfService {
     private readonly encounterRepository: Repository<Encounter>,
     @InjectRepository(PhysicalExamination)
     private readonly examRepository: Repository<PhysicalExamination>,
+    @InjectRepository(PrescriptionSignature)
+    private readonly signatureRepository: Repository<PrescriptionSignature>,
   ) {}
 
   async generatePrescriptionPdf(
@@ -78,6 +82,9 @@ export class PrescriptionPdfService {
     }
 
     const exam = await this.examRepository.findOne({ where: { encounterId } });
+    const signature = await this.signatureRepository.findOne({
+      where: { encounterId },
+    });
 
     const clinic = encounter.clinic;
     const practitioner = encounter.practitioner;
@@ -88,49 +95,88 @@ export class PrescriptionPdfService {
     );
     const age = calculateAge(patient?.birthDate);
 
+    // Nama sudah bergelar (drg./dr./Dr.) tidak diberi "dr." lagi
+    const doctorName = practitioner?.name
+      ? /^(dr|drg)\.?\s/i.test(practitioner.name)
+        ? practitioner.name
+        : `dr. ${practitioner.name}`
+      : '-';
+
     const rxBlocks = items.map((item, index) => {
-      const detailParts = [item.dosage, item.frequency]
-        .filter(Boolean)
-        .join(' ');
+      // Baris obat: nama + kekuatan + sediaan, numero di kanan (No. XV)
+      const drugLine = rxLine(item.drugName, item.dosage, item.dosageForm);
+      const numero = item.numero
+        ? `No. ${toRoman(item.numero)}`
+        : item.quantity
+          ? `No. ${item.quantity}`
+          : '';
       const lines: any[] = [
         {
-          text: [
-            { text: 'R/  ', style: 'rxMark' },
-            { text: item.drugName, style: 'rxDrug' },
+          columns: [
+            {
+              width: '*',
+              text: [
+                { text: 'R/  ', style: 'rxMark' },
+                { text: drugLine, style: 'rxDrug' },
+              ],
+            },
+            numero
+              ? { width: 'auto', text: numero, style: 'rxDrug' }
+              : { width: 'auto', text: '' },
           ],
         },
       ];
-      if (detailParts) {
+      // Racikan: bahan-bahan lalu m.f. (misce fac) bentuk sediaan
+      if (item.compoundType && item.ingredients?.length) {
+        for (const g of item.ingredients) {
+          lines.push({
+            text: `${g.name}  ${g.amount} ${g.amountUnit}`,
+            style: 'rxDetail',
+            margin: [24, 1, 0, 0],
+          });
+        }
         lines.push({
-          text: detailParts,
+          text: `m.f. ${(item.compoundFormName ?? 'racikan').toLowerCase()}${item.compoundType === 'SD' ? ' d.t.d' : ''}`,
           style: 'rxDetail',
           margin: [24, 1, 0, 0],
         });
       }
-      if (item.quantity) {
+      if (item.signa) {
         lines.push({
-          text: `No. ${item.quantity}`,
-          style: 'rxDetail',
-          margin: [24, 1, 0, 0],
-        });
-      }
-      if (item.duration) {
-        lines.push({
-          text: `Untuk ${item.duration}`,
-          style: 'rxDetail',
-          margin: [24, 1, 0, 0],
-        });
-      }
-      if (item.instructions) {
-        lines.push({
-          text: `S  ${item.instructions}`,
-          style: 'rxSignature',
+          text: item.signa.latin,
+          style: 'rxSigna',
           margin: [24, 3, 0, 0],
+        });
+        lines.push({
+          text: `(${item.signa.text})`,
+          style: 'rxSignature',
+          margin: [24, 1, 0, 0],
+        });
+      } else {
+        const legacy = [
+          item.frequency,
+          item.duration && `selama ${item.duration}`,
+        ]
+          .filter(Boolean)
+          .join(', ');
+        if (legacy) {
+          lines.push({
+            text: legacy,
+            style: 'rxDetail',
+            margin: [24, 1, 0, 0],
+          });
+        }
+      }
+      if (item.instructions && item.instructions !== item.signa?.text) {
+        lines.push({
+          text: item.instructions,
+          style: 'rxSignature',
+          margin: [24, 1, 0, 0],
         });
       }
       return {
         stack: lines,
-        margin: [0, 0, 0, index === items.length - 1 ? 0 : 16],
+        margin: [0, 0, 0, index === items.length - 1 ? 0 : 14],
       };
     });
 
@@ -186,7 +232,7 @@ export class PrescriptionPdfService {
             {
               text: [
                 {
-                  text: `dr. ${practitioner?.name || '-'}`,
+                  text: doctorName,
                   style: 'doctorName',
                 },
                 practitioner?.specialization
@@ -284,7 +330,13 @@ export class PrescriptionPdfService {
               width: 160,
               alignment: 'center',
               stack: [
-                { text: ' ', margin: [0, 30, 0, 0] },
+                signature?.signature
+                  ? {
+                      image: signature.signature,
+                      fit: [150, 56],
+                      alignment: 'center',
+                    }
+                  : { text: ' ', margin: [0, 30, 0, 0] },
                 {
                   canvas: [
                     {
@@ -299,7 +351,7 @@ export class PrescriptionPdfService {
                   ],
                 },
                 {
-                  text: `dr. ${practitioner?.name || '-'}`,
+                  text: doctorName,
                   style: 'clinicMeta',
                   margin: [0, 4, 0, 0],
                 },
@@ -326,6 +378,7 @@ export class PrescriptionPdfService {
         rxDrug: { fontSize: 12, bold: true, color: '#1A2340' },
         rxDetail: { fontSize: 10, color: '#1A2340' },
         rxSignature: { fontSize: 10, italics: true, color: '#6B7A99' },
+        rxSigna: { fontSize: 11, bold: true, color: '#1A2340' },
         proLabel: { fontSize: 10, color: '#6B7A99' },
         proValue: { fontSize: 10, color: '#1A2340' },
         footerNote: { fontSize: 8, color: '#A0AEC0', italics: true },

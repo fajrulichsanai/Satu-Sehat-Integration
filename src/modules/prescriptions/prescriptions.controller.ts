@@ -3,9 +3,11 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   ParseIntPipe,
   Post,
+  Put,
   Res,
   UseGuards,
   UseInterceptors,
@@ -14,13 +16,22 @@ import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PrescriptionsService } from './prescriptions.service';
 import { PrescriptionPdfService } from './prescription-pdf.service';
-import { CreatePrescriptionItemDto } from './dto/prescription-item.dto';
+import {
+  AdministerPrescriptionDto,
+  CreatePrescriptionItemDto,
+  DispensePrescriptionDto,
+  SavePrescriptionReviewDto,
+  SavePrescriptionSignatureDto,
+  SetPrescriptionCodingDto,
+} from './dto/prescription-item.dto';
+import { PRESCRIPTION_REVIEW_GROUPS } from './prescription-review.questions';
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
 import { ClinicId } from '../auth/decorators/clinic-id.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Audit } from '../audit-log/decorators/audit.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
 import { AuditActionType } from '../audit-log/entities/audit-log.entity';
+import { RequireFeature } from '../features/require-feature.decorator';
 
 @ApiTags('encounters')
 @ApiBearerAuth('JWT-auth')
@@ -68,6 +79,48 @@ export class PrescriptionsController {
     res.end(pdfBuffer);
   }
 
+  @Get('signature')
+  @ApiOperation({ summary: 'Tanda tangan dokter pada resep' })
+  async getSignature(
+    @Param('encounterId', ParseIntPipe) encounterId: number,
+    @ClinicId() clinicId: number,
+  ) {
+    const data = await this.prescriptionsService.getSignature(
+      encounterId,
+      clinicId,
+    );
+    return { success: true, data };
+  }
+
+  @Put('signature')
+  @Audit('MedicalRecord', AuditActionType.UPDATE)
+  @ApiOperation({ summary: 'Simpan tanda tangan dokter pada resep' })
+  async saveSignature(
+    @Param('encounterId', ParseIntPipe) encounterId: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: SavePrescriptionSignatureDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.prescriptionsService.saveSignature(
+      encounterId,
+      clinicId,
+      dto,
+      user.userId,
+    );
+    return { success: true, data };
+  }
+
+  @Delete('signature')
+  @Audit('MedicalRecord', AuditActionType.UPDATE)
+  @ApiOperation({ summary: 'Hapus tanda tangan dokter pada resep' })
+  async removeSignature(
+    @Param('encounterId', ParseIntPipe) encounterId: number,
+    @ClinicId() clinicId: number,
+  ) {
+    await this.prescriptionsService.removeSignature(encounterId, clinicId);
+    return { success: true, data: null };
+  }
+
   @Post()
   @Audit('MedicalRecord', AuditActionType.CREATE)
   @ApiOperation({ summary: 'Add a prescription item to an encounter' })
@@ -78,6 +131,150 @@ export class PrescriptionsController {
     @CurrentUser() user: any,
   ) {
     const data = await this.prescriptionsService.create(
+      encounterId,
+      clinicId,
+      dto,
+      user.userId,
+    );
+    return { success: true, data };
+  }
+
+  @Put(':itemId/coding')
+  @Audit('MedicalRecord', AuditActionType.UPDATE)
+  @ApiOperation({
+    summary: 'Pasang kode KFA atau ubah obat menjadi racikan (untuk SATUSEHAT)',
+  })
+  async setCoding(
+    @Param('encounterId', ParseIntPipe) encounterId: number,
+    @Param('itemId', ParseIntPipe) itemId: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: SetPrescriptionCodingDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.prescriptionsService.setCoding(
+      encounterId,
+      clinicId,
+      itemId,
+      dto,
+      user.userId,
+    );
+    return { success: true, data };
+  }
+
+  @Post(':itemId/dispense')
+  @RequireFeature('farmasi')
+  @HttpCode(200)
+  @Audit('MedicalRecord', AuditActionType.UPDATE)
+  @ApiOperation({
+    summary: 'Catat obat diserahkan ke pasien (pengeluaran obat)',
+  })
+  async dispense(
+    @Param('encounterId', ParseIntPipe) encounterId: number,
+    @Param('itemId', ParseIntPipe) itemId: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: DispensePrescriptionDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.prescriptionsService.dispense(
+      encounterId,
+      clinicId,
+      itemId,
+      dto,
+      user.userId,
+    );
+    return { success: true, data };
+  }
+
+  @Delete(':itemId/dispense')
+  @RequireFeature('farmasi')
+  @Audit('MedicalRecord', AuditActionType.UPDATE)
+  @ApiOperation({ summary: 'Batalkan catatan pengeluaran obat' })
+  async undoDispense(
+    @Param('encounterId', ParseIntPipe) encounterId: number,
+    @Param('itemId', ParseIntPipe) itemId: number,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.prescriptionsService.undoDispense(
+      encounterId,
+      clinicId,
+      itemId,
+      user.userId,
+    );
+    return { success: true, data };
+  }
+
+  @Post(':itemId/administer')
+  @RequireFeature('farmasi')
+  @HttpCode(200)
+  @Audit('MedicalRecord', AuditActionType.UPDATE)
+  @ApiOperation({ summary: 'Catat obat diberikan langsung di klinik' })
+  async administer(
+    @Param('encounterId', ParseIntPipe) encounterId: number,
+    @Param('itemId', ParseIntPipe) itemId: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: AdministerPrescriptionDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.prescriptionsService.administer(
+      encounterId,
+      clinicId,
+      itemId,
+      dto,
+      user.userId,
+    );
+    return { success: true, data };
+  }
+
+  @Delete(':itemId/administer')
+  @RequireFeature('farmasi')
+  @Audit('MedicalRecord', AuditActionType.UPDATE)
+  @ApiOperation({ summary: 'Batalkan catatan pemberian obat' })
+  async undoAdminister(
+    @Param('encounterId', ParseIntPipe) encounterId: number,
+    @Param('itemId', ParseIntPipe) itemId: number,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.prescriptionsService.undoAdminister(
+      encounterId,
+      clinicId,
+      itemId,
+      user.userId,
+    );
+    return { success: true, data };
+  }
+
+  @Get('review')
+  @Audit('Prescription', AuditActionType.VIEW)
+  @ApiOperation({ summary: 'Pengkajian resep kunjungan (Q0007)' })
+  async getReview(
+    @Param('encounterId', ParseIntPipe) encounterId: number,
+    @ClinicId() clinicId: number,
+  ) {
+    return {
+      success: true,
+      data: {
+        review: await this.prescriptionsService.getReview(
+          encounterId,
+          clinicId,
+        ),
+        questions: PRESCRIPTION_REVIEW_GROUPS,
+      },
+    };
+  }
+
+  @Put('review')
+  @RequireFeature('farmasi')
+  @Audit('MedicalRecord', AuditActionType.UPDATE)
+  @ApiOperation({ summary: 'Simpan pengkajian resep' })
+  async saveReview(
+    @Param('encounterId', ParseIntPipe) encounterId: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: SavePrescriptionReviewDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.prescriptionsService.saveReview(
       encounterId,
       clinicId,
       dto,

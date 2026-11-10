@@ -22,6 +22,7 @@ import {
 import { SubscriptionPaymentsService } from './subscription-payments.service';
 import {
   CreateSubscriptionPaymentDto,
+  QuoteQueryDto,
   ReviewSubscriptionPaymentDto,
   SubscriptionPaymentQueryDto,
 } from './dto/subscription-payment.dto';
@@ -62,6 +63,30 @@ export class SubscriptionPaymentsController {
     return this.paymentsService.claim(clinicId, dto, user.userId, proof);
   }
 
+  @Get('quote')
+  @ApiOperation({
+    summary:
+      'Rincian harga sebelum bayar: harga normal, promo, diskon lama langganan, storage, total',
+  })
+  async quote(@Query() query: QuoteQueryDto, @ClinicId() clinicId: number) {
+    const { plan, quote } = await this.paymentsService.quoteForClinic(
+      clinicId,
+      query.planId,
+      query.months ?? 1,
+      query.quantity ?? 1,
+    );
+    return { planId: plan.id, planName: plan.name, ...quote };
+  }
+
+  @Get('upgrade-quote')
+  @ApiOperation({
+    summary:
+      'Naik paket: selisih harga untuk sisa masa aktif (paket baru langsung berlaku setelah dikonfirmasi)',
+  })
+  upgradeQuote(@Query() query: QuoteQueryDto, @ClinicId() clinicId: number) {
+    return this.paymentsService.upgradeQuote(clinicId, query.planId);
+  }
+
   @Get('mine')
   @ApiOperation({ summary: "List the caller's clinic payment claim history" })
   listMine(
@@ -78,6 +103,33 @@ export class SubscriptionPaymentsController {
   })
   listQueue(@Query() query: SubscriptionPaymentQueryDto) {
     return this.paymentsService.listQueue(query);
+  }
+
+  @Get(':id/receipt.pdf')
+  @ApiOperation({ summary: 'Kuitansi PDF pembayaran yang sudah dikonfirmasi' })
+  async receiptPdf(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId({ optional: true }) clinicId: number | null,
+    @Res() res: Response,
+  ) {
+    const { fileName, pdf } = await this.paymentsService.receiptPdf(id, {
+      clinicId,
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(pdf);
+  }
+
+  @Get(':id/receipt')
+  @ApiOperation({
+    summary:
+      'Kuitansi pembayaran yang sudah dikonfirmasi (klinik pemilik atau Super Admin)',
+  })
+  async receipt(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId({ optional: true }) clinicId: number | null,
+  ) {
+    return this.paymentsService.receipt(id, { clinicId });
   }
 
   @Get(':id/proof-file')

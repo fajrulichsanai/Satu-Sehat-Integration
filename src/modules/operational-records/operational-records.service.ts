@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { OperationalRecord } from './entities/operational-record.entity';
 import {
   CreateOperationalRecordDto,
@@ -21,32 +21,71 @@ export class OperationalRecordsService {
     const page = query.page || 1;
     const limit = query.limit || 50;
 
-    const qb = this.repo
-      .createQueryBuilder('o')
-      .where('o.clinicId = :clinicId', { clinicId });
+    // Periode + pencarian dipakai bersama oleh daftar dan ringkasan; filter
+    // kategori hanya menyaring daftar supaya rincian per kategori tetap utuh
+    // (dipakai untuk menyaring dengan satu klik di layar).
+    const applyPeriod = (qb: SelectQueryBuilder<OperationalRecord>) => {
+      qb.where('o.clinicId = :clinicId', { clinicId });
+      if (query.search) {
+        qb.andWhere('o.deskripsi LIKE :search', {
+          search: `%${query.search}%`,
+        });
+      }
+      if (query.startDate) {
+        qb.andWhere('o.tanggal >= :startDate', { startDate: query.startDate });
+      }
+      if (query.endDate) {
+        qb.andWhere('o.tanggal <= :endDate', { endDate: query.endDate });
+      }
+      return qb;
+    };
 
-    if (query.search) {
-      qb.andWhere('o.deskripsi LIKE :search', { search: `%${query.search}%` });
-    }
+    const qb = applyPeriod(this.repo.createQueryBuilder('o'));
     if (query.kategori) {
       qb.andWhere('o.kategori = :kategori', { kategori: query.kategori });
     }
-    if (query.startDate) {
-      qb.andWhere('o.tanggal >= :startDate', { startDate: query.startDate });
-    }
-    if (query.endDate) {
-      qb.andWhere('o.tanggal <= :endDate', { endDate: query.endDate });
-    }
 
+    // id sebagai pembeda kedua: tanggal yang sama tidak boleh tertukar
+    // urutannya antar halaman (baris bisa dobel/hilang).
     const [data, total] = await qb
       .orderBy('o.tanggal', 'DESC')
+      .addOrderBy('o.id', 'DESC')
       .skip((page - 1) * limit)
       .take(limit)
       .getManyAndCount();
 
+    const rows = await applyPeriod(this.repo.createQueryBuilder('o'))
+      .select('o.kategori', 'kategori')
+      .addSelect('COALESCE(SUM(o.nominal), 0)', 'total')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('o.kategori')
+      .getRawMany<{ kategori: string; total: string; count: string }>();
+    const byKategori = rows
+      .map((r) => ({
+        kategori: r.kategori,
+        total: Number(r.total),
+        count: Number(r.count),
+      }))
+      .sort((a, b) => b.total - a.total);
+    const periodTotal = byKategori.reduce((n, r) => n + r.total, 0);
+    const periodCount = byKategori.reduce((n, r) => n + r.count, 0);
+
     return {
       success: true,
-      data: { data, meta: { total, page, limit } },
+      data: {
+        data,
+        meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+        summary: {
+          total: periodTotal,
+          count: periodCount,
+          byKategori,
+          // jumlah untuk daftar yang sedang tampil (memperhitungkan kategori)
+          filteredTotal: query.kategori
+            ? (byKategori.find((r) => r.kategori === query.kategori)?.total ??
+              0)
+            : periodTotal,
+        },
+      },
     };
   }
 

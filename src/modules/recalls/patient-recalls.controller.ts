@@ -21,11 +21,13 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Audit } from '../audit-log/decorators/audit.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
 import { AuditActionType } from '../audit-log/entities/audit-log.entity';
+import { RequireFeature } from '../features/require-feature.decorator';
 
 @ApiTags('recalls')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(ClinicContextGuard)
 @UseInterceptors(AuditInterceptor)
+@RequireFeature('recall-reminder')
 @Controller('patient-recalls')
 export class PatientRecallsController {
   constructor(private readonly patientRecallsService: PatientRecallsService) {}

@@ -1,3 +1,5 @@
+import type { MedicationHistoryEntry } from '../medication-history';
+import type { FamilyHistoryEntry } from '../family-history';
 import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { BaseEntity } from '../../../common/base.entity';
 import { nikColumnTransformer } from '../../../common/utils/nik-crypto.util';
@@ -179,6 +181,14 @@ export class Patient extends BaseEntity {
   @Column('text', { name: 'catatan_sistemik_lainnya', nullable: true })
   catatanSistemikLainnya: string;
 
+  /** Riwayat penyakit keluarga (FamilyMemberHistory) */
+  @Column({ name: 'riwayat_keluarga', type: 'json', nullable: true })
+  riwayatKeluarga: FamilyHistoryEntry[] | null;
+
+  /** Riwayat obat yang dikonsumsi (MedicationStatement) */
+  @Column({ name: 'riwayat_obat', type: 'json', nullable: true })
+  riwayatObat: MedicationHistoryEntry[] | null;
+
   @Column({ name: 'alergi_obat', default: false })
   alergiObat: boolean;
 
@@ -214,6 +224,17 @@ export class Patient extends BaseEntity {
 
   @Column({ name: 'consent_version', length: 20, nullable: true })
   consentVersion: string;
+
+  // Izin pakai foto klinis pasien ini sebagai konten promosi — null = belum
+  // diputuskan, beda dari consentMarketing di atas (persetujuan umum data).
+  @Column({ name: 'photo_consent_marketing', type: 'boolean', nullable: true })
+  photoConsentMarketing: boolean | null;
+
+  @Column({ name: 'photo_consent_updated_at', type: 'datetime', nullable: true })
+  photoConsentUpdatedAt: Date | null;
+
+  @Column({ name: 'photo_consent_updated_by', type: 'int', nullable: true })
+  photoConsentUpdatedBy: number | null;
 
   // Relations
   @ManyToOne(() => Clinic, { onDelete: 'CASCADE' })

@@ -5,20 +5,43 @@ import {
   ForbiddenException,
   ConflictException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { User } from './entities/user.entity';
 import { Practitioner } from '../practitioners/entities/practitioner.entity';
-import { UserRole, ROLE_LEVEL } from '../../enums';
+import { UserRole, ROLE_LEVEL, isClinician } from '../../enums';
 import { InviteUserDto, UpdateUserDto } from './dto/user.dto';
+import {
+  accountQuotaForClinic,
+  assertAccountRoom,
+} from '../multi-clinic/account-pool';
+import { UsersMailService } from './users-mail.service';
 
 interface CurrentUserPayload {
   userId: number;
   role: UserRole;
   clinicId: number | null;
+  /** Real role when the token acts as another (Manajer Cabang, Multi-Klinik Owner in a branch). */
+  actorRole?: string;
+}
+
+/** 10 karakter: huruf + angka, tanpa karakter yang mirip (0/O, 1/l). */
+export function generateTemporaryPassword(): string {
+  const letters = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ';
+  const digits = '23456789';
+  const all = letters + digits;
+  const pick = (set: string) => set[crypto.randomInt(set.length)];
+  const chars = [pick(letters), pick(digits)];
+  while (chars.length < 10) chars.push(pick(all));
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
 }
 
 @Injectable()
@@ -30,7 +53,61 @@ export class UsersService {
     private userRepository: Repository<User>,
     @InjectRepository(Practitioner)
     private practitionerRepository: Repository<Practitioner>,
+    @Optional() private readonly mail?: UsersMailService,
   ) {}
+
+  /** A Manajer Cabang acts with owner rights but may not manage peers. */
+  private isBranchManager(currentUser: CurrentUserPayload): boolean {
+    return currentUser.actorRole === UserRole.MANAJER_CABANG;
+  }
+
+  /**
+   * Manajer Cabang hanya untuk cabang yang terhubung (disetujui) ke owner
+   * multiklinik, dan satu cabang paling banyak satu manajer aktif (PRD MC-01).
+   */
+  private async assertCanAppointManager(
+    clinicId: number | null,
+    exceptUserId?: number,
+  ) {
+    const manager = this.userRepository.manager;
+    if (!clinicId) {
+      throw new BadRequestException({
+        success: false,
+        error: {
+          code: 'CLINIC_ID_REQUIRED',
+          message: 'Manajer Cabang harus terikat ke satu cabang',
+        },
+      });
+    }
+    const [link] = await manager.query(
+      "SELECT id FROM owner_clinic_links WHERE clinic_id = ? AND status = 'approved' LIMIT 1",
+      [clinicId],
+    );
+    if (!link) {
+      throw new BadRequestException({
+        success: false,
+        error: {
+          code: 'NOT_A_BRANCH',
+          message:
+            'Manajer Cabang hanya untuk klinik yang terhubung ke owner multiklinik',
+        },
+      });
+    }
+    const [existing] = await manager.query(
+      "SELECT id FROM users WHERE clinic_id = ? AND role = 'manajer_cabang' AND is_active = 1 AND id <> ? LIMIT 1",
+      [clinicId, exceptUserId ?? 0],
+    );
+    if (existing) {
+      throw new ConflictException({
+        success: false,
+        error: {
+          code: 'BRANCH_MANAGER_EXISTS',
+          message:
+            'Cabang ini sudah punya Manajer Cabang. Nonaktifkan yang lama dulu.',
+        },
+      });
+    }
+  }
 
   /**
    * Memastikan user dengan role dokter memiliki baris practitioners terkait,
@@ -42,22 +119,54 @@ export class UsersService {
     const existing = await this.practitionerRepository.findOne({
       where: { userId: user.id },
     });
-    if (existing) return;
+    if (existing) {
+      await this.linkPractitioner(user, existing.id);
+      return;
+    }
+
+    // Data nakes yang sudah diinput (email sama, belum punya akun) dipakai
+    // ulang — jangan buat data dokter ganda untuk orang yang sama
+    const sameEmail = user.email
+      ? await this.practitionerRepository.findOne({
+          where: {
+            clinicId: user.clinicId,
+            email: user.email,
+            userId: IsNull(),
+          },
+        })
+      : null;
+    if (sameEmail) {
+      await this.practitionerRepository.update(sameEmail.id, {
+        userId: user.id,
+      });
+      await this.linkPractitioner(user, sameEmail.id);
+      return;
+    }
 
     const practitioner = this.practitionerRepository.create({
       userId: user.id,
       clinicId: user.clinicId,
       name: user.name,
       email: user.email,
+      // Nakes perawat: profesi tercatat supaya mudah dibedakan dari dokter
+      ...(user.role === UserRole.PERAWAT ? { specialization: 'Perawat' } : {}),
       isActive: true,
       createdBy: user.id,
       updatedBy: user.id,
     });
 
     await this.practitionerRepository.save(practitioner);
+    await this.linkPractitioner(user, practitioner.id);
     this.logger.log(
       `[AUTO-PRACTITIONER] Practitioner dibuat otomatis | userId=${user.id}, clinicId=${user.clinicId}`,
     );
+  }
+
+  /** users.practitioner_id dipakai laporan "Share Fee Saya" — selalu tautkan */
+  private async linkPractitioner(user: User, practitionerId: number) {
+    if (user.practitionerId === practitionerId) return;
+    user.practitionerId = practitionerId;
+    await this.userRepository.update(user.id, { practitionerId });
   }
 
   private isSuperAdmin(currentUser: CurrentUserPayload): boolean {
@@ -84,7 +193,11 @@ export class UsersService {
       });
     }
 
-    if (ROLE_LEVEL[targetUser.role] <= ROLE_LEVEL[currentUser.role]) {
+    if (
+      ROLE_LEVEL[targetUser.role] <= ROLE_LEVEL[currentUser.role] ||
+      (this.isBranchManager(currentUser) &&
+        targetUser.role === UserRole.MANAJER_CABANG)
+    ) {
       throw new ForbiddenException({
         success: false,
         error: {
@@ -105,7 +218,10 @@ export class UsersService {
       return;
     }
 
-    if (ROLE_LEVEL[newRole] <= ROLE_LEVEL[currentUser.role]) {
+    if (
+      ROLE_LEVEL[newRole] <= ROLE_LEVEL[currentUser.role] ||
+      (this.isBranchManager(currentUser) && newRole === UserRole.MANAJER_CABANG)
+    ) {
       throw new ForbiddenException({
         success: false,
         error: {
@@ -138,6 +254,57 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  /**
+   * Super Admin: semua pengguna lintas klinik dengan filter dan paginasi
+   * (PRD Super Admin PG-01), beserta nama kliniknya.
+   */
+  async searchAll(query: {
+    page?: number;
+    limit?: number;
+    role?: string;
+    clinicId?: number;
+    search?: string;
+  }) {
+    const page = Math.max(1, query.page ?? 1);
+    const limit = Math.min(100, Math.max(1, query.limit ?? 20));
+    const qb = this.userRepository
+      .createQueryBuilder('u')
+      .orderBy('u.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
+    if (query.role) qb.andWhere('u.role = :role', { role: query.role });
+    if (query.clinicId)
+      qb.andWhere('u.clinicId = :clinicId', { clinicId: query.clinicId });
+    if (query.search) {
+      qb.andWhere('(u.name LIKE :q OR u.email LIKE :q)', {
+        q: `%${query.search}%`,
+      });
+    }
+    const [users, total] = await qb.getManyAndCount();
+    const clinicIds = [
+      ...new Set(
+        users.map((u) => u.clinicId).filter((id): id is number => !!id),
+      ),
+    ];
+    const clinics: { id: number; name: string }[] = clinicIds.length
+      ? await this.userRepository.manager.query(
+          'SELECT id, name FROM clinics WHERE id IN (?)',
+          [clinicIds],
+        )
+      : [];
+    const clinicName = new Map(clinics.map((c) => [Number(c.id), c.name]));
+    // Paginated shape { data, meta } (no `success`) so the frontend keeps meta.
+    return {
+      data: users.map((user) => ({
+        ...this.sanitizeUser(user),
+        clinicName: user.clinicId
+          ? (clinicName.get(user.clinicId) ?? null)
+          : null,
+      })),
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 },
+    };
   }
 
   async findAll(currentUser: CurrentUserPayload) {
@@ -290,7 +457,7 @@ export class UsersService {
     const user = await this.findByIdOrThrow(id, currentUser);
     this.assertCanManage(currentUser, user);
 
-    if (user.role === UserRole.DOKTER) {
+    if (isClinician(user.role)) {
       await this.practitionerRepository.delete({ userId: user.id });
       this.logger.log(
         `[DELETE] Practitioner terkait ikut dihapus | userId=${id}`,
@@ -309,7 +476,19 @@ export class UsersService {
     };
   }
 
-  getRoles(currentUser: CurrentUserPayload) {
+  /** Akun aktif vs batas paket / jatah bersama, untuk User Management. */
+  async getAccountQuota(currentUser: CurrentUserPayload) {
+    if (!currentUser.clinicId) {
+      return { success: true, data: null };
+    }
+    const data = await accountQuotaForClinic(
+      this.userRepository.manager,
+      currentUser.clinicId,
+    );
+    return { success: true, data };
+  }
+
+  async getRoles(currentUser: CurrentUserPayload) {
     this.logger.log('[GET-ROLES] Mengambil daftar role yang tersedia');
 
     const roles = this.isSuperAdmin(currentUser)
@@ -319,11 +498,32 @@ export class UsersService {
           { value: UserRole.OWNER, label: 'Owner' },
           { value: UserRole.ADMIN, label: 'Admin' },
           { value: UserRole.DOKTER, label: 'Dokter' },
+          { value: UserRole.PERAWAT, label: 'Perawat' },
         ]
       : [
           { value: UserRole.ADMIN, label: 'Admin' },
           { value: UserRole.DOKTER, label: 'Dokter' },
+          { value: UserRole.PERAWAT, label: 'Perawat' },
         ];
+
+    // The owner of a multiklinik branch (or the Multi-Klinik Owner inside
+    // it) may appoint one Manajer Cabang.
+    if (
+      !this.isSuperAdmin(currentUser) &&
+      currentUser.role === UserRole.OWNER &&
+      !this.isBranchManager(currentUser) &&
+      currentUser.clinicId
+    ) {
+      const [link] = await this.userRepository.manager.query(
+        "SELECT id FROM owner_clinic_links WHERE clinic_id = ? AND status = 'approved' LIMIT 1",
+        [currentUser.clinicId],
+      );
+      if (link)
+        roles.unshift({
+          value: UserRole.MANAJER_CABANG,
+          label: 'Manajer Cabang',
+        });
+    }
 
     return { success: true, data: roles };
   }
@@ -400,7 +600,7 @@ export class UsersService {
 
     await this.userRepository.save(user);
 
-    if (newRole === UserRole.DOKTER) {
+    if (isClinician(newRole)) {
       await this.ensurePractitionerForUser(user);
     }
 
@@ -445,14 +645,37 @@ export class UsersService {
       });
     }
 
-    if (![UserRole.ADMIN, UserRole.DOKTER, UserRole.OWNER].includes(newRole)) {
+    if (
+      ![
+        UserRole.ADMIN,
+        UserRole.DOKTER,
+        UserRole.PERAWAT,
+        UserRole.OWNER,
+        UserRole.MANAJER_CABANG,
+      ].includes(newRole)
+    ) {
       throw new BadRequestException({
         success: false,
         error: {
           code: 'INVALID_ROLE',
-          message: 'Role hanya bisa diubah ke admin, dokter, atau owner',
+          message:
+            'Role hanya bisa diubah ke admin, dokter, perawat, atau owner',
         },
       });
+    }
+
+    if (newRole === UserRole.MANAJER_CABANG) {
+      await this.assertCanAppointManager(user.clinicId, user.id);
+    }
+
+    // A pending/inactive account becoming active takes a seat: from the
+    // plan's account limit, or the multiklinik pool (PRD Super Admin BL-02).
+    // Super Admin may go over a plan's limit on purpose (support cases).
+    if (
+      (user.role === UserRole.PENDING || !user.isActive) &&
+      !this.isSuperAdmin(currentUser)
+    ) {
+      await assertAccountRoom(this.userRepository.manager, user.clinicId);
     }
 
     user.role = newRole;
@@ -461,7 +684,7 @@ export class UsersService {
 
     await this.userRepository.save(user);
 
-    if (newRole === UserRole.DOKTER) {
+    if (isClinician(newRole)) {
       await this.ensurePractitionerForUser(user);
     }
 
@@ -523,7 +746,15 @@ export class UsersService {
       });
     }
 
-    const temporaryPassword = '123asd';
+    if (!this.isSuperAdmin(currentUser)) {
+      await assertAccountRoom(this.userRepository.manager, clinicId);
+    }
+    if (dto.role === UserRole.MANAJER_CABANG) {
+      await this.assertCanAppointManager(clinicId);
+    }
+
+    // Password sementara acak per user (bukan nilai tetap yang mudah ditebak)
+    const temporaryPassword = generateTemporaryPassword();
     const passwordHash = await bcrypt.hash(temporaryPassword, 10);
 
     const user = this.userRepository.create({
@@ -533,6 +764,8 @@ export class UsersService {
       clinicId,
       passwordHash,
       isActive: true,
+      // Temporary password: replaced on first login (PRD Multi-Klinik alur A).
+      mustChangePassword: true,
       emailVerifiedAt: new Date(),
       createdBy: currentUser.userId,
       updatedBy: currentUser.userId,
@@ -540,9 +773,17 @@ export class UsersService {
 
     await this.userRepository.save(user);
 
-    if (dto.role === UserRole.DOKTER) {
+    if (isClinician(dto.role)) {
       await this.ensurePractitionerForUser(user);
     }
+
+    const emailSent =
+      (await this.mail?.sendWelcome({
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        temporaryPassword,
+      })) ?? false;
 
     this.logger.log(
       `[INVITE] User baru berhasil dibuat | userId=${user.id}, email=${user.email}`,
@@ -553,6 +794,7 @@ export class UsersService {
       data: {
         ...this.sanitizeUser(user),
         temporaryPassword,
+        emailSent,
         message:
           'User berhasil dibuat. Bagikan password sementara ini kepada user.',
       },
@@ -603,8 +845,22 @@ export class UsersService {
     };
   }
 
+  /**
+   * Strips every credential before a user row leaves the API: an owner (or a
+   * Multi-Klinik Owner inside a branch) lists staff, and must never receive
+   * their MFA secret, backup codes or single-use reset/verification tokens.
+   */
   private sanitizeUser(user: User) {
-    const { passwordHash, ...sanitized } = user;
+    const {
+      passwordHash: _passwordHash,
+      mfaSecret: _mfaSecret,
+      mfaBackupCodes: _mfaBackupCodes,
+      verificationToken: _verificationToken,
+      resetPasswordToken: _resetPasswordToken,
+      resetPasswordExpiresAt: _resetPasswordExpiresAt,
+      tokenVersion: _tokenVersion,
+      ...sanitized
+    } = user;
     return sanitized;
   }
 }

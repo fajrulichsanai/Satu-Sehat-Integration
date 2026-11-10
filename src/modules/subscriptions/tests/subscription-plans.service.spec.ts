@@ -9,7 +9,12 @@ import {
 
 describe('SubscriptionPlansService', () => {
   let service: SubscriptionPlansService;
-  let repo: { find: jest.Mock; findOne: jest.Mock; create: jest.Mock; save: jest.Mock };
+  let repo: {
+    find: jest.Mock;
+    findOne: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+  };
 
   beforeEach(async () => {
     repo = {
@@ -61,9 +66,9 @@ describe('SubscriptionPlansService', () => {
 
     it('throws NotFoundException when missing (negative)', async () => {
       repo.findOne.mockResolvedValue(null);
-      await expect(
-        service.update(999, {} as any, 9),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.update(999, {} as any, 9)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -85,7 +90,10 @@ describe('SubscriptionPlansService', () => {
 
   describe('findActiveTrialPlan', () => {
     it('queries for the active TRIAL-tier plan (positive)', async () => {
-      repo.findOne.mockResolvedValue({ id: 1, tier: SubscriptionPlanTier.TRIAL });
+      repo.findOne.mockResolvedValue({
+        id: 1,
+        tier: SubscriptionPlanTier.TRIAL,
+      });
       const result = await service.findActiveTrialPlan();
       expect(result?.tier).toBe(SubscriptionPlanTier.TRIAL);
       expect(repo.findOne).toHaveBeenCalledWith(

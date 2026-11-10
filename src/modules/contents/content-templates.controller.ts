@@ -20,6 +20,7 @@ import {
   CreateContentTemplateDto,
   UpdateContentTemplateDto,
 } from './dto/content.dto';
+import { RequireFeature } from '../features/require-feature.decorator';
 
 /**
  * Treatment templates for Konten. Registered before ContentsController so
@@ -29,6 +30,7 @@ import {
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.OWNER, UserRole.ADMIN)
+@RequireFeature('konten')
 @Controller('contents/templates')
 export class ContentTemplatesController {
   constructor(private readonly service: ContentTemplatesService) {}

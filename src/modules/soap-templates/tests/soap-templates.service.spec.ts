@@ -1,5 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { TerminologyConcept } from '../../terminology/entities/terminology-concept.entity';
+import { DENTAL_DIAGNOSES } from '../../terminology/data/dental-id';
+import { SOAP_PRESETS } from '../presets';
+
+const conceptRepo = {
+  find: jest
+    .fn()
+    .mockResolvedValue([
+      { system: 'icd10', code: 'K02.1', display: 'Caries of dentine' },
+    ]),
+};
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { SoapTemplatesService } from '../soap-templates.service';
 import { SoapTemplate } from '../entities/soap-template.entity';
@@ -41,6 +52,10 @@ describe('SoapTemplatesService', () => {
       providers: [
         SoapTemplatesService,
         { provide: getRepositoryToken(SoapTemplate), useValue: repo },
+        {
+          provide: getRepositoryToken(TerminologyConcept),
+          useValue: conceptRepo,
+        },
       ],
     }).compile();
 
@@ -147,9 +162,9 @@ describe('SoapTemplatesService', () => {
 
     it('throws NotFoundException when the template does not exist (negative)', async () => {
       repo.findOne.mockResolvedValue(null);
-      await expect(
-        service.update(999, 1, {} as any, owner),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.update(999, 1, {} as any, owner)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -173,6 +188,35 @@ describe('SoapTemplatesService', () => {
       await expect(service.remove(999, 1, owner)).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('presets', () => {
+    it('semua kode template ada di daftar diagnosis gigi terkurasi', () => {
+      for (const p of SOAP_PRESETS) {
+        const curated = DENTAL_DIAGNOSES.find((d) => d.icd10 === p.icd10);
+        expect(curated).toBeDefined();
+        if (p.snomed) expect(curated?.snomed).toBe(p.snomed);
+        for (const c of p.extraIcd10 ?? []) {
+          expect(DENTAL_DIAGNOSES.some((d) => d.icd10 === c)).toBe(true);
+        }
+      }
+    });
+
+    it('memakai nama resmi dari terminologi, fallback ke nama Indonesia', async () => {
+      const list = await service.presets();
+      const karies = list.find((p) => p.key === 'karies-dentin')!;
+      expect(karies.diagnoses[0]).toMatchObject({
+        system: 'icd10',
+        code: 'K02.1',
+        display: 'Caries of dentine',
+        primary: true,
+      });
+      expect(karies.diagnoses[1]).toMatchObject({
+        system: 'snomed',
+        code: '44828002',
+        display: 'Karies dentin',
+      });
     });
   });
 });

@@ -47,6 +47,15 @@ const FIELDS: (keyof UpsertPhysicalExaminationDto)[] = [
   'extremities',
   'genitalia',
   'rectal',
+  'psychologicalStatus',
+  'psychologicalNote',
+  'pregnancyStatus',
+  'waistCircumference',
+  'headCircumference',
+  'gcsTotal',
+  'bloodGlucose',
+  'smokingStatus',
+  'otherFindings',
 ];
 
 @Injectable()

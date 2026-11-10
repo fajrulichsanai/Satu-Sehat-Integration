@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   Min,
   Max,
 } from 'class-validator';
@@ -95,6 +96,26 @@ export class EncounterListQueryDto {
   @IsOptional()
   @IsString()
   date?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Bulan (YYYY-MM). Bila diisi, daftar mencakup seluruh bulan itu (bukan hanya hari ini) dan respons memuat `days` (tanggal berisi kunjungan) serta `counts`.',
+    example: '2026-10',
+  })
+  @IsOptional()
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, {
+    message: 'month harus berformat YYYY-MM, mis. 2026-10',
+  })
+  month?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Jika true, hanya kunjungan Menunggu/Berlangsung (arrived + in_progress)',
+  })
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  active?: boolean;
 
   @ApiPropertyOptional()
   @IsOptional()

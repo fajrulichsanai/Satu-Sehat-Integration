@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
   IsBoolean,
   IsDateString,
   IsEmail,
@@ -7,10 +8,19 @@ import {
   IsInt,
   IsNotEmpty,
   IsOptional,
+  IsArray,
+  IsIn,
   IsString,
+  Matches,
   MaxLength,
   ValidateIf,
+  ValidateNested,
+  Min,
+  Max,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { FAMILY_RELATIONSHIP_CODES } from '../family-history';
+import type { FamilyRelationship } from '../family-history';
 import {
   Gender,
   MaritalStatus,
@@ -24,6 +34,60 @@ import {
 } from '../../../enums';
 import { PaginationDto } from '../../../common/dto/pagination.dto';
 import { IsValidNIK } from '../../../common/validators/nik.validator';
+
+export class FamilyHistoryEntryDto {
+  @ApiPropertyOptional({ description: 'Kunci baris yang sudah ada' })
+  @IsOptional()
+  @Matches(/^[a-z0-9]{6,12}$/)
+  key?: string;
+
+  @ApiProperty({ enum: FAMILY_RELATIONSHIP_CODES, example: 'FTH' })
+  @IsIn(FAMILY_RELATIONSHIP_CODES)
+  relationship: FamilyRelationship;
+
+  @ApiProperty({ description: 'Kode ICD-10', example: 'I10' })
+  @IsString()
+  @MaxLength(10)
+  code: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  note?: string | null;
+}
+
+export class MedicationHistoryEntryDto {
+  @ApiPropertyOptional({ description: 'Kunci baris yang sudah ada' })
+  @IsOptional()
+  @Matches(/^[a-z0-9]{6,12}$/)
+  key?: string;
+
+  @ApiPropertyOptional({
+    description: 'Kode produk KFA (92…/93…); kosong = tidak dikirim',
+    example: '93001819',
+  })
+  @IsOptional()
+  @Matches(/^9[23]\d{6}$/)
+  kfaCode?: string | null;
+
+  @ApiProperty({ example: 'Amlodipine Besilate 5 mg Tablet' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  name: string;
+
+  @ApiPropertyOptional({ example: '1 tablet sekali sehari' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  dosage?: string | null;
+
+  @ApiPropertyOptional({ description: 'Masih dikonsumsi', default: true })
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
+}
 
 function isMinor(dateOfBirth?: string): boolean {
   if (!dateOfBirth) return false;
@@ -223,6 +287,27 @@ export class CreatePatientDto {
   @IsString()
   catatanSistemikLainnya?: string;
 
+  @ApiPropertyOptional({
+    type: [FamilyHistoryEntryDto],
+    description: 'Riwayat penyakit keluarga (ganti seluruh daftar)',
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => FamilyHistoryEntryDto)
+  riwayatKeluarga?: FamilyHistoryEntryDto[];
+
+  @ApiPropertyOptional({
+    type: [MedicationHistoryEntryDto],
+    description: 'Riwayat obat yang dikonsumsi (ganti seluruh daftar)',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => MedicationHistoryEntryDto)
+  riwayatObat?: MedicationHistoryEntryDto[];
+
   @ApiPropertyOptional({ example: false })
   @IsOptional()
   @IsBoolean()
@@ -268,16 +353,54 @@ export class CreatePatientDto {
 
 export class UpdatePatientDto extends PartialType(CreatePatientDto) {}
 
+export enum PatientCategory {
+  BAYI = 'bayi',
+  UMUM = 'umum',
+}
+
 export class PatientQueryDto extends PaginationDto {
   @ApiPropertyOptional({ description: 'Search by name, NIK, or No. RM' })
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   search?: string;
 
   @ApiPropertyOptional({ enum: Gender })
   @IsOptional()
   @IsEnum(Gender)
   gender?: Gender;
+
+  @ApiPropertyOptional({
+    enum: PatientCategory,
+    description:
+      'bayi = belum punya NIK sendiri (terdaftar via NIK ibu); umum = selain bayi',
+  })
+  @IsOptional()
+  @IsEnum(PatientCategory)
+  kategori?: PatientCategory;
+}
+
+export class BirthdayQueryDto {
+  @ApiPropertyOptional({ enum: ['today', 'week', 'month'], default: 'month' })
+  @IsOptional()
+  @IsIn(['today', 'week', 'month'])
+  range?: 'today' | 'week' | 'month' = 'month';
+
+  @ApiPropertyOptional({ description: 'Bulan 1-12 (untuk range=month)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  month?: number;
+}
+
+export class PatientStatsQueryDto {
+  @ApiPropertyOptional({ description: 'Search by name, NIK, or No. RM' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  search?: string;
 }
 
 export class PatientResponseDto {
@@ -300,4 +423,69 @@ export class PatientResponseDto {
   @ApiProperty({ enum: SyncStatus }) syncStatus: SyncStatus | undefined;
   @ApiProperty() createdAt: Date | undefined;
   @ApiProperty() updatedAt: Date | undefined;
+}
+
+/**
+ * Cari pasien di SATUSEHAT (Master Patient Index). Salah satu:
+ * NIK · nama + tanggal lahir + jenis kelamin · NIK ibu (bayi baru lahir) · ID SATUSEHAT.
+ */
+export class SearchSatusehatPatientDto {
+  @ApiPropertyOptional({ example: '9271060312000001' })
+  @IsOptional()
+  @Matches(/^\d{16}$/, { message: 'NIK harus 16 digit angka' })
+  nik?: string;
+
+  @ApiPropertyOptional({ example: 'Ardianto Putra' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  name?: string;
+
+  @ApiPropertyOptional({ example: '1992-01-09' })
+  @IsOptional()
+  @IsDateString()
+  birthDate?: string;
+
+  @ApiPropertyOptional({ enum: Gender })
+  @IsOptional()
+  @IsEnum(Gender)
+  gender?: Gender;
+
+  @ApiPropertyOptional({ description: 'NIK ibu — pencarian bayi baru lahir' })
+  @IsOptional()
+  @Matches(/^\d{16}$/, { message: 'NIK ibu harus 16 digit angka' })
+  nikIbu?: string;
+
+  @ApiPropertyOptional({ example: 'P02478375538' })
+  @IsOptional()
+  @Matches(/^[A-Za-z0-9-]{3,64}$/, { message: 'ID SATUSEHAT tidak valid' })
+  ihsId?: string;
+}
+
+/** Riwayat kunjungan/transaksi satu pasien: filter bulan + pagination. */
+export class PatientHistoryQueryDto {
+  @ApiPropertyOptional({
+    description: 'Bulan (YYYY-MM). Kosong = semua bulan.',
+    example: '2026-10',
+  })
+  @IsOptional()
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, {
+    message: 'month harus berformat YYYY-MM, mis. 2026-10',
+  })
+  month?: string;
+
+  @ApiPropertyOptional({ default: 1, minimum: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page: number = 1;
+
+  @ApiPropertyOptional({ default: 10, minimum: 1, maximum: 50 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit: number = 10;
 }

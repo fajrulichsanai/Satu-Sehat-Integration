@@ -37,7 +37,12 @@ describe('ClinicSubscriptionsService', () => {
     save: jest.Mock;
     createQueryBuilder: jest.Mock;
   };
-  let clinicRepo: { findOne: jest.Mock; createQueryBuilder: jest.Mock };
+  let clinicRepo: {
+    findOne: jest.Mock;
+    createQueryBuilder: jest.Mock;
+    update: jest.Mock;
+    manager: { query: jest.Mock };
+  };
   let plansService: { findOne: jest.Mock; findActiveTrialPlan: jest.Mock };
 
   beforeEach(async () => {
@@ -51,6 +56,8 @@ describe('ClinicSubscriptionsService', () => {
     clinicRepo = {
       findOne: jest.fn(),
       createQueryBuilder: jest.fn(() => buildQb()),
+      update: jest.fn(),
+      manager: { query: jest.fn().mockResolvedValue([]) },
     };
     plansService = { findOne: jest.fn(), findActiveTrialPlan: jest.fn() };
 
@@ -127,6 +134,32 @@ describe('ClinicSubscriptionsService', () => {
       expect(subRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({ startDate: daysFromToday(0) }),
       );
+    });
+
+    it('adds calendar months for a multi-month payment, clamped to month end (positive/edge)', async () => {
+      clinicRepo.findOne.mockResolvedValue({ id: 1, name: 'Klinik A' });
+      plansService.findOne.mockResolvedValue({
+        id: 5,
+        durationDays: 30,
+        billingCycle: 'monthly',
+      });
+      for (const [end, months, expected] of [
+        ['2099-12-31', 6, '2100-06-30'],
+        ['2099-08-31', 3, '2099-11-30'],
+        ['2099-01-15', 12, '2100-01-15'],
+      ] as const) {
+        subRepo.findOne
+          .mockResolvedValueOnce({
+            id: 9,
+            status: ClinicSubscriptionStatus.ACTIVE,
+            endDate: end,
+          })
+          .mockResolvedValueOnce({ id: 13 });
+        await service.extendSubscription(1, 5, 9, null, months);
+        expect(subRepo.create).toHaveBeenLastCalledWith(
+          expect.objectContaining({ startDate: end, endDate: expected }),
+        );
+      }
     });
 
     it('throws NotFoundException when the clinic does not exist (negative)', async () => {

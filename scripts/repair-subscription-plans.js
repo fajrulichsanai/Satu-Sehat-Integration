@@ -68,8 +68,8 @@ async function main() {
         ('Starter Tahunan', 365, 990000, 1, 'basic', 'yearly', 0),
         ('Pro Bulanan', 30, 149000, 1, 'pro', 'monthly', 0),
         ('Pro Tahunan', 365, 1490000, 1, 'pro', 'yearly', 0),
-        ('Multi Klinik Bulanan', 30, 149000, 1, 'multi_klinik', 'monthly', 99000),
-        ('Multi Klinik Tahunan', 365, 1490000, 1, 'multi_klinik', 'yearly', 990000)
+        ('Multi Klinik Bulanan', 30, 149000, 1, 'multi_klinik', 'monthly', 49000),
+        ('Multi Klinik Tahunan', 365, 1490000, 1, 'multi_klinik', 'yearly', 490000)
     `);
   } else {
     console.log('Tier plans already seeded, skipping insert.');
@@ -83,6 +83,22 @@ async function main() {
   );
   if (renamed.affectedRows > 0) {
     console.log(`Renamed ${renamed.affectedRows} 'Basic ...' plan(s) to 'Starter ...'.`);
+  }
+
+  // Biaya admin owner Multi Klinik diturunkan ke Rp49.000/bulan (dari
+  // Rp99.000); paket tahunan lama ikut diturunkan ke 10×49.000 — idempotent,
+  // hanya menyentuh baris yang masih punya nilai lama.
+  const [adminFeeMonthly] = await conn.query(
+    "UPDATE `subscription_plans` SET `owner_fee` = 49000 WHERE `tier` = 'multi_klinik' AND `billing_cycle` = 'monthly' AND `owner_fee` = 99000",
+  );
+  if (adminFeeMonthly.affectedRows > 0) {
+    console.log(`Updated ${adminFeeMonthly.affectedRows} Multi Klinik (monthly) owner_fee to 49000.`);
+  }
+  const [adminFeeYearly] = await conn.query(
+    "UPDATE `subscription_plans` SET `owner_fee` = 490000 WHERE `tier` = 'multi_klinik' AND `billing_cycle` = 'yearly' AND `owner_fee` = 990000",
+  );
+  if (adminFeeYearly.affectedRows > 0) {
+    console.log(`Updated ${adminFeeYearly.affectedRows} Multi Klinik (yearly) owner_fee to 490000.`);
   }
 
   // --- Free Trial 15 hari (PRD bagian 7) ---

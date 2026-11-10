@@ -1,3 +1,4 @@
+import { SatusehatModule } from '../satusehat/satusehat.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Encounter } from './entities/encounter.entity';
@@ -12,6 +13,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     TypeOrmModule.forFeature([Encounter, Reservation]),
     AuditLogModule,
     NotificationsModule,
+    SatusehatModule,
   ],
   controllers: [EncountersController],
   providers: [EncountersService],

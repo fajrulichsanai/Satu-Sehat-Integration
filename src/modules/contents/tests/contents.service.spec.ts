@@ -1,4 +1,7 @@
+jest.mock('fs/promises', () => ({ readFile: jest.fn().mockResolvedValue(Buffer.from('img')) }));
+
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { readFile } from 'fs/promises';
 import { ContentsService } from '../contents.service';
 import { S3StorageService } from '../../../common/storage/s3-storage.service';
 import { ContentStatus } from '../entities/clinic-content.entity';
@@ -13,8 +16,18 @@ describe('ContentsService', () => {
     remove: jest.Mock;
   };
   let clinicRepo: { findOne: jest.Mock };
+  let photoRepo: {
+    find: jest.Mock;
+    findOne: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    remove: jest.Mock;
+    count: jest.Mock;
+  };
   let storage: S3StorageService;
   let templates: { assertOwned: jest.Mock };
+  let clinicalPhotos: { isConsented: jest.Mock; listForPatient: jest.Mock; findByIdForClinic: jest.Mock; getFilePathById: jest.Mock };
+  let supportingExam: { listByPatient: jest.Mock; findByIdForClinic: jest.Mock; getFilePathById: jest.Mock };
 
   const file = {
     originalname: 'story.png',
@@ -31,17 +44,39 @@ describe('ContentsService', () => {
       remove: jest.fn(),
     };
     clinicRepo = { findOne: jest.fn() };
+    photoRepo = {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn(),
+      create: jest.fn((d) => ({ ...d })),
+      save: jest.fn((d) => Promise.resolve({ id: 1, ...d })),
+      remove: jest.fn(),
+      count: jest.fn().mockResolvedValue(0),
+    };
     // Real storage without S3 config: URLs are local /files/... paths.
     storage = new S3StorageService({ get: () => undefined } as any);
     jest
       .spyOn(storage, 'uploadBuffer')
       .mockImplementation((key) => Promise.resolve(`/files/${key}`));
     templates = { assertOwned: jest.fn().mockResolvedValue(undefined) };
+    clinicalPhotos = {
+      isConsented: jest.fn().mockResolvedValue(false),
+      listForPatient: jest.fn(),
+      findByIdForClinic: jest.fn(),
+      getFilePathById: jest.fn(),
+    };
+    supportingExam = {
+      listByPatient: jest.fn(),
+      findByIdForClinic: jest.fn(),
+      getFilePathById: jest.fn(),
+    };
     service = new ContentsService(
       repo as any,
       clinicRepo as any,
+      photoRepo as any,
       storage,
       templates as any,
+      clinicalPhotos as any,
+      supportingExam as any,
     );
   });
 
@@ -95,6 +130,16 @@ describe('ContentsService', () => {
     expect(published.status).toBe(ContentStatus.PUBLISHED);
     expect(published.imageUrl).toMatch(/^\/files\/contents\/5\//);
     expect(published.publishedAt).toBeInstanceOf(Date);
+  });
+
+  it('publishes a series layout once it has 2+ photos, no before/after needed (positive/negative)', async () => {
+    repo.findOne.mockResolvedValue({ id: 2, clinicId: 5, layout: 'series', status: ContentStatus.DRAFT });
+    photoRepo.count.mockResolvedValue(1);
+    await expect(service.publish(2, 5, 1, file)).rejects.toThrow(BadRequestException);
+
+    photoRepo.count.mockResolvedValue(2);
+    const published = await service.publish(2, 5, 1, file);
+    expect(published.status).toBe(ContentStatus.PUBLISHED);
   });
 
   it('keeps other clinics’ content out of reach', async () => {
@@ -170,5 +215,88 @@ describe('ContentsService', () => {
     expect(
       (await service.update(1, 5, 9, { templateId: 8 } as any)).templateId,
     ).toBe(8);
+  });
+
+  describe('pickerForPatient', () => {
+    it("returns nothing when the patient hasn't consented (negative)", async () => {
+      clinicalPhotos.isConsented.mockResolvedValue(false);
+      const result = await service.pickerForPatient(10, 5);
+      expect(result).toEqual({ consentMarketing: false, folders: [], supportingExam: [] });
+      expect(clinicalPhotos.listForPatient).not.toHaveBeenCalled();
+    });
+
+    it('combines folders and Pemeriksaan Penunjang once consented (positive)', async () => {
+      clinicalPhotos.isConsented.mockResolvedValue(true);
+      clinicalPhotos.listForPatient.mockResolvedValue({ folders: [{ group: null, photos: [] }] });
+      supportingExam.listByPatient.mockResolvedValue([{ id: 1, imageType: 'xray' }]);
+      const result = await service.pickerForPatient(10, 5);
+      expect(result.consentMarketing).toBe(true);
+      expect(result.folders).toHaveLength(1);
+      expect(result.supportingExam).toHaveLength(1);
+    });
+  });
+
+  describe('importPhoto', () => {
+    it('copies a patient_photo into the content storage prefix (positive)', async () => {
+      clinicalPhotos.getFilePathById.mockResolvedValue({ absolutePath: '/x/uploads/patient-photos/a.jpg' });
+      const result = await service.importPhoto(5, { sourceType: 'patient_photo', sourceId: 1 } as any);
+      expect(result.url).toMatch(/^\/files\/contents\/5\//);
+      expect(readFile).toHaveBeenCalledWith('/x/uploads/patient-photos/a.jpg');
+    });
+
+    it('copies a supporting_exam_image into the content storage prefix (positive)', async () => {
+      supportingExam.getFilePathById.mockResolvedValue({ absolutePath: '/x/uploads/supporting-exam/b.png' });
+      const result = await service.importPhoto(5, { sourceType: 'supporting_exam_image', sourceId: 2 } as any);
+      expect(result.url).toMatch(/^\/files\/contents\/5\//);
+    });
+
+    it('propagates a not-found error for a source outside this clinic (negative)', async () => {
+      clinicalPhotos.getFilePathById.mockRejectedValue(new NotFoundException('Foto tidak ditemukan'));
+      await expect(
+        service.importPhoto(5, { sourceType: 'patient_photo', sourceId: 99 } as any),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('updatePhoto', () => {
+    it('toggles blurFace and trims the caption (positive)', async () => {
+      repo.findOne.mockResolvedValue({ id: 1, clinicId: 5 });
+      photoRepo.findOne.mockResolvedValue({ id: 3, contentId: 1, caption: null, blurFace: false });
+      const result = await service.updatePhoto(1, 5, 3, { caption: '  hai  ', blurFace: true });
+      expect(result.caption).toBe('hai');
+      expect(result.blurFace).toBe(true);
+    });
+
+    it('throws NotFoundException for a photo outside this content (negative)', async () => {
+      repo.findOne.mockResolvedValue({ id: 1, clinicId: 5 });
+      photoRepo.findOne.mockResolvedValue(null);
+      await expect(service.updatePhoto(1, 5, 99, { blurFace: true })).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('addPhoto', () => {
+    beforeEach(() => {
+      repo.findOne.mockResolvedValue({ id: 1, clinicId: 5 });
+    });
+
+    it('rejects a patient_photo this clinic does not own (negative)', async () => {
+      clinicalPhotos.findByIdForClinic.mockResolvedValue(null);
+      await expect(
+        service.addPhoto(1, 5, { sourceType: 'patient_photo', sourceId: 99 } as any),
+      ).rejects.toThrow(BadRequestException);
+      expect(photoRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('accepts a supporting_exam_image this clinic owns (positive)', async () => {
+      supportingExam.findByIdForClinic.mockResolvedValue({ id: 2 });
+      photoRepo.count.mockResolvedValue(2);
+      const saved = await service.addPhoto(1, 5, {
+        sourceType: 'supporting_exam_image',
+        sourceId: 2,
+      } as any);
+      expect(saved.sortOrder).toBe(2);
+    });
   });
 });

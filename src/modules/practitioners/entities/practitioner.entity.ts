@@ -54,6 +54,22 @@ export class Practitioner extends BaseEntity {
   @Column({ name: 'str_number', length: 50, nullable: true })
   strNumber: string;
 
+  /** dokter | dokter_gigi | perawat | bidan | apoteker | ... (lihat PRACTITIONER_PROFESSIONS) */
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  profession: string | null;
+
+  @Column({ name: 'birth_place', type: 'varchar', length: 100, nullable: true })
+  birthPlace: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  address: string | null;
+
+  @Column({ name: 'sip_expired_at', type: 'date', nullable: true })
+  sipExpiredAt: string | null;
+
+  @Column({ name: 'str_expired_at', type: 'date', nullable: true })
+  strExpiredAt: string | null;
+
   @Column({ name: 'satusehat_practitioner_id', length: 100, nullable: true })
   satusehatPractitionerId: string;
 

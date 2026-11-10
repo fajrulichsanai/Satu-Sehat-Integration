@@ -92,7 +92,9 @@ describe('MasterDataService', () => {
       expect(global.fetch).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          headers: expect.objectContaining({ Authorization: 'Bearer token-abc' }),
+          headers: expect.objectContaining({
+            Authorization: 'Bearer token-abc',
+          }),
         }),
       );
     });

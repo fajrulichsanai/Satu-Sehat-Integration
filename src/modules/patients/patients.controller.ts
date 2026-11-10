@@ -16,9 +16,14 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PatientsService } from './patients.service';
+import { RequireFeature } from '../features/require-feature.decorator';
 import {
+  BirthdayQueryDto,
   CreatePatientDto,
+  PatientHistoryQueryDto,
   PatientQueryDto,
+  PatientStatsQueryDto,
+  SearchSatusehatPatientDto,
   UpdatePatientDto,
 } from './dto/patient.dto';
 import { ClinicContextGuard } from '../auth/guards/clinic-context.guard';
@@ -43,14 +48,24 @@ export class PatientsController {
   @Audit('Patient', AuditActionType.VIEW)
   @Get()
   @ApiOperation({ summary: 'List patients with pagination and search' })
-  async findAll(@ClinicId() clinicId: number, @Query() query: PatientQueryDto) {
-    const result = await this.patientsService.findAll(clinicId, query);
+  async findAll(
+    @ClinicId() clinicId: number,
+    @Query() query: PatientQueryDto,
+    @Req() req: { user?: { userId: number; role: string } },
+  ) {
+    const result = await this.patientsService.findAll(
+      clinicId,
+      query,
+      req.user,
+    );
     return { success: true, ...result };
   }
 
   @Post()
   @Audit('Patient', AuditActionType.CREATE, { labelField: 'name' })
-  @Notify(NotificationType.PATIENT_NEW, 'Pasien baru terdaftar', { labelField: 'name' })
+  @Notify(NotificationType.PATIENT_NEW, 'Pasien baru terdaftar', {
+    labelField: 'name',
+  })
   @ApiOperation({ summary: 'Register new patient' })
   async create(@ClinicId() clinicId: number, @Body() dto: CreatePatientDto) {
     const patient = await this.patientsService.create(clinicId, dto);
@@ -61,13 +76,61 @@ export class PatientsController {
     };
   }
 
+  @Get('stats')
+  @ApiOperation({ summary: 'Patient counts (total, male, female, baby)' })
+  async stats(
+    @ClinicId() clinicId: number,
+    @Query() query: PatientStatsQueryDto,
+    @Req() req: { user?: { userId: number; role: string } },
+  ) {
+    const data = await this.patientsService.getStats(
+      clinicId,
+      query.search,
+      req.user,
+    );
+    return { success: true, data };
+  }
+
   @Get('search-satusehat')
+  @RequireFeature('satusehat')
   @ApiOperation({ summary: 'Search patient by NIK via SATUSEHAT API' })
   async searchSatusehat(
     @Query('nik') nik: string,
     @ClinicId() clinicId: number,
   ) {
     const data = await this.patientsService.searchSatusehat(nik, clinicId);
+    return { success: true, data };
+  }
+
+  @Post('search-satusehat')
+  @RequireFeature('satusehat')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Cari pasien di SATUSEHAT: NIK, nama + tgl lahir + JK, NIK ibu (bayi), atau ID SATUSEHAT',
+  })
+  async searchSatusehatPatients(
+    @Body() dto: SearchSatusehatPatientDto,
+    @ClinicId() clinicId: number,
+  ) {
+    return {
+      success: true,
+      data: await this.patientsService.searchSatusehatPatients(dto, clinicId),
+    };
+  }
+
+  @Get('birthdays')
+  @RequireFeature('ulang-tahun')
+  @ApiOperation({ summary: 'Pasien berulang tahun (promo ulang tahun)' })
+  async birthdays(
+    @ClinicId() clinicId: number,
+    @Query() query: BirthdayQueryDto,
+  ) {
+    const data = await this.patientsService.getBirthdays(
+      clinicId,
+      query.range,
+      query.month,
+    );
     return { success: true, data };
   }
 
@@ -116,6 +179,44 @@ export class PatientsController {
   ) {
     const encounters = await this.patientsService.findEncounters(id, clinicId);
     return { success: true, data: encounters };
+  }
+
+  @Audit('Patient', AuditActionType.VIEW)
+  @Get(':id/encounter-history')
+  @ApiOperation({
+    summary:
+      'Riwayat kunjungan pasien per bulan + pagination (plus daftar bulan & tanggal datang)',
+  })
+  async findEncounterHistory(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @Query() query: PatientHistoryQueryDto,
+  ) {
+    const data = await this.patientsService.findEncounterHistory(
+      id,
+      clinicId,
+      query,
+    );
+    return { success: true, data };
+  }
+
+  @Audit('Patient', AuditActionType.VIEW)
+  @Get(':id/billing-history')
+  @ApiOperation({
+    summary:
+      'Riwayat transaksi/invoice pasien per bulan + pagination (plus daftar bulan & tanggal)',
+  })
+  async findBillingHistory(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @Query() query: PatientHistoryQueryDto,
+  ) {
+    const data = await this.patientsService.findBillingHistory(
+      id,
+      clinicId,
+      query,
+    );
+    return { success: true, data };
   }
 
   @Audit('Patient', AuditActionType.VIEW)

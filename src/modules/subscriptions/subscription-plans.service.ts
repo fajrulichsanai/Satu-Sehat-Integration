@@ -9,6 +9,7 @@ import {
   CreateSubscriptionPlanDto,
   UpdateSubscriptionPlanDto,
 } from './dto/subscription-plan.dto';
+import { effectivePrice, isPromoActive } from './limits/pricing';
 
 @Injectable()
 export class SubscriptionPlansService {
@@ -17,8 +18,20 @@ export class SubscriptionPlansService {
     private readonly planRepository: Repository<SubscriptionPlan>,
   ) {}
 
-  findAll() {
-    return this.planRepository.find({ order: { durationDays: 'ASC' } });
+  /** Plans with today's price: promoActive + effectivePrice (harga coret). */
+  async findAll() {
+    const plans = await this.planRepository.find({
+      order: { durationDays: 'ASC' },
+    });
+    return plans.map((plan) => ({
+      ...plan,
+      promoActive: isPromoActive(plan),
+      effectivePrice: effectivePrice(plan),
+      effectiveOwnerFee:
+        isPromoActive(plan) && plan.promoOwnerFee !== null
+          ? Number(plan.promoOwnerFee)
+          : Number(plan.ownerFee ?? 0),
+    }));
   }
 
   async findOne(id: number) {

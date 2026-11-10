@@ -1,0 +1,27 @@
+{
+  "entry": [
+    {
+      "response": {
+        "etag": "W/\"MTc1OTgwODk2Mzg0NTk5NTAwMA\"",
+        "lastModified": "2025-10-07T03:49:23.845995+00:00",
+        "location": "https://api-satusehat-stg.dto.kemkes.go.id/fhir-r4/v1/ServiceRequest/e220ebc6-b5ad-484d-96f2-58b2e846435a/_history/MTc1OTgwODk2Mzg0NTk5NTAwMA",
+        "status": "201 Created",
+        "resourceType": "ServiceRequest",
+        "resourceID": "e220ebc6-b5ad-484d-96f2-58b2e846435a"
+      }
+    },
+    {
+      "response": {
+        "etag": "W/\"MTc1OTgwODk2Mzg0NTk5NTAwMA\"",
+        "lastModified": "2025-10-07T03:49:23.845995+00:00",
+        "location": "https://api-satusehat-stg.dto.kemkes.go.id/fhir-r4/v1/CarePlan/a2beed6a-5828-4bab-a9f2-4853c3124244/_history/MTc1OTgwODk2Mzg0NTk5NTAwMA",
+        "status": "201 Created",
+        "resourceType": "CarePlan",
+        "resourceID": "a2beed6a-5828-4bab-a9f2-4853c3124244"
+      }
+    }
+  ],
+  "resourceType": "Bundle",
+  "type": "transaction-response",
+  "total": 2
+}

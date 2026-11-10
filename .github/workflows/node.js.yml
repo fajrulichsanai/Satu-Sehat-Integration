@@ -20,12 +20,16 @@ jobs:
           S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
           S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
           S3_REGION: ${{ secrets.S3_REGION }}
+          SATUSEHAT_ENVIRONMENT: ${{ secrets.SATUSEHAT_ENVIRONMENT }}
+          SATUSEHAT_ORGANIZATION_ID: ${{ secrets.SATUSEHAT_ORGANIZATION_ID }}
+          SATUSEHAT_CLIENT_ID: ${{ secrets.SATUSEHAT_CLIENT_ID }}
+          SATUSEHAT_CLIENT_SECRET: ${{ secrets.SATUSEHAT_CLIENT_SECRET }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT }}
-          envs: S3_ENDPOINT,S3_BUCKET,S3_ACCESS_KEY,S3_SECRET_KEY,S3_REGION
+          envs: S3_ENDPOINT,S3_BUCKET,S3_ACCESS_KEY,S3_SECRET_KEY,S3_REGION,SATUSEHAT_ENVIRONMENT,SATUSEHAT_ORGANIZATION_ID,SATUSEHAT_CLIENT_ID,SATUSEHAT_CLIENT_SECRET
           script: |
             set -e
 
@@ -37,16 +41,17 @@ jobs:
             git checkout ${{ github.ref_name }}
             git reset --hard origin/${{ github.ref_name }}
 
-            echo "🔑 Sinkronkan kredensial S3 ke .env (kalau di-set sebagai GitHub Secret)..."
+            echo "🔑 Sinkronkan kredensial S3 & SATUSEHAT ke .env (kalau di-set sebagai GitHub Secret)..."
             touch .env
-            for KEY in S3_ENDPOINT S3_BUCKET S3_ACCESS_KEY S3_SECRET_KEY S3_REGION; do
+            chmod 600 .env
+            for KEY in S3_ENDPOINT S3_BUCKET S3_ACCESS_KEY S3_SECRET_KEY S3_REGION \
+                       SATUSEHAT_ENVIRONMENT SATUSEHAT_ORGANIZATION_ID SATUSEHAT_CLIENT_ID SATUSEHAT_CLIENT_SECRET; do
               VALUE="${!KEY}"
               if [ -n "$VALUE" ]; then
-                if grep -q "^${KEY}=" .env; then
-                  sed -i "s|^${KEY}=.*|${KEY}=${VALUE}|" .env
-                else
-                  echo "${KEY}=${VALUE}" >> .env
-                fi
+                # Tanpa sed: nilai secret boleh berisi karakter apa pun (|, &, /)
+                grep -v "^${KEY}=" .env > .env.tmp || true
+                printf '%s=%s\n' "$KEY" "$VALUE" >> .env.tmp
+                cat .env.tmp > .env && rm -f .env.tmp
               fi
             done
 

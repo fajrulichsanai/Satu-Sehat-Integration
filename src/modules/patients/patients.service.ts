@@ -4,10 +4,17 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  In,
+  Repository,
+  SelectQueryBuilder,
+} from 'typeorm';
 import { Patient } from './entities/patient.entity';
 import { Encounter } from '../encounters/entities/encounter.entity';
 import { EncounterSoapNote } from '../encounter-soap-notes/entities/encounter-soap-note.entity';
@@ -22,13 +29,29 @@ import {
 import { PatientRecall } from '../recalls/entities/patient-recall.entity';
 import {
   CreatePatientDto,
+  PatientCategory,
   PatientQueryDto,
   UpdatePatientDto,
 } from './dto/patient.dto';
 import { paginate, PaginatedResult } from '../../common/dto/pagination.dto';
 import { SatusehatClientService } from '../satusehat/satusehat-client.service';
 import { TreatmentPlansService } from '../treatment-plans/treatment-plans.service';
+import { FamilyHistoryService } from './family-history.service';
+import { MedicationHistoryService } from './medication-history.service';
 import { hashNik, maskNik } from '../../common/utils/nik-crypto.util';
+import type {
+  PatientHistoryQueryDto,
+  SearchSatusehatPatientDto,
+} from './dto/patient.dto';
+import {
+  ClinicalAccessService,
+  type ClinicalUser,
+} from '../clinical-access/clinical-access.service';
+
+// Bayi = belum punya NIK sendiri dan didaftarkan memakai NIK ibu. Harus sama
+// dengan aturan di frontend (list-pasien) agar filter & statistik konsisten.
+const BABY_CONDITION =
+  "((p.nik IS NULL OR p.nik = '') AND p.nikIbu IS NOT NULL AND p.nikIbu <> '')";
 
 @Injectable()
 export class PatientsService {
@@ -56,28 +79,29 @@ export class PatientsService {
     private readonly dataSource: DataSource,
     private readonly satusehatClient: SatusehatClientService,
     private readonly treatmentPlansService: TreatmentPlansService,
+    private readonly familyHistory: FamilyHistoryService,
+    private readonly medicationHistory: MedicationHistoryService,
+    @Optional() private readonly clinicalAccess?: ClinicalAccessService,
   ) {}
 
   async findAll(
     clinicId: number,
     query: PatientQueryDto,
+    user?: ClinicalUser,
   ): Promise<PaginatedResult<Patient>> {
     this.logger.log(
       `[GET-ALL] Mengambil daftar pasien | clinicId=${clinicId}, search=${query.search || '-'}`,
     );
-    const qb = this.patientRepository
-      .createQueryBuilder('p')
-      .where('p.clinicId = :clinicId', { clinicId });
-
-    if (query.search) {
-      qb.andWhere(
-        '(p.name LIKE :search OR p.noRm LIKE :search OR p.nikHash = :nikHash)',
-        { search: `%${query.search}%`, nikHash: hashNik(query.search) },
-      );
-    }
+    const qb = this.scopedPatientQuery(clinicId, query.search, user);
 
     if (query.gender) {
       qb.andWhere('p.gender = :gender', { gender: query.gender });
+    }
+
+    if (query.kategori === PatientCategory.BAYI) {
+      qb.andWhere(BABY_CONDITION);
+    } else if (query.kategori === PatientCategory.UMUM) {
+      qb.andWhere(`NOT ${BABY_CONDITION}`);
     }
 
     const sortBy = query.sortBy || 'p.createdAt';
@@ -88,6 +112,138 @@ export class PatientsService {
     qb.orderBy(finalSort, query.sortOrder);
 
     return paginate(qb, query);
+  }
+
+  /**
+   * Ringkasan jumlah pasien untuk kartu statistik di daftar pasien. Dihitung
+   * di server agar angka tetap benar meskipun daftar dimuat per halaman.
+   * Laki-laki/perempuan tidak termasuk bayi (sama seperti pengelompokan UI).
+   */
+  async getStats(
+    clinicId: number,
+    search: string | undefined,
+    user?: ClinicalUser,
+  ): Promise<{ total: number; male: number; female: number; baby: number }> {
+    const raw = await this.scopedPatientQuery(clinicId, search, user)
+      .select('COUNT(*)', 'total')
+      .addSelect(`SUM(CASE WHEN ${BABY_CONDITION} THEN 1 ELSE 0 END)`, 'baby')
+      .addSelect(
+        `SUM(CASE WHEN NOT ${BABY_CONDITION} AND p.gender = 'male' THEN 1 ELSE 0 END)`,
+        'male',
+      )
+      .addSelect(
+        `SUM(CASE WHEN NOT ${BABY_CONDITION} AND p.gender = 'female' THEN 1 ELSE 0 END)`,
+        'female',
+      )
+      .getRawOne<Record<string, string | number | null>>();
+    const num = (v: string | number | null | undefined) => Number(v ?? 0) || 0;
+    return {
+      total: num(raw?.total),
+      male: num(raw?.male),
+      female: num(raw?.female),
+      baby: num(raw?.baby),
+    };
+  }
+
+  private scopedPatientQuery(
+    clinicId: number,
+    search: string | undefined,
+    user?: ClinicalUser,
+  ) {
+    const qb = this.patientRepository
+      .createQueryBuilder('p')
+      .where('p.clinicId = :clinicId', { clinicId });
+    // Dokter/perawat hanya melihat pasien yang pernah/sedang ditanganinya
+    this.clinicalAccess?.scopePatients(qb, user);
+
+    const term = search?.trim();
+    if (term) {
+      qb.andWhere(
+        "(p.name LIKE :search ESCAPE '\\\\' OR p.noRm LIKE :search ESCAPE '\\\\' OR p.nikHash = :nikHash)",
+        // % dan _ dari input diperlakukan sebagai huruf biasa, bukan wildcard
+        {
+          search: `%${term.replace(/[\\%_]/g, '\\$&')}%`,
+          nikHash: hashNik(term),
+        },
+      );
+    }
+    return qb;
+  }
+
+  /**
+   * Pasien yang berulang tahun (promo ulang tahun): hari ini, 7 hari ke
+   * depan, atau sepanjang bulan tertentu. Hanya data yang perlu untuk
+   * menyapa pasien — tanpa NIK/alamat.
+   */
+  async getBirthdays(
+    clinicId: number,
+    range: 'today' | 'week' | 'month' = 'month',
+    month?: number,
+    now = new Date(),
+  ) {
+    // Tanggal kalender WIB (UTC+7) supaya "hari ini" tidak bergeser
+    const local = new Date(now.getTime() + 7 * 3600_000);
+    const year = local.getUTCFullYear();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const md = (d: Date) =>
+      `${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+    const isLeap = (y: number) =>
+      (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+
+    let where: string;
+    const params: unknown[] = [clinicId];
+    const targetMonth = month ?? local.getUTCMonth() + 1;
+    if (range === 'month') {
+      where = 'MONTH(p.birth_date) = ?';
+      params.push(targetMonth);
+    } else {
+      const days = range === 'today' ? 1 : 7;
+      const keys: string[] = [];
+      for (let i = 0; i < days; i++) {
+        const d = new Date(
+          Date.UTC(year, local.getUTCMonth(), local.getUTCDate() + i),
+        );
+        keys.push(md(d));
+        // Lahir 29 Feb dirayakan 28 Feb pada tahun biasa
+        if (md(d) === '02-28' && !isLeap(d.getUTCFullYear()))
+          keys.push('02-29');
+      }
+      where = `DATE_FORMAT(p.birth_date, '%m-%d') IN (${keys.map(() => '?').join(', ')})`;
+      params.push(...keys);
+    }
+
+    const rows: any[] = await this.patientRepository.query(
+      `SELECT p.id, p.no_rm AS noRm, p.name, p.gender, p.phone,
+         DATE_FORMAT(p.birth_date, '%Y-%m-%d') AS birthDate,
+         p.consent_marketing AS consentMarketing,
+         (SELECT MAX(e.arrived_time) FROM encounters e
+           WHERE e.patient_id = p.id AND e.clinic_id = p.clinic_id) AS lastVisit
+       FROM patients p
+       WHERE p.clinic_id = ? AND p.birth_date IS NOT NULL AND ${where}
+       ORDER BY DATE_FORMAT(p.birth_date, '%m-%d') ASC, p.name ASC
+       LIMIT 1000`,
+      params,
+    );
+    const todayKey = md(local);
+    return rows.map((r) => {
+      const [by, bm, bd] = String(r.birthDate).split('-').map(Number);
+      const thisYearKey = `${pad(bm)}-${pad(bd)}`;
+      // Usia yang dirayakan pada ulang tahun berikutnya / hari ini
+      const turning =
+        year - by + (range === 'month' || thisYearKey >= todayKey ? 0 : 1);
+      return {
+        id: Number(r.id),
+        noRm: r.noRm,
+        name: r.name,
+        gender: r.gender,
+        phone: r.phone ?? null,
+        birthDate: r.birthDate,
+        turning,
+        isToday: thisYearKey === todayKey,
+        consentMarketing: !!Number(r.consentMarketing),
+        lastVisit: r.lastVisit ?? null,
+      };
+    });
   }
 
   async getReferralSummary(clinicId: number) {
@@ -202,36 +358,41 @@ export class PatientsService {
     });
     const encounterIds = encounters.map((e) => e.id);
 
-    const [soapNotes, physicalExams, dentalExams, prescriptions, supportingExamImages] =
-      await Promise.all([
-        encounterIds.length
-          ? this.encounterSoapNoteRepository.find({
-              where: { encounterId: In(encounterIds) },
-            })
-          : Promise.resolve([]),
-        encounterIds.length
-          ? this.physicalExaminationRepository.find({
-              where: { encounterId: In(encounterIds) },
-            })
-          : Promise.resolve([]),
-        encounterIds.length
-          ? this.dentalExaminationRepository.find({
-              where: { encounterId: In(encounterIds) },
-            })
-          : Promise.resolve([]),
-        encounterIds.length
-          ? this.prescriptionItemRepository.find({
-              where: { encounterId: In(encounterIds) },
-              order: { sortOrder: 'ASC' },
-            })
-          : Promise.resolve([]),
-        encounterIds.length
-          ? this.supportingExamImageRepository.find({
-              where: { encounterId: In(encounterIds) },
-              order: { createdAt: 'ASC' },
-            })
-          : Promise.resolve([]),
-      ]);
+    const [
+      soapNotes,
+      physicalExams,
+      dentalExams,
+      prescriptions,
+      supportingExamImages,
+    ] = await Promise.all([
+      encounterIds.length
+        ? this.encounterSoapNoteRepository.find({
+            where: { encounterId: In(encounterIds) },
+          })
+        : Promise.resolve([]),
+      encounterIds.length
+        ? this.physicalExaminationRepository.find({
+            where: { encounterId: In(encounterIds) },
+          })
+        : Promise.resolve([]),
+      encounterIds.length
+        ? this.dentalExaminationRepository.find({
+            where: { encounterId: In(encounterIds) },
+          })
+        : Promise.resolve([]),
+      encounterIds.length
+        ? this.prescriptionItemRepository.find({
+            where: { encounterId: In(encounterIds) },
+            order: { sortOrder: 'ASC' },
+          })
+        : Promise.resolve([]),
+      encounterIds.length
+        ? this.supportingExamImageRepository.find({
+            where: { encounterId: In(encounterIds) },
+            order: { createdAt: 'ASC' },
+          })
+        : Promise.resolve([]),
+    ]);
 
     const soapByEncounter = new Map(soapNotes.map((s) => [s.encounterId, s]));
     const examByEncounter = new Map(
@@ -248,7 +409,12 @@ export class PatientsService {
     }
     const imagesByEncounter = new Map<
       number,
-      { id: number; fileUrl: string; imageType: string; category: string | null }[]
+      {
+        id: number;
+        fileUrl: string;
+        imageType: string;
+        category: string | null;
+      }[]
     >();
     for (const img of supportingExamImages) {
       const list = imagesByEncounter.get(img.encounterId) ?? [];
@@ -316,6 +482,144 @@ export class PatientsService {
         supportingExamImages: imagesByEncounter.get(e.id) ?? [],
       };
     });
+  }
+
+  /**
+   * Riwayat kunjungan satu pasien, per bulan & berhalaman. `months` memuat
+   * semua bulan yang punya data (untuk navigasi), `days` memuat tanggal
+   * datang pada bulan terpilih (atau semua bulan bila tidak difilter).
+   */
+  async findEncounterHistory(
+    patientId: number,
+    clinicId: number,
+    query: PatientHistoryQueryDto,
+  ) {
+    await this.findOne(patientId, clinicId);
+    const { page, limit, month } = query;
+    const scope = (qb: SelectQueryBuilder<Encounter>) => {
+      qb.where('e.patient_id = :patientId AND e.clinic_id = :clinicId', {
+        patientId,
+        clinicId,
+      });
+      if (month) {
+        qb.andWhere("DATE_FORMAT(e.arrived_time, '%Y-%m') = :month", {
+          month,
+        });
+      }
+      return qb;
+    };
+
+    const [rows, total] = await scope(
+      this.encounterRepository
+        .createQueryBuilder('e')
+        .leftJoinAndSelect('e.practitioner', 'practitioner'),
+    )
+      .orderBy('e.arrived_time', 'DESC')
+      .addOrderBy('e.id', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    const months = await this.encounterRepository
+      .createQueryBuilder('e')
+      .select("DATE_FORMAT(e.arrived_time, '%Y-%m')", 'month')
+      .addSelect('COUNT(*)', 'count')
+      .where('e.patient_id = :patientId AND e.clinic_id = :clinicId', {
+        patientId,
+        clinicId,
+      })
+      .groupBy('month')
+      .orderBy('month', 'DESC')
+      .getRawMany<{ month: string; count: string }>();
+
+    const days = await scope(this.encounterRepository.createQueryBuilder('e'))
+      .select("DATE_FORMAT(e.arrived_time, '%Y-%m-%d')", 'date')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('date')
+      .orderBy('date', 'ASC')
+      .getRawMany<{ date: string; count: string }>();
+
+    return {
+      items: rows.map((e) => ({
+        id: e.id,
+        status: e.status,
+        serviceType: e.serviceType,
+        chiefComplaint: e.chiefComplaint,
+        arrivedTime: e.arrivedTime,
+        finishedTime: e.finishedTime,
+        practitionerName: e.practitioner?.name,
+      })),
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      months: months.map((m) => ({ month: m.month, count: Number(m.count) })),
+      days: days.map((d) => ({ date: d.date, count: Number(d.count) })),
+    };
+  }
+
+  /** Riwayat transaksi (invoice) satu pasien: per bulan & berhalaman. */
+  async findBillingHistory(
+    patientId: number,
+    clinicId: number,
+    query: PatientHistoryQueryDto,
+  ) {
+    await this.findOne(patientId, clinicId);
+    const { page, limit, month } = query;
+    const scope = (qb: SelectQueryBuilder<Billing>) => {
+      qb.where('b.patient_id = :patientId AND b.clinic_id = :clinicId', {
+        patientId,
+        clinicId,
+      });
+      if (month) {
+        qb.andWhere("DATE_FORMAT(b.created_at, '%Y-%m') = :month", { month });
+      }
+      return qb;
+    };
+
+    const [rows, total] = await scope(
+      this.billingRepository
+        .createQueryBuilder('b')
+        .leftJoinAndSelect('b.items', 'items'),
+    )
+      .orderBy('b.created_at', 'DESC')
+      .addOrderBy('b.id', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    const months = await this.billingRepository
+      .createQueryBuilder('b')
+      .select("DATE_FORMAT(b.created_at, '%Y-%m')", 'month')
+      .addSelect('COUNT(*)', 'count')
+      .where('b.patient_id = :patientId AND b.clinic_id = :clinicId', {
+        patientId,
+        clinicId,
+      })
+      .groupBy('month')
+      .orderBy('month', 'DESC')
+      .getRawMany<{ month: string; count: string }>();
+
+    const days = await scope(this.billingRepository.createQueryBuilder('b'))
+      .select("DATE_FORMAT(b.created_at, '%Y-%m-%d')", 'date')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('date')
+      .orderBy('date', 'ASC')
+      .getRawMany<{ date: string; count: string }>();
+
+    return {
+      items: rows.map((b) => ({
+        id: b.id,
+        invoiceNumber: b.invoiceNumber,
+        status: b.status,
+        grandTotal: Number(b.grandTotal),
+        paidAmount: Number(b.paidAmount),
+        outstandingAmount: Number(b.outstandingAmount),
+        createdAt: b.createdAt,
+        encounterId: b.encounterId,
+        itemNames: (b.items ?? []).map((i) => i.name),
+      })),
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      months: months.map((m) => ({ month: m.month, count: Number(m.count) })),
+      days: days.map((d) => ({ date: d.date, count: Number(d.count) })),
+    };
   }
 
   /**
@@ -465,7 +769,30 @@ export class PatientsService {
       await this.checkDuplicateNik(dto.nik, clinicId);
     }
 
-    const saved = await this.createWithNoRmRetry(clinicId, dto, noRmOverride);
+    const riwayatKeluarga = dto.riwayatKeluarga?.length
+      ? await this.familyHistory.normalize(
+          dto.riwayatKeluarga,
+          null,
+          clinicId,
+          null,
+        )
+      : null;
+    const riwayatObat = dto.riwayatObat?.length
+      ? await this.medicationHistory.normalize(
+          dto.riwayatObat,
+          null,
+          clinicId,
+          null,
+        )
+      : null;
+    const saved = await this.createWithNoRmRetry(
+      clinicId,
+      { ...dto, riwayatKeluarga: undefined, riwayatObat: undefined },
+      noRmOverride,
+      1,
+      riwayatKeluarga,
+      riwayatObat,
+    );
 
     this.logger.log(
       `[CREATE] Pasien berhasil dibuat | id=${saved.id}, noRm=${saved.noRm}, clinicId=${clinicId}`,
@@ -478,6 +805,8 @@ export class PatientsService {
     dto: CreatePatientDto,
     noRmOverride?: string,
     attempt = 1,
+    riwayatKeluarga: Patient['riwayatKeluarga'] = null,
+    riwayatObat: Patient['riwayatObat'] = null,
   ): Promise<Patient> {
     try {
       return await this.dataSource.transaction(async (manager) => {
@@ -486,7 +815,8 @@ export class PatientsService {
         // generateNoRm's own scan already excludes non-numeric/legacy-style
         // no_rm values for exactly this reason, so the two schemes coexist
         // without colliding on the sequence.
-        const noRm = noRmOverride || (await this.generateNoRm(manager, clinicId));
+        const noRm =
+          noRmOverride || (await this.generateNoRm(manager, clinicId));
         const patient = manager.create(Patient, {
           clinicId,
           noRm,
@@ -522,6 +852,8 @@ export class PatientsService {
           riwayatSyaraf: dto.riwayatSyaraf ?? false,
           riwayatSistemikLainnya: dto.riwayatSistemikLainnya ?? false,
           catatanSistemikLainnya: dto.catatanSistemikLainnya,
+          riwayatKeluarga,
+          riwayatObat,
           alergiObat: dto.alergiObat ?? false,
           alergiMakanan: dto.alergiMakanan ?? false,
           preferensiKontak: dto.preferensiKontak,
@@ -553,7 +885,14 @@ export class PatientsService {
         );
       }
       if (isDuplicateNoRm && !noRmOverride && attempt < 5) {
-        return this.createWithNoRmRetry(clinicId, dto, undefined, attempt + 1);
+        return this.createWithNoRmRetry(
+          clinicId,
+          dto,
+          undefined,
+          attempt + 1,
+          riwayatKeluarga,
+          riwayatObat,
+        );
       }
       throw err;
     }
@@ -571,6 +910,24 @@ export class PatientsService {
 
     if (dto.nik && dto.nik !== patient.nik) {
       await this.checkDuplicateNik(dto.nik, clinicId, id);
+    }
+
+    if (dto.riwayatObat !== undefined) {
+      patient.riwayatObat = await this.medicationHistory.normalize(
+        dto.riwayatObat,
+        patient.riwayatObat,
+        clinicId,
+        patient.id,
+      );
+    }
+
+    if (dto.riwayatKeluarga !== undefined) {
+      patient.riwayatKeluarga = await this.familyHistory.normalize(
+        dto.riwayatKeluarga,
+        patient.riwayatKeluarga,
+        clinicId,
+        patient.id,
+      );
     }
 
     Object.assign(patient, {
@@ -708,6 +1065,105 @@ export class PatientsService {
       throw new BadRequestException('NIK diperlukan untuk pencarian SATUSEHAT');
     }
     return this.satusehatClient.searchPatientByNik(clinicId, nik);
+  }
+
+  /**
+   * Cari pasien di SATUSEHAT (MPI) dan ringkas hasilnya untuk mengisi form
+   * pasien baru. NIK hasil SATUSEHAT selalu tersamar; pasien yang sudah ada di
+   * klinik (NIK/ID SATUSEHAT sama) ditandai agar tidak terdaftar ganda.
+   */
+  async searchSatusehatPatients(
+    dto: SearchSatusehatPatientDto,
+    clinicId: number,
+  ) {
+    const NIK_SYSTEM = 'https://fhir.kemkes.go.id/id/nik';
+    let resources: any[] = [];
+    let path: string | null = null;
+    if (dto.nik) {
+      resources = (
+        (await this.satusehatClient.searchPatientByNik(clinicId, dto.nik))
+          ?.entry ?? []
+      ).map((e: any) => e.resource);
+    } else if (dto.ihsId) {
+      const { status, data } = await this.satusehatClient.getFhir(
+        clinicId,
+        `Patient/${encodeURIComponent(dto.ihsId)}`,
+      );
+      if (status < 300 && data?.resourceType === 'Patient') resources = [data];
+    } else if (dto.nikIbu) {
+      path = `Patient?identifier=${encodeURIComponent(`https://fhir.kemkes.go.id/id/nik-ibu|${dto.nikIbu}`)}`;
+    } else if (dto.name?.trim() && dto.birthDate && dto.gender) {
+      path = `Patient?${new URLSearchParams({
+        name: dto.name.trim(),
+        birthdate: dto.birthDate.slice(0, 10),
+        gender: dto.gender,
+      }).toString()}`;
+    } else {
+      throw new BadRequestException(
+        'Isi NIK, atau nama + tanggal lahir + jenis kelamin, atau NIK ibu, atau ID SATUSEHAT',
+      );
+    }
+    if (path) {
+      const { data } = await this.satusehatClient.getFhir(clinicId, path);
+      resources = (data?.entry ?? []).map((e: any) => e.resource);
+    }
+
+    const ihsIds = resources.map((r) => r?.id).filter(Boolean) as string[];
+    const nikHash = dto.nik ? hashNik(dto.nik) : null;
+    const ours =
+      ihsIds.length || nikHash
+        ? await this.patientRepository.find({
+            where: [
+              ...(ihsIds.length
+                ? [{ clinicId, satusehatPatientId: In(ihsIds) }]
+                : []),
+              ...(nikHash ? [{ clinicId, nikHash }] : []),
+            ],
+            select: {
+              id: true,
+              name: true,
+              noRm: true,
+              satusehatPatientId: true,
+              nikHash: true,
+            },
+          })
+        : [];
+
+    const results = resources
+      .filter((r) => r?.id)
+      .slice(0, 20)
+      .map((r) => {
+        const nik = (r.identifier ?? []).find(
+          (i: any) => i.system === NIK_SYSTEM,
+        )?.value as string | undefined;
+        const match = ours.find(
+          (p) =>
+            p.satusehatPatientId === r.id ||
+            (!!nikHash && p.nikHash === nikHash),
+        );
+        const addr = r.address?.[0];
+        return {
+          id: String(r.id),
+          name: (r.name?.[0]?.text as string | undefined) ?? null,
+          gender: (r.gender as string | undefined) ?? null,
+          birthDate: (r.birthDate as string | undefined) ?? null,
+          nikMasked: nik ? maskNik(nik) : null,
+          address: (addr?.line?.[0] as string | undefined) ?? null,
+          city: (addr?.city as string | undefined) ?? null,
+          phone:
+            ((r.telecom ?? []).find((t: any) => t.system === 'phone')?.value as
+              | string
+              | undefined) ?? null,
+          deceased: r.deceasedBoolean === true || !!r.deceasedDateTime,
+          inClinic: match
+            ? { id: match.id, name: match.name, noRm: match.noRm }
+            : null,
+        };
+      });
+    this.logger.log(
+      `[SEARCH-SS] Cari pasien SATUSEHAT | clinicId=${clinicId}, mode=${dto.nik ? 'nik' : dto.ihsId ? 'id' : dto.nikIbu ? 'nik-ibu' : 'nama'}, hasil=${results.length}`,
+    );
+    return { found: results.length > 0, results };
   }
 
   private async generateNoRm(

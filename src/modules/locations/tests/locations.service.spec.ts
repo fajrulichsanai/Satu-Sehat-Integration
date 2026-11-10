@@ -62,9 +62,7 @@ describe('LocationsService', () => {
 
     it('throws NotFoundException when missing (negative)', async () => {
       repo.findOne.mockResolvedValue(null);
-      await expect(service.findOne(999, 1)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.findOne(999, 1)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -95,13 +93,13 @@ describe('LocationsService', () => {
 
   describe('update', () => {
     it('updates fields without re-checking name uniqueness when unchanged (positive)', async () => {
-      repo.findOne.mockResolvedValueOnce({ id: 1, clinicId: 1, name: 'Ruang 1', type: 'ROOM' });
-      const result = await service.update(
-        1,
-        { type: 'DEPT' } as any,
-        1,
-        9,
-      );
+      repo.findOne.mockResolvedValueOnce({
+        id: 1,
+        clinicId: 1,
+        name: 'Ruang 1',
+        type: 'ROOM',
+      });
+      const result = await service.update(1, { type: 'DEPT' } as any, 1, 9);
       expect(result.data.type).toBe('DEPT');
       expect(repo.findOne).toHaveBeenCalledTimes(1);
     });
@@ -117,9 +115,9 @@ describe('LocationsService', () => {
 
     it('throws NotFoundException when location does not exist (negative)', async () => {
       repo.findOne.mockResolvedValue(null);
-      await expect(
-        service.update(999, {} as any, 1, 9),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.update(999, {} as any, 1, 9)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -133,9 +131,7 @@ describe('LocationsService', () => {
 
     it('throws NotFoundException when missing (negative)', async () => {
       repo.findOne.mockResolvedValue(null);
-      await expect(service.remove(999, 1)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.remove(999, 1)).rejects.toThrow(NotFoundException);
     });
   });
 

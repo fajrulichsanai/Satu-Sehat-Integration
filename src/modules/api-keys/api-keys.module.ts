@@ -20,7 +20,14 @@ import { StorageModule } from '../../common/storage/storage.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ApiKey, ApiUsageDaily, Clinic, Practitioner, Tarif, Reservation]),
+    TypeOrmModule.forFeature([
+      ApiKey,
+      ApiUsageDaily,
+      Clinic,
+      Practitioner,
+      Tarif,
+      Reservation,
+    ]),
     SubscriptionsModule,
     ReservationsModule,
     PublicModule,

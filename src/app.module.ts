@@ -3,7 +3,14 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { BranchAuditInterceptor } from './modules/audit-log/interceptors/branch-audit.interceptor';
+import { FeaturesModule } from './modules/features/features.module';
+import { AttendanceModule } from './modules/attendance/attendance.module';
+import { StorageQuotaModule } from './modules/storage-quota/storage-quota.module';
+import { FeatureAccessGuard } from './modules/features/feature-access.guard';
+import { ClinicalAccessModule } from './modules/clinical-access/clinical-access.module';
+import { ClinicalAccessGuard } from './modules/clinical-access/clinical-access.guard';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './modules/auth/auth.module';
@@ -24,13 +31,19 @@ import { IcdModule } from './modules/icd/icd.module';
 import { OwnerCodeModule } from './modules/owner-code/owner-code.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { DataRequestsModule } from './modules/data-requests/data-requests.module';
+import { DataRetentionModule } from './modules/data-retention/data-retention.module';
+import { SuperAdminToolsModule } from './modules/super-admin-tools/super-admin-tools.module';
 import { ContentsModule } from './modules/contents/contents.module';
 import { TerminologyModule } from './modules/terminology/terminology.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { OperationalRecordsModule } from './modules/operational-records/operational-records.module';
+import { PayrollModule } from './modules/payroll/payroll.module';
 import { DoctorFeeModule } from './modules/doctor-fee/doctor-fee.module';
 import { EncounterSoapNotesModule } from './modules/encounter-soap-notes/encounter-soap-notes.module';
 import { PhysicalExaminationModule } from './modules/physical-examination/physical-examination.module';
+import { ImmunizationsModule } from './modules/immunizations/immunizations.module';
+import { ReferralsModule } from './modules/referrals/referrals.module';
+import { DiagnosticsModule } from './modules/diagnostics/diagnostics.module';
 import { PrescriptionsModule } from './modules/prescriptions/prescriptions.module';
 import { OdontogramModule } from './modules/odontogram/odontogram.module';
 import { DentalExaminationModule } from './modules/dental-examination/dental-examination.module';
@@ -44,6 +57,7 @@ import { RecallsModule } from './modules/recalls/recalls.module';
 import { ConsentsModule } from './modules/consents/consents.module';
 import { MultiClinicModule } from './modules/multi-clinic/multi-clinic.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
+import { ClinicalPhotosModule } from './modules/clinical-photos/clinical-photos.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
@@ -68,7 +82,8 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
             limit: parseInt(config.get<string>('THROTTLE_LIMIT', '300'), 10),
           },
         ],
-        errorMessage: 'Terlalu banyak permintaan. Silakan coba lagi sebentar lagi.',
+        errorMessage:
+          'Terlalu banyak permintaan. Silakan coba lagi sebentar lagi.',
       }),
     }),
     ScheduleModule.forRoot(),
@@ -76,10 +91,19 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
         const nodeEnv = configService.get<string>('NODE_ENV', 'development');
+        // Schema is managed by the explicit, idempotent migrations in
+        // scripts/apply-security-schema.js — TypeORM's synchronize() must
+        // never run against a shared database (staging/production/anywhere
+        // else), only local development, because it can try to alter/drop
+        // columns and indexes on its own and crash-loop or corrupt schema
+        // drift when it conflicts with a foreign key (as it did on staging:
+        // NODE_ENV there isn't the literal string 'production', so the old
+        // `nodeEnv !== 'production'` default silently turned sync on).
+        // DB_SYNCHRONIZE=true remains an explicit opt-in for any env.
         const synchronize =
           configService.get<string>(
             'DB_SYNCHRONIZE',
-            nodeEnv !== 'production' ? 'true' : 'false',
+            nodeEnv === 'development' ? 'true' : 'false',
           ) === 'true';
         return {
           type: 'mysql',
@@ -118,12 +142,18 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     OwnerCodeModule,
     ApiKeysModule,
     DataRequestsModule,
+    DataRetentionModule,
+    SuperAdminToolsModule,
     TerminologyModule,
     DashboardModule,
     OperationalRecordsModule,
+    PayrollModule,
     DoctorFeeModule,
     EncounterSoapNotesModule,
     PhysicalExaminationModule,
+    ImmunizationsModule,
+    ReferralsModule,
+    DiagnosticsModule,
     PrescriptionsModule,
     OdontogramModule,
     DentalExaminationModule,
@@ -133,11 +163,16 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     NotificationsModule,
     GudangModule,
     SubscriptionsModule,
+    FeaturesModule,
+    AttendanceModule,
     RecallsModule,
     ConsentsModule,
     MultiClinicModule,
+    StorageQuotaModule,
     OnboardingModule,
+    ClinicalPhotosModule,
     ContentsModule,
+    ClinicalAccessModule,
   ],
   controllers: [AppController],
   providers: [
@@ -158,6 +193,21 @@ import { SubscriptionGuard } from './modules/subscriptions/guards/subscription.g
     {
       provide: APP_GUARD,
       useExisting: SubscriptionGuard,
+    },
+    // Fitur yang dimatikan super admin (per klinik) / owner (per user)
+    {
+      provide: APP_GUARD,
+      useExisting: FeatureAccessGuard,
+    },
+    // Dokter/perawat hanya membuka pasien yang pernah/sedang ditanganinya
+    {
+      provide: APP_GUARD,
+      useExisting: ClinicalAccessGuard,
+    },
+    // Multi-Klinik Owner di mode Cabang aktif: setiap perubahan tercatat
+    {
+      provide: APP_INTERCEPTOR,
+      useExisting: BranchAuditInterceptor,
     },
   ],
 })

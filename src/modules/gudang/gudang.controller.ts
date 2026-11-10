@@ -14,7 +14,11 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { GudangService } from './gudang.service';
-import { BarangQueryDto, CreateBarangDto, UpdateBarangDto } from './dto/barang.dto';
+import {
+  BarangQueryDto,
+  CreateBarangDto,
+  UpdateBarangDto,
+} from './dto/barang.dto';
 import {
   CreateStokTransaksiDto,
   StokTransaksiQueryDto,
@@ -30,20 +34,30 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Audit } from '../audit-log/decorators/audit.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
 import { AuditActionType } from '../audit-log/entities/audit-log.entity';
+import { RequireFeature } from '../features/require-feature.decorator';
+import { StockOpnameService } from './stock-opname.service';
+import { CreateStockOpnameDto } from './dto/stock-opname.dto';
 
 @ApiTags('gudang')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(ClinicContextGuard)
 @UseInterceptors(AuditInterceptor)
+@RequireFeature('gudang')
 @Controller('gudang')
 export class GudangController {
-  constructor(private readonly gudangService: GudangService) {}
+  constructor(
+    private readonly gudangService: GudangService,
+    private readonly stockOpnameService: StockOpnameService,
+  ) {}
 
   // ── Barang ──────────────────────────────────────────────────────────────
 
   @Get('barang')
   @ApiOperation({ summary: 'List barang' })
-  async findBarang(@ClinicId() clinicId: number, @Query() query: BarangQueryDto) {
+  async findBarang(
+    @ClinicId() clinicId: number,
+    @Query() query: BarangQueryDto,
+  ) {
     const result = await this.gudangService.findAllBarang(clinicId, query);
     return { success: true, data: result };
   }
@@ -66,7 +80,11 @@ export class GudangController {
     @Body() dto: CreateBarangDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.gudangService.createBarang(clinicId, dto, user.userId);
+    const data = await this.gudangService.createBarang(
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data };
   }
 
@@ -81,7 +99,12 @@ export class GudangController {
     @Req() req: any,
   ) {
     req.auditBefore = await this.gudangService.findOneBarang(id, clinicId);
-    const data = await this.gudangService.updateBarang(id, clinicId, dto, user.userId);
+    const data = await this.gudangService.updateBarang(
+      id,
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data };
   }
 
@@ -119,7 +142,52 @@ export class GudangController {
     @Body() dto: CreateStokTransaksiDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.gudangService.createTransaksi(clinicId, dto, user.userId);
+    const data = await this.gudangService.createTransaksi(
+      clinicId,
+      dto,
+      user.userId,
+    );
+    return { success: true, data };
+  }
+
+  // ── Stock Opname ───────────────────────────────────────────────────────
+
+  @Get('opname')
+  @ApiOperation({ summary: 'Riwayat stock opname' })
+  async listOpname(@ClinicId() clinicId: number) {
+    return {
+      success: true,
+      data: await this.stockOpnameService.list(clinicId),
+    };
+  }
+
+  @Get('opname/:id')
+  @ApiOperation({ summary: 'Detail stock opname (berita acara)' })
+  async getOpname(
+    @ClinicId() clinicId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return {
+      success: true,
+      data: await this.stockOpnameService.findOne(clinicId, id),
+    };
+  }
+
+  @Post('opname')
+  @Audit('StockOpname', AuditActionType.CREATE)
+  @ApiOperation({
+    summary: 'Simpan stock opname & sesuaikan stok sesuai hitungan fisik',
+  })
+  async createOpname(
+    @ClinicId() clinicId: number,
+    @Body() dto: CreateStockOpnameDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.stockOpnameService.create(
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data };
   }
 
@@ -127,8 +195,14 @@ export class GudangController {
 
   @Get('bom')
   @ApiOperation({ summary: 'List resep bahan untuk sebuah tarif/tindakan' })
-  async findBom(@ClinicId() clinicId: number, @Query() query: TindakanBomQueryDto) {
-    const data = await this.gudangService.findBomByTarif(clinicId, query.tarifId);
+  async findBom(
+    @ClinicId() clinicId: number,
+    @Query() query: TindakanBomQueryDto,
+  ) {
+    const data = await this.gudangService.findBomByTarif(
+      clinicId,
+      query.tarifId,
+    );
     return { success: true, data };
   }
 
@@ -153,14 +227,22 @@ export class GudangController {
     @Body() dto: UpdateTindakanBomDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.gudangService.updateBom(id, clinicId, dto, user.userId);
+    const data = await this.gudangService.updateBom(
+      id,
+      clinicId,
+      dto,
+      user.userId,
+    );
     return { success: true, data };
   }
 
   @Delete('bom/:id')
   @Audit('TindakanBom', AuditActionType.DELETE)
   @ApiOperation({ summary: 'Hapus bahan dari resep tindakan' })
-  async removeBom(@Param('id', ParseIntPipe) id: number, @ClinicId() clinicId: number) {
+  async removeBom(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+  ) {
     await this.gudangService.removeBom(id, clinicId);
     return { success: true, data: { success: true } };
   }

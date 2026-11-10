@@ -20,10 +20,16 @@ export class ApiKeyGuard implements CanActivate {
       req.headers?.['x-api-key'] ??
       (bearer?.startsWith('Bearer apx_') ? bearer.slice(7) : undefined);
 
-    const { apiKey, usage } = await this.apiKeysService.authenticate(rawKey, req.headers?.origin);
+    const { apiKey, usage } = await this.apiKeysService.authenticate(
+      rawKey,
+      req.headers?.origin,
+    );
 
     res.setHeader('X-RateLimit-Limit', usage.limitPerMinute);
-    res.setHeader('X-RateLimit-Remaining', Math.max(0, usage.remainingThisMinute));
+    res.setHeader(
+      'X-RateLimit-Remaining',
+      Math.max(0, usage.remainingThisMinute),
+    );
     res.setHeader('X-Quota-Limit', usage.limitPerDay);
     res.setHeader('X-Quota-Remaining', Math.max(0, usage.remainingToday));
 

@@ -1,5 +1,37 @@
-import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export class TemplateDiagnosisDto {
+  @IsIn(['icd10', 'snomed'])
+  system: 'icd10' | 'snomed';
+
+  @IsString()
+  @MaxLength(20)
+  code: string;
+
+  @IsString()
+  @MaxLength(255)
+  display: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  nameId?: string | null;
+
+  @IsBoolean()
+  primary: boolean;
+}
 
 export class CreateSoapTemplateDto {
   @ApiProperty()
@@ -26,6 +58,19 @@ export class CreateSoapTemplateDto {
   @IsOptional()
   @IsString()
   plan?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  treatment?: string;
+
+  @ApiPropertyOptional({ type: [TemplateDiagnosisDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => TemplateDiagnosisDto)
+  diagnoses?: TemplateDiagnosisDto[];
 
   @ApiPropertyOptional({
     default: false,
@@ -61,6 +106,19 @@ export class UpdateSoapTemplateDto {
   @IsOptional()
   @IsString()
   plan?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  treatment?: string;
+
+  @ApiPropertyOptional({ type: [TemplateDiagnosisDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => TemplateDiagnosisDto)
+  diagnoses?: TemplateDiagnosisDto[];
 
   @ApiPropertyOptional()
   @IsOptional()

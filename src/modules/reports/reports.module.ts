@@ -16,6 +16,7 @@ import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
 import { InvestorReportPdfService } from './investor-report-pdf.service';
 import { FinancialReportPdfService } from './financial-report-pdf.service';
+import { ProfitLossService } from './profit-loss.service';
 
 @Module({
   imports: [
@@ -39,6 +40,8 @@ import { FinancialReportPdfService } from './financial-report-pdf.service';
     ReportsService,
     InvestorReportPdfService,
     FinancialReportPdfService,
+    ProfitLossService,
   ],
+  exports: [ReportsService, ProfitLossService],
 })
 export class ReportsModule {}

@@ -5,6 +5,7 @@ import { ClinicSubscription } from './entities/clinic-subscription.entity';
 import { SubscriptionPayment } from './entities/subscription-payment.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { User } from '../users/entities/user.entity';
+import { OwnerClinicLink } from '../multi-clinic/entities/owner-clinic-link.entity';
 import { SubscriptionPlansService } from './subscription-plans.service';
 import { ClinicSubscriptionsService } from './clinic-subscriptions.service';
 import { SubscriptionPaymentsService } from './subscription-payments.service';
@@ -17,6 +18,8 @@ import { SuperAdminReportsController } from './super-admin-reports.controller';
 import { SubscriptionGuard } from './guards/subscription.guard';
 import { SubscriptionExpiryCron } from './subscription-expiry.cron';
 import { AuditLogModule } from '../audit-log/audit-log.module';
+import { PlatformSetting } from '../features/entities/platform-setting.entity';
+import { BillingSettingsService } from './billing-settings.service';
 
 @Module({
   imports: [
@@ -26,6 +29,8 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
       SubscriptionPayment,
       Clinic,
       User,
+      OwnerClinicLink,
+      PlatformSetting,
     ]),
     AuditLogModule,
   ],
@@ -43,11 +48,13 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
     SubscriptionNotificationsService,
     SubscriptionGuard,
     SubscriptionExpiryCron,
+    BillingSettingsService,
   ],
   exports: [
     ClinicSubscriptionsService,
     SubscriptionGuard,
     SubscriptionPaymentsService,
+    BillingSettingsService,
   ],
 })
 export class SubscriptionsModule {}

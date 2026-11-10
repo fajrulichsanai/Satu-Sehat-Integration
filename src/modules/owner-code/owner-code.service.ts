@@ -48,14 +48,42 @@ export class OwnerCodeService {
     };
   }
 
+  /** Codes with the owner who used each one and the clinic they registered (OC-02). */
   async findAll() {
     const codes = await this.ownerCodeRepository.find({
       order: { createdAt: 'DESC' },
     });
+    const userIds = codes
+      .map((c) => c.usedBy)
+      .filter((id): id is number => !!id);
+    const users: {
+      id: number;
+      name: string;
+      email: string;
+      clinicId: number | null;
+      clinicName: string | null;
+    }[] = userIds.length
+      ? await this.ownerCodeRepository.manager.query(
+          `SELECT u.id, u.name, u.email, u.clinic_id AS clinicId, c.name AS clinicName
+               FROM users u LEFT JOIN clinics c ON c.id = u.clinic_id
+              WHERE u.id IN (?)`,
+          [userIds],
+        )
+      : [];
+    const byId = new Map(users.map((u) => [Number(u.id), u]));
 
     return {
       success: true,
-      data: codes,
+      data: codes.map((code) => {
+        const user = code.usedBy ? byId.get(Number(code.usedBy)) : undefined;
+        return {
+          ...code,
+          usedByName: user?.name ?? null,
+          usedByEmail: user?.email ?? null,
+          clinicId: user?.clinicId != null ? Number(user.clinicId) : null,
+          clinicName: user?.clinicName ?? null,
+        };
+      }),
     };
   }
 

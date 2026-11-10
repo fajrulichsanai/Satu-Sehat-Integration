@@ -1,0 +1,223 @@
+{
+  "authoredOn": "2026-02-20T15:00:00+00:00",
+  "basedOn": [
+    {
+      "reference": "Task/8f8a31aa-a075-499f-a419-9e6d94da6696"
+    }
+  ],
+  "code": {
+    "coding": [
+      {
+        "code": "referral-pre-request",
+        "display": "Referral pre request",
+        "system": "http://terminology.kemkes.go.id"
+      }
+    ]
+  },
+  "contained": [
+    {
+      "id": "1319155f-7356-49e2-baa1-cdd10e55a8f2",
+      "item": [
+        {
+          "item": [
+            {
+              "linkId": "000001",
+              "text": "Mengancam nyawa, membahayakan diri dan orang lain/lingkungan",
+              "type": "boolean"
+            },
+            {
+              "linkId": "000002",
+              "text": "Adanya gangguan pada jalan nafas, pernafasan, dan sirkulasi",
+              "type": "boolean"
+            },
+            {
+              "linkId": "000003",
+              "text": "Adanya penurunan kesadaran",
+              "type": "boolean"
+            },
+            {
+              "linkId": "000004",
+              "text": "Adanya gangguan hemodinamik",
+              "type": "boolean"
+            },
+            {
+              "linkId": "000005",
+              "text": "Memerlukan tindakan segera",
+              "type": "boolean"
+            }
+          ],
+          "linkId": "0",
+          "text": "GAWAT DARURAT",
+          "type": "group"
+        }
+      ],
+      "resourceType": "Questionnaire",
+      "status": "active",
+      "title": "Kriteria Rujukan"
+    },
+    {
+      "id": "a54c4998-352d-4e56-a5a9-9ca09aa7c5f3",
+      "item": [
+        {
+          "item": [
+            {
+              "answerOption": [
+                {
+                  "valueCoding": {
+                    "code": "11",
+                    "display": "ACEH",
+                    "system": "http://sys-ids.kemkes.go.id/administrative-area"
+                  }
+                },
+                {
+                  "valueCoding": {
+                    "code": "31",
+                    "display": "DKI JAKARTA",
+                    "system": "http://sys-ids.kemkes.go.id/administrative-area"
+                  }
+                },
+                {
+                  "valueCoding": {
+                    "code": "32",
+                    "display": "JAWA BARAT",
+                    "system": "http://sys-ids.kemkes.go.id/administrative-area"
+                  }
+                }
+              ],
+              "linkId": "1.1",
+              "required": true,
+              "text": "Provinsi",
+              "type": "choice"
+            },
+            {
+              "answerOption": [
+                {
+                  "valueCoding": {
+                    "code": "1101",
+                    "display": "ACEH SELATAN",
+                    "system": "http://sys-ids.kemkes.go.id/administrative-area"
+                  }
+                },
+                {
+                  "valueCoding": {
+                    "code": "3174",
+                    "display": "JAKARTA SELATAN",
+                    "system": "http://sys-ids.kemkes.go.id/administrative-area"
+                  }
+                },
+                {
+                  "valueCoding": {
+                    "code": "3273",
+                    "display": "BANDUNG",
+                    "system": "http://sys-ids.kemkes.go.id/administrative-area"
+                  }
+                }
+              ],
+              "linkId": "1.2",
+              "required": true,
+              "text": "Kabupaten/Kota",
+              "type": "choice"
+            }
+          ],
+          "linkId": "1",
+          "text": "Jejaring wilayah rujukan",
+          "type": "group"
+        }
+      ],
+      "resourceType": "Questionnaire",
+      "status": "active",
+      "title": "Jejaring Wilayah Rujukan"
+    }
+  ],
+  "encounter": {
+    "reference": "Encounter/96c3db0f-a99d-4f8a-b264-68466fe4c108"
+  },
+  "id": "8f8a31aa-a075-499f-a419-9e6d94da6696",
+  "identifier": [
+    {
+      "system": "http://sys-ids.kemkes.go.id/task/100010957",
+      "value": "2026022030416"
+    }
+  ],
+  "input": [
+    {
+      "type": {
+        "coding": [
+          {
+            "code": "119270007",
+            "display": "Management procedure",
+            "system": "http://snomed.info/sct"
+          }
+        ]
+      },
+      "valueCoding": {
+        "code": "385868005",
+        "display": "Emergency treatment management",
+        "system": "http://snomed.info/sct"
+      }
+    },
+    {
+      "type": {
+        "coding": [
+          {
+            "code": "primary-diagnosis",
+            "display": "Primary Diagnosis",
+            "system": "http://terminology.kemkes.go.id"
+          }
+        ]
+      },
+      "valueCoding": {
+        "code": "I61.9",
+        "display": "Intracerebral haemorrhage, unspecified",
+        "system": "http://hl7.org/fhir/sid/icd-10"
+      }
+    }
+  ],
+  "intent": "instance-order",
+  "lastModified": "2026-02-20T15:00:00+00:00",
+  "meta": {
+    "lastUpdated": "2026-02-20T14:39:32.357072+00:00",
+    "versionId": "MTc3MTU5ODM3MjM1NzA3MjAwMA"
+  },
+  "output": [
+    {
+      "type": {
+        "coding": [
+          {
+            "code": "referral-criteria",
+            "display": "Referral Criteria",
+            "system": "http://terminology.kemkes.go.id"
+          }
+        ]
+      },
+      "valueReference": {
+        "display": "Referral Criteria Response",
+        "reference": "#1319155f-7356-49e2-baa1-cdd10e55a8f2"
+      }
+    },
+    {
+      "type": {
+        "coding": [
+          {
+            "code": "referral-network-area",
+            "display": "Referral Network Area",
+            "system": "http://terminology.kemkes.go.id"
+          }
+        ]
+      },
+      "valueReference": {
+        "display": "Jejaring Wilayah Rujukan Response",
+        "reference": "#a54c4998-352d-4e56-a5a9-9ca09aa7c5f3"
+      }
+    }
+  ],
+  "owner": {
+    "reference": "Organization/100010957"
+  },
+  "priority": "routine",
+  "requester": {
+    "reference": "Organization/100010957"
+  },
+  "resourceType": "Task",
+  "status": "requested"
+}

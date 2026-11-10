@@ -4,6 +4,7 @@ import {
   Post,
   Put,
   Delete,
+  Patch,
   Body,
   Param,
   Req,
@@ -31,8 +32,11 @@ import {
   PractitionerResponseDto,
   PractitionerListResponseDto,
   SatusehatPractitionerSearchResultDto,
+  CreatePractitionerAccountDto,
+  UpdatePractitionerAccountDto,
 } from './dto/practitioner.dto';
 import { Audit } from '../audit-log/decorators/audit.decorator';
+import { RequireFeature } from '../features/require-feature.decorator';
 import { AuditInterceptor } from '../audit-log/interceptors/audit.interceptor';
 import { AuditActionType } from '../audit-log/entities/audit-log.entity';
 
@@ -104,10 +108,15 @@ export class PractitionersController {
     @ClinicId() clinicId: number,
     @Req() req: any,
   ) {
+    // Snapshot audit memakai bentuk tersamar (tanpa NIK utuh)
     req.auditBefore = await this.practitionersService
       .findOne(id, clinicId)
+      .then((r) => r.data)
       .catch(() => null);
-    return this.practitionersService.update(id, dto, clinicId, user.userId);
+    return this.practitionersService.update(id, dto, clinicId, {
+      userId: user.userId,
+      name: user.name,
+    });
   }
 
   @Delete(':id')
@@ -124,15 +133,81 @@ export class PractitionersController {
   ) {
     req.auditBefore = await this.practitionersService
       .findOne(id, clinicId)
+      .then((r) => r.data)
       .catch(() => null);
     return this.practitionersService.remove(id, clinicId);
   }
 
-  @Post('search-satusehat')
+  @Get(':id/revisions')
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Riwayat revisi data tenaga kesehatan' })
+  async revisions(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+  ) {
+    return this.practitionersService.revisions(id, clinicId);
+  }
+
+  @Post(':id/match-satusehat')
+  @RequireFeature('satusehat')
+  @Audit('Staff', AuditActionType.UPDATE)
   @Roles(UserRole.OWNER, UserRole.ADMIN)
   @ApiOperation({
-    summary: 'Search practitioner in SATUSEHAT by NIK',
-    description: 'TODO: Implement actual SATUSEHAT API integration in Phase 8',
+    summary: 'Cocokkan nakes dengan SATUSEHAT (NIK → ID IHS + nama resmi)',
+  })
+  async matchSatusehat(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.practitionersService.matchSatusehat(id, clinicId, {
+      userId: user.userId,
+      name: user.name,
+    });
+  }
+
+  @Post(':id/account')
+  @Audit('Staff', AuditActionType.UPDATE)
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Buat akun login (email + password) untuk nakes' })
+  async createAccount(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreatePractitionerAccountDto,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.practitionersService.createAccount(
+      id,
+      clinicId,
+      { ...dto, role: dto.role as UserRole | undefined },
+      { userId: user.userId, name: user.name },
+    );
+  }
+
+  @Patch(':id/account')
+  @Audit('Staff', AuditActionType.UPDATE)
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Ubah email / reset password / (non)aktifkan akun nakes',
+  })
+  async updateAccount(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdatePractitionerAccountDto,
+    @ClinicId() clinicId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.practitionersService.updateAccount(id, clinicId, dto, {
+      userId: user.userId,
+      name: user.name,
+    });
+  }
+
+  @Post('search-satusehat')
+  @RequireFeature('satusehat')
+  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @ApiOperation({
+    summary:
+      'Cari nakes di SATUSEHAT: NIK, ID SATUSEHAT, atau nama + jenis kelamin + tanggal lahir',
   })
   @ApiResponse({
     status: 200,

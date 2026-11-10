@@ -5,6 +5,7 @@ import { EncounterSoapNotesService } from '../encounter-soap-notes.service';
 import { EncounterSoapNote } from '../entities/encounter-soap-note.entity';
 import { Encounter } from '../../encounters/entities/encounter.entity';
 import { TerminologyService } from '../../terminology/terminology.service';
+import { ClinicalCatalogService } from '../../terminology/clinical-catalog.service';
 
 const CONCEPTS: Record<string, string> = {
   'icd10:K02.1': 'Caries of dentine',
@@ -49,6 +50,7 @@ describe('EncounterSoapNotesService', () => {
         { provide: getRepositoryToken(EncounterSoapNote), useValue: noteRepo },
         { provide: getRepositoryToken(Encounter), useValue: encounterRepo },
         { provide: TerminologyService, useValue: terminology },
+        ClinicalCatalogService,
       ],
     }).compile();
 

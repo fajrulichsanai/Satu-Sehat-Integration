@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Put,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -20,6 +21,8 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserRole } from '../../enums';
 import { SkipSubscriptionCheck } from './guards/subscription.guard';
+import { BillingSettingsService } from './billing-settings.service';
+import { DurationDiscountsDto } from './dto/subscription-plan.dto';
 
 @ApiTags('subscriptions')
 @ApiBearerAuth('JWT-auth')
@@ -27,12 +30,31 @@ import { SkipSubscriptionCheck } from './guards/subscription.guard';
 @SkipSubscriptionCheck()
 @Controller('subscription-plans')
 export class SubscriptionPlansController {
-  constructor(private readonly plansService: SubscriptionPlansService) {}
+  constructor(
+    private readonly plansService: SubscriptionPlansService,
+    private readonly billingSettings: BillingSettingsService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'List subscription plans (any authenticated user)' })
   findAll() {
     return this.plansService.findAll();
+  }
+
+  @Get('duration-discounts')
+  @ApiOperation({ summary: 'Diskon lama langganan 1/3/6/12 bulan (%)' })
+  getDurationDiscounts() {
+    return this.billingSettings.getDurationDiscounts();
+  }
+
+  @Put('duration-discounts')
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Ubah diskon lama langganan (Super Admin only)' })
+  setDurationDiscounts(
+    @Body() dto: DurationDiscountsDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.billingSettings.setDurationDiscounts(dto, user.userId);
   }
 
   @Post()

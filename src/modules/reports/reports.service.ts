@@ -8,7 +8,7 @@ import {
   SatusehatSyncLog,
   SyncLogStatus,
 } from '../satusehat/sync/entities/satusehat-sync-log.entity';
-import { UserRole } from '../../enums/user-role.enum';
+import { UserRole, isClinician } from '../../enums/user-role.enum';
 import {
   DoctorFeeShareReportQueryDto,
   FinancialReportQueryDto,
@@ -27,6 +27,8 @@ import { Barang } from '../gudang/entities/barang.entity';
 import { StokTransaksi } from '../gudang/entities/stok-transaksi.entity';
 import { Patient } from '../patients/entities/patient.entity';
 import { PatientOriginGeocode } from './entities/patient-origin-geocode.entity';
+import { SHARE_FEE_JOIN, SHARE_FEE_SELECT, computeShareFee } from './share-fee';
+import { ProfitLossService } from './profit-loss.service';
 
 export interface DoctorFeeShareBreakdownItem {
   tarifId: number;
@@ -34,6 +36,12 @@ export interface DoctorFeeShareBreakdownItem {
   count: number;
   feeType: FeeType;
   feeValue: number;
+  /** Total harga jual (unit price x qty) sebelum dipotong biaya lab. */
+  totalHarga: number;
+  /** Total biaya lab yang dipotong dari dasar share fee. */
+  totalBiayaLab: number;
+  /** Dasar perhitungan share fee persen = totalHarga - totalBiayaLab. */
+  dasarFee: number;
   totalShare: number;
 }
 
@@ -42,6 +50,7 @@ export interface DoctorFeeShareEntry {
   practitionerName: string;
   breakdown: DoctorFeeShareBreakdownItem[];
   totalTindakan: number;
+  totalBiayaLab: number;
   totalShareFee: number;
 }
 
@@ -70,6 +79,7 @@ export class ReportsService {
     private readonly patientRepo: Repository<Patient>,
     @InjectRepository(PatientOriginGeocode)
     private readonly patientOriginGeocodeRepo: Repository<PatientOriginGeocode>,
+    private readonly profitLoss: ProfitLossService,
   ) {}
 
   async getDoctorFeeShareReport(
@@ -92,24 +102,18 @@ export class ReportsService {
          pr.id AS practitionerId,
          pr.name AS practitionerName,
          t.id AS tarifId,
-         t.name AS tarifName,
-         t.harga_jual AS hargaJual,
-         SUM(bi.quantity) AS count,
-         dfc.fee_type AS feeType,
-         dfc.fee_value AS feeValue
+         t.name AS tarifName,${SHARE_FEE_SELECT}
        FROM billing_items bi
        JOIN billings b ON bi.billing_id = b.id
        JOIN encounters e ON b.encounter_id = e.id
        JOIN practitioners pr ON e.practitioner_id = pr.id
-       JOIN tarifs t ON bi.tarif_id = t.id
-       LEFT JOIN doctor_fee_configs dfc
-         ON dfc.tarif_id = t.id AND dfc.clinic_id = b.clinic_id
+       JOIN tarifs t ON bi.tarif_id = t.id${SHARE_FEE_JOIN}
        WHERE b.clinic_id = ?
-         AND b.status != 'cancelled'
+         AND b.status NOT IN ('cancelled', 'refunded')
          AND YEAR(b.created_at) = ?
          AND MONTH(b.created_at) = ?
          ${practitionerFilter}
-       GROUP BY pr.id, pr.name, t.id, t.name, t.harga_jual, dfc.fee_type, dfc.fee_value
+       GROUP BY pr.id, pr.name, t.id, t.name, dfc.fee_type, dfc.fee_value
        ORDER BY pr.id ASC`,
       params,
     );
@@ -117,14 +121,7 @@ export class ReportsService {
     const byPractitioner = new Map<number, DoctorFeeShareEntry>();
 
     for (const row of rows as any[]) {
-      const count = parseInt(row.count, 10);
-      const hargaJual = parseFloat(row.hargaJual || 0);
-      const feeType: FeeType = row.feeType || FeeType.PERCENTAGE;
-      const feeValue = parseFloat(row.feeValue || 0);
-      const totalShare =
-        feeType === FeeType.FIXED
-          ? count * feeValue
-          : count * (hargaJual * (feeValue / 100));
+      const fee = computeShareFee(row);
 
       const entry: DoctorFeeShareEntry = byPractitioner.get(
         row.practitionerId,
@@ -133,19 +130,24 @@ export class ReportsService {
         practitionerName: row.practitionerName,
         breakdown: [],
         totalTindakan: 0,
+        totalBiayaLab: 0,
         totalShareFee: 0,
       };
 
       entry.breakdown.push({
         tarifId: row.tarifId,
         tarifName: row.tarifName,
-        count,
-        feeType,
-        feeValue,
-        totalShare,
+        count: fee.count,
+        feeType: fee.feeType,
+        feeValue: fee.feeValue,
+        totalHarga: fee.totalHarga,
+        totalBiayaLab: fee.totalBiayaLab,
+        dasarFee: fee.dasarFee,
+        totalShare: fee.totalShare,
       });
-      entry.totalTindakan += count;
-      entry.totalShareFee += totalShare;
+      entry.totalTindakan += fee.count;
+      entry.totalBiayaLab += fee.totalBiayaLab;
+      entry.totalShareFee += fee.totalShare;
 
       byPractitioner.set(row.practitionerId, entry);
     }
@@ -184,7 +186,7 @@ export class ReportsService {
         dateTo: query.dateTo,
       });
 
-    if (user.role === UserRole.DOKTER) {
+    if (isClinician(user.role)) {
       qb.andWhere(
         'e.practitionerId = (SELECT id FROM practitioners WHERE user_id = :uid LIMIT 1)',
         { uid: user.userId },
@@ -531,34 +533,21 @@ export class ReportsService {
     const shareRows = await this.billingItemRepo.query(
       `SELECT
          pr.id AS practitionerId,
-         t.id AS tarifId,
-         t.harga_jual AS hargaJual,
-         SUM(bi.quantity) AS count,
-         dfc.fee_type AS feeType,
-         dfc.fee_value AS feeValue
+         t.id AS tarifId,${SHARE_FEE_SELECT}
        FROM billing_items bi
        JOIN billings b ON bi.billing_id = b.id
        JOIN encounters e ON b.encounter_id = e.id
        JOIN practitioners pr ON e.practitioner_id = pr.id
-       JOIN tarifs t ON bi.tarif_id = t.id
-       LEFT JOIN doctor_fee_configs dfc
-         ON dfc.tarif_id = t.id AND dfc.clinic_id = b.clinic_id
+       JOIN tarifs t ON bi.tarif_id = t.id${SHARE_FEE_JOIN}
        WHERE b.clinic_id = ? AND DATE(b.created_at) BETWEEN ? AND ?
-         AND b.status != 'cancelled'
-       GROUP BY pr.id, t.id, t.harga_jual, dfc.fee_type, dfc.fee_value`,
+         AND b.status NOT IN ('cancelled', 'refunded')
+       GROUP BY pr.id, t.id, dfc.fee_type, dfc.fee_value`,
       [clinicId, query.dateFrom, query.dateTo],
     );
 
     const shareByPractitioner = new Map<number, number>();
     for (const row of shareRows as any[]) {
-      const count = parseInt(row.count, 10);
-      const hargaJual = parseFloat(row.hargaJual || 0);
-      const feeType: FeeType = row.feeType || FeeType.PERCENTAGE;
-      const feeValue = parseFloat(row.feeValue || 0);
-      const totalShare =
-        feeType === FeeType.FIXED
-          ? count * feeValue
-          : count * (hargaJual * (feeValue / 100));
+      const { totalShare } = computeShareFee(row);
       shareByPractitioner.set(
         row.practitionerId,
         (shareByPractitioner.get(row.practitionerId) || 0) + totalShare,
@@ -571,63 +560,29 @@ export class ReportsService {
       doctorFeeShare: shareByPractitioner.get(r.practitionerId) || 0,
     }));
 
-    // bi.subtotal is per-item, pre billing-level discount — a billing-level
-    // discount/additional fee (billings.total_discount / additional_fee)
-    // never lands on any single item, so raw SUM(bi.subtotal) overstates
-    // revenue whenever a billing has one. Scale each item by that billing's
-    // grand_total/subtotal ratio so tindakan-level totals foot back to the
-    // clinic's actual (billing.grand_total-based) revenue.
-    const tindakanRows = await this.billingItemRepo.query(
-      `SELECT
-         t.id AS tarifId,
-         t.name AS tarifName,
-         t.harga_pokok AS hargaPokok,
-         t.harga_jual AS hargaJual,
-         SUM(bi.quantity) AS frekuensi,
-         SUM(bi.discount) AS totalDiskon,
-         SUM(bi.subtotal * (b.grand_total / NULLIF(b.subtotal, 0))) AS totalSubtotal
-       FROM billing_items bi
-       JOIN billings b ON bi.billing_id = b.id
-       JOIN tarifs t ON bi.tarif_id = t.id
-       WHERE b.clinic_id = ? AND DATE(b.created_at) BETWEEN ? AND ?
-         AND b.status != 'cancelled'
-       GROUP BY t.id, t.name, t.harga_pokok, t.harga_jual
-       ORDER BY frekuensi DESC`,
-      [clinicId, query.dateFrom, query.dateTo],
+    // Laba rugi satu definisi (lihat ProfitLossService): pendapatan bersih -
+    // HPP (modal + lab) - beban (share fee, gaji, operasional rutin). Belanja
+    // bahan/alat tidak dihitung lagi sebagai beban karena bahan sudah masuk HPP.
+    const pl = await this.profitLoss.compute(
+      clinicId,
+      query.dateFrom,
+      query.dateTo,
+      { detail: false },
     );
-
-    const tindakanTerlaris = tindakanRows.map((r: any) => {
-      const frekuensi = parseInt(r.frekuensi, 10);
-      const hargaPokok = parseFloat(r.hargaPokok || 0);
-      const hargaJual = parseFloat(r.hargaJual || 0);
-      const totalDiskon = parseFloat(r.totalDiskon || 0);
-      const totalSubtotal = parseFloat(r.totalSubtotal || 0);
-      const modal = hargaPokok * frekuensi;
-      return {
-        tarifId: r.tarifId,
-        namaTindakan: r.tarifName,
-        modal,
-        hargaJual,
-        frekuensi,
-        totalDiskon,
-        labaBersih: totalSubtotal - modal,
-      };
-    });
-
-    const totalModal = tindakanTerlaris.reduce((sum, t) => sum + t.modal, 0);
-
-    const [pengeluaranRow] = await this.operationalRecordRepo.query(
-      `SELECT SUM(nominal) AS total FROM operational_records
-       WHERE clinic_id = ? AND tanggal BETWEEN ? AND ?`,
-      [clinicId, query.dateFrom, query.dateTo],
-    );
-    const totalPengeluaran = parseFloat(pengeluaranRow?.total || 0);
-
-    const labaBersih = totalPaid - totalModal - totalPengeluaran;
-    const marginPersen =
-      totalPaid > 0
-        ? parseFloat(((labaBersih / totalPaid) * 100).toFixed(1))
-        : 0;
+    const tindakanTerlaris = pl.tindakan
+      .map((t) => ({
+        tarifId: t.tarifId,
+        namaTindakan: t.nama,
+        modal: t.modal,
+        biayaLab: t.biayaLab,
+        shareFee: t.shareFee,
+        hargaJual: t.hargaRata,
+        frekuensi: t.qty,
+        totalDiskon: t.diskon,
+        pendapatan: t.pendapatan,
+        labaBersih: t.laba,
+      }))
+      .sort((a, b) => b.frekuensi - a.frekuensi);
 
     // ----- Perbandingan periode sebelumnya (durasi sama, langsung sebelum dateFrom) -----
     const rangeDays =
@@ -642,19 +597,19 @@ export class ReportsService {
     prevDateFrom.setDate(prevDateFrom.getDate() - (rangeDays - 1));
     const toIso = (d: Date) => d.toISOString().slice(0, 10);
 
-    const [prevSummaryRow] = await this.billingRepo.query(
-      `SELECT SUM(paid_amount) AS totalPaid
-       FROM billings
-       WHERE clinic_id = ? AND DATE(created_at) BETWEEN ? AND ?
-         AND status != 'cancelled'`,
-      [clinicId, toIso(prevDateFrom), toIso(prevDateTo)],
+    const prevPl = await this.profitLoss.compute(
+      clinicId,
+      toIso(prevDateFrom),
+      toIso(prevDateTo),
+      { detail: false },
     );
-    const previousPendapatan = parseFloat(prevSummaryRow?.totalPaid || 0);
+    const previousPendapatan = prevPl.pendapatan.bersih;
     const changePercent =
       previousPendapatan > 0
         ? parseFloat(
             (
-              ((totalPaid - previousPendapatan) / previousPendapatan) *
+              ((pl.pendapatan.bersih - previousPendapatan) /
+                previousPendapatan) *
               100
             ).toFixed(1),
           )
@@ -698,12 +653,14 @@ export class ReportsService {
         })),
         byDoctor,
         ringkasan: {
-          pendapatanTotal: totalPaid,
-          modal: totalModal,
-          labaBersih,
-          pengeluaran: totalPengeluaran,
-          marginPersen,
+          pendapatanTotal: pl.pendapatan.bersih,
+          modal: pl.hpp.total,
+          labaKotor: pl.labaKotor,
+          labaBersih: pl.labaBersih,
+          pengeluaran: pl.beban.total,
+          marginPersen: pl.marginPersen,
         },
+        labaRugi: pl,
         tindakanTerlaris,
         paymentStats,
         discountStats,
@@ -843,10 +800,9 @@ export class ReportsService {
   ) {
     const base = await this.getFinancialReport(clinicId, query);
 
-    const monthKeys = this.getTrailingMonthKeys(6);
     const [monthlyTrend, byDoctorProfit, visitHeatmap, stockReport] =
       await Promise.all([
-        this.computeMonthlyTrend(clinicId, monthKeys),
+        this.profitLoss.trend(clinicId, query.dateTo, 6),
         this.computeByDoctorProfit(clinicId, query.dateFrom, query.dateTo),
         this.computeVisitHeatmap(clinicId, query.dateFrom, query.dateTo),
         this.computeStockReport(clinicId, query.dateFrom, query.dateTo),
@@ -857,7 +813,7 @@ export class ReportsService {
       .sort((a, b) => b.totalDiskon - a.totalDiskon)
       .slice(0, 10);
 
-    const labaKotor = base.data.summary.totalPaid - base.data.ringkasan.modal;
+    const labaKotor = base.data.ringkasan.labaKotor;
 
     return {
       data: {
@@ -890,22 +846,15 @@ export class ReportsService {
       `SELECT
          pr.id AS practitionerId,
          pr.name AS practitionerName,
-         t.harga_pokok AS hargaPokok,
-         t.harga_jual AS hargaJual,
-         SUM(bi.quantity) AS qty,
-         SUM(bi.subtotal * (b.grand_total / NULLIF(b.subtotal, 0))) AS revenue,
-         dfc.fee_type AS feeType,
-         dfc.fee_value AS feeValue
+         SUM(bi.subtotal * (b.grand_total / NULLIF(b.subtotal, 0))) AS revenue,${SHARE_FEE_SELECT}
        FROM billing_items bi
        JOIN billings b ON bi.billing_id = b.id
        JOIN encounters e ON b.encounter_id = e.id
        JOIN practitioners pr ON e.practitioner_id = pr.id
-       JOIN tarifs t ON bi.tarif_id = t.id
-       LEFT JOIN doctor_fee_configs dfc
-         ON dfc.tarif_id = t.id AND dfc.clinic_id = b.clinic_id
+       JOIN tarifs t ON bi.tarif_id = t.id${SHARE_FEE_JOIN}
        WHERE b.clinic_id = ? AND DATE(b.created_at) BETWEEN ? AND ?
-         AND b.status != 'cancelled'
-       GROUP BY pr.id, pr.name, t.id, t.harga_pokok, t.harga_jual, dfc.fee_type, dfc.fee_value`,
+         AND b.status NOT IN ('cancelled', 'refunded')
+       GROUP BY pr.id, pr.name, t.id, dfc.fee_type, dfc.fee_value`,
       [clinicId, dateFrom, dateTo],
     );
 
@@ -915,30 +864,30 @@ export class ReportsService {
         practitionerName: string;
         revenue: number;
         modal: number;
+        lab: number;
         feeShare: number;
       }
     >();
     for (const r of rows as any[]) {
-      const qty = parseInt(r.qty, 10);
       const revenue = parseFloat(r.revenue || 0);
-      const hargaPokok = parseFloat(r.hargaPokok || 0);
-      const hargaJual = parseFloat(r.hargaJual || 0);
-      const feeType: FeeType = r.feeType || FeeType.PERCENTAGE;
-      const feeValue = parseFloat(r.feeValue || 0);
-      const modal = hargaPokok * qty;
-      const feeShare =
-        feeType === FeeType.FIXED
-          ? qty * feeValue
-          : qty * (hargaJual * (feeValue / 100));
+      const fee = computeShareFee(r);
+      const modal =
+        r.totalModal != null
+          ? parseFloat(r.totalModal)
+          : parseFloat(r.hargaPokok || 0) * fee.count;
+      const lab = fee.totalBiayaLab;
+      const feeShare = fee.totalShare;
 
       const existing = byPractitioner.get(r.practitionerId) ?? {
         practitionerName: r.practitionerName,
         revenue: 0,
         modal: 0,
+        lab: 0,
         feeShare: 0,
       };
       existing.revenue += revenue;
       existing.modal += modal;
+      existing.lab += lab;
       existing.feeShare += feeShare;
       byPractitioner.set(r.practitionerId, existing);
     }
@@ -947,8 +896,10 @@ export class ReportsService {
       .map((d) => ({
         practitionerName: d.practitionerName,
         revenue: d.revenue,
+        modal: d.modal,
+        biayaLab: d.lab,
         doctorFeeShare: d.feeShare,
-        labaBersih: d.revenue - d.modal - d.feeShare,
+        labaBersih: d.revenue - d.modal - d.lab - d.feeShare,
       }))
       .sort((a, b) => b.revenue - a.revenue);
   }

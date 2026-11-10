@@ -34,7 +34,14 @@ import {
   CreateContentDto,
   UpdateContentDto,
 } from './dto/content.dto';
+import {
+  AddContentPhotoDto,
+  ImportPhotoDto,
+  ReorderContentPhotosDto,
+  UpdateContentPhotoDto,
+} from './dto/content-photo.dto';
 import { contentImageUploadOptions } from './upload/content-image.upload';
+import { RequireFeature } from '../features/require-feature.decorator';
 
 const PHOTOS: ContentPhoto[] = ['before', 'after', 'rendered'];
 
@@ -56,6 +63,7 @@ const sendImage = (
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.OWNER, UserRole.ADMIN)
+@RequireFeature('konten')
 @Controller('contents')
 export class ContentsController {
   constructor(private readonly service: ContentsService) {}
@@ -86,6 +94,30 @@ export class ContentsController {
     sendImage(res, await this.service.readLogo(clinicId));
   }
 
+  @Post('import-photo')
+  @ApiOperation({
+    summary:
+      'Salin foto dari folder foto klinis / Pemeriksaan Penunjang pasien menjadi foto konten (before/after)',
+  })
+  async importPhoto(@ClinicId() clinicId: number, @Body() dto: ImportPhotoDto) {
+    return { success: true, data: await this.service.importPhoto(clinicId, dto) };
+  }
+
+  @Get('picker/:patientId')
+  @ApiOperation({
+    summary:
+      'Folder foto pasien (Fase 1 + Pemeriksaan Penunjang) untuk dipilih ke konten — hanya yang sudah consent',
+  })
+  async picker(
+    @Param('patientId', ParseIntPipe) patientId: number,
+    @ClinicId() clinicId: number,
+  ) {
+    return {
+      success: true,
+      data: await this.service.pickerForPatient(patientId, clinicId),
+    };
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Detail konten' })
   async findOne(
@@ -107,6 +139,78 @@ export class ContentsController {
       ? (which as ContentPhoto)
       : 'rendered';
     sendImage(res, await this.service.readPhoto(id, clinicId, kind));
+  }
+
+  @Get(':id/series-photos')
+  @ApiOperation({ summary: 'Foto-foto konten layout series' })
+  async listSeriesPhotos(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+  ) {
+    return { success: true, data: await this.service.listPhotos(id, clinicId) };
+  }
+
+  @Post(':id/series-photos')
+  @ApiOperation({ summary: 'Tambah foto ke konten series, dari folder pasien atau Pemeriksaan Penunjang' })
+  async addSeriesPhoto(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: AddContentPhotoDto,
+  ) {
+    return {
+      success: true,
+      data: await this.service.addPhoto(id, clinicId, dto),
+    };
+  }
+
+  @Patch(':id/series-photos/reorder')
+  @ApiOperation({ summary: 'Urutkan ulang foto konten series' })
+  async reorderSeriesPhotos(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: ReorderContentPhotosDto,
+  ) {
+    return {
+      success: true,
+      data: await this.service.reorderPhotos(id, clinicId, dto.orderedIds),
+    };
+  }
+
+  @Patch(':id/series-photos/:photoId')
+  @ApiOperation({ summary: 'Ubah caption/blur wajah satu foto konten series' })
+  async updateSeriesPhoto(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('photoId', ParseIntPipe) photoId: number,
+    @ClinicId() clinicId: number,
+    @Body() dto: UpdateContentPhotoDto,
+  ) {
+    return {
+      success: true,
+      data: await this.service.updatePhoto(id, clinicId, photoId, dto),
+    };
+  }
+
+  @Delete(':id/series-photos/:photoId')
+  @ApiOperation({ summary: 'Hapus satu foto dari konten series' })
+  async removeSeriesPhoto(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('photoId', ParseIntPipe) photoId: number,
+    @ClinicId() clinicId: number,
+  ) {
+    await this.service.removePhoto(id, clinicId, photoId);
+    return { success: true };
+  }
+
+  @Get(':id/series-photos/:photoId/file')
+  @ApiOperation({ summary: 'Streaming file satu foto konten series' })
+  async seriesPhotoFile(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('photoId', ParseIntPipe) photoId: number,
+    @ClinicId() clinicId: number,
+    @Res() res: Response,
+  ) {
+    const absolutePath = await this.service.readContentPhotoFile(id, clinicId, photoId);
+    res.sendFile(absolutePath);
   }
 
   @Post()

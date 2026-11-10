@@ -4,8 +4,10 @@ import { SatusehatModule } from '../satusehat/satusehat.module';
 import { MasterDataController } from './master-data.controller';
 import { MasterDataService } from './master-data.service';
 
+import { FeaturesModule } from '../features/features.module';
+
 @Module({
-  imports: [ConfigModule, SatusehatModule],
+  imports: [ConfigModule, SatusehatModule, FeaturesModule],
   controllers: [MasterDataController],
   providers: [MasterDataService],
   exports: [MasterDataService],

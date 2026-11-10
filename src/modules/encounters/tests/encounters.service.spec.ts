@@ -5,6 +5,8 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { ClinicalAccessService } from '../../clinical-access/clinical-access.service';
+import { SyncOrchestratorService } from '../../satusehat/sync/sync-orchestrator.service';
 import { EncountersService } from '../encounters.service';
 import { Encounter } from '../entities/encounter.entity';
 import { Reservation } from '../../reservations/entities/reservation.entity';
@@ -12,13 +14,18 @@ import { EncounterStatus } from '../../../enums';
 import { ReservationStatus } from '../../../enums/reservation-status.enum';
 import { UserRole } from '../../../enums/user-role.enum';
 
-function buildQb(result: [any[], number] = [[], 0]) {
+function buildQb(result: [any[], number] = [[], 0], rawRows: any[] = []) {
   return {
     leftJoinAndSelect: jest.fn().mockReturnThis(),
     leftJoin: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
+    addOrderBy: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    groupBy: jest.fn().mockReturnThis(),
+    getRawMany: jest.fn().mockResolvedValue(rawRows),
     skip: jest.fn().mockReturnThis(),
     take: jest.fn().mockReturnThis(),
     getManyAndCount: jest.fn().mockResolvedValue(result),
@@ -26,6 +33,7 @@ function buildQb(result: [any[], number] = [[], 0]) {
 }
 
 describe('EncountersService', () => {
+  let syncOrchestrator: { syncEncounterInBackground: jest.Mock };
   let service: EncountersService;
   let encounterRepo: {
     createQueryBuilder: jest.Mock;
@@ -36,10 +44,14 @@ describe('EncountersService', () => {
   };
   let reservationRepo: { findOne: jest.Mock; update: jest.Mock };
 
+  let clinicalAccess: { assertPatient: jest.Mock };
   const admin = { userId: 1, role: UserRole.ADMIN };
   const dokter = { userId: 2, role: UserRole.DOKTER };
 
   beforeEach(async () => {
+    syncOrchestrator = {
+      syncEncounterInBackground: jest.fn().mockResolvedValue(undefined),
+    };
     encounterRepo = {
       createQueryBuilder: jest.fn(() => buildQb()),
       findOne: jest.fn(),
@@ -48,12 +60,19 @@ describe('EncountersService', () => {
       query: jest.fn(),
     };
     reservationRepo = { findOne: jest.fn(), update: jest.fn() };
+    clinicalAccess = {
+      assertPatient: jest
+        .fn()
+        .mockRejectedValue(new ForbiddenException('bukan pasien Anda')),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         EncountersService,
         { provide: getRepositoryToken(Encounter), useValue: encounterRepo },
         { provide: getRepositoryToken(Reservation), useValue: reservationRepo },
+        { provide: SyncOrchestratorService, useValue: syncOrchestrator },
+        { provide: ClinicalAccessService, useValue: clinicalAccess },
       ],
     }).compile();
 
@@ -67,7 +86,7 @@ describe('EncountersService', () => {
       const qb = buildQb();
       encounterRepo.createQueryBuilder.mockReturnValue(qb);
 
-      await service.findAll(1, {} as any, dokter);
+      await service.findAll(1, {}, dokter);
 
       expect(qb.andWhere).toHaveBeenCalledWith(
         expect.stringContaining('practitioners WHERE user_id'),
@@ -79,7 +98,7 @@ describe('EncountersService', () => {
       const qb = buildQb();
       encounterRepo.createQueryBuilder.mockReturnValue(qb);
 
-      await service.findAll(1, { practitionerId: 7 } as any, admin);
+      await service.findAll(1, { practitionerId: 7 }, admin);
 
       expect(qb.andWhere).toHaveBeenCalledWith(
         'e.practitionerId = :practitionerId',
@@ -91,7 +110,7 @@ describe('EncountersService', () => {
       const qb = buildQb();
       encounterRepo.createQueryBuilder.mockReturnValue(qb);
 
-      await service.findAll(1, {} as any, admin);
+      await service.findAll(1, {}, admin);
 
       const dateCalls = qb.andWhere.mock.calls.filter((c: any[]) =>
         c[0].includes('DATE(e.arrivedTime)'),
@@ -103,7 +122,7 @@ describe('EncountersService', () => {
       const qb = buildQb();
       encounterRepo.createQueryBuilder.mockReturnValue(qb);
 
-      await service.findAll(1, { status: EncounterStatus.ARRIVED } as any, admin);
+      await service.findAll(1, { status: EncounterStatus.ARRIVED }, admin);
 
       const dateCalls = qb.andWhere.mock.calls.filter((c: any[]) =>
         c[0].includes('DATE(e.arrivedTime)'),
@@ -115,7 +134,7 @@ describe('EncountersService', () => {
       const qb = buildQb();
       encounterRepo.createQueryBuilder.mockReturnValue(qb);
 
-      await service.findAll(1, { unbilled: true } as any, admin);
+      await service.findAll(1, { unbilled: true }, admin);
 
       const dateCalls = qb.andWhere.mock.calls.filter((c: any[]) =>
         c[0].includes('DATE(e.arrivedTime)'),
@@ -128,11 +147,103 @@ describe('EncountersService', () => {
       const qb = buildQb();
       encounterRepo.createQueryBuilder.mockReturnValue(qb);
 
-      await service.findAll(1, { date: '2026-01-01' } as any, admin);
+      await service.findAll(1, { date: '2026-01-01' }, admin);
 
       expect(qb.andWhere).toHaveBeenCalledWith('DATE(e.arrivedTime) = :date', {
         date: '2026-01-01',
       });
+    });
+  });
+
+  describe('findAll (penelusuran per bulan)', () => {
+    it('filters the whole month instead of defaulting to today (positive)', async () => {
+      const qb = buildQb();
+      encounterRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll(1, { month: '2026-10' }, admin);
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining("DATE_FORMAT(e.arrived_time, '%Y-%m')"),
+        { month: '2026-10' },
+      );
+      const todayCalls = qb.andWhere.mock.calls.filter(
+        (c: any[]) => c[0] === 'DATE(e.arrivedTime) = :date',
+      );
+      expect(todayCalls).toHaveLength(0);
+    });
+
+    it('returns per-status counts for the whole period and the days that have visits (positive)', async () => {
+      const qb = buildQb(
+        [[], 25],
+        [
+          { status: 'finished', count: '20', date: '2026-10-03' },
+          { status: 'cancelled', count: '5' },
+        ],
+      );
+      qb.getRawMany
+        .mockResolvedValueOnce([
+          { status: 'finished', count: '20' },
+          { status: 'cancelled', count: '5' },
+        ])
+        .mockResolvedValueOnce([{ date: '2026-10-03', count: '4' }]);
+      encounterRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const r: any = await service.findAll(1, { month: '2026-10' }, admin);
+
+      expect(r.counts).toEqual({
+        total: 25,
+        arrived: 0,
+        in_progress: 0,
+        finished: 20,
+        cancelled: 5,
+      });
+      expect(r.days).toEqual([{ date: '2026-10-03', count: 4 }]);
+      expect(r.meta.total).toBe(25);
+    });
+
+    it('keeps the dokter scope on the counts and days queries too (negative)', async () => {
+      const qb = buildQb();
+      encounterRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll(1, { month: '2026-10' }, dokter);
+
+      const scoped = qb.andWhere.mock.calls.filter((c: any[]) =>
+        String(c[0]).includes('practitioners WHERE user_id'),
+      );
+      // daftar + hitungan status + kalender tanggal
+      expect(scoped).toHaveLength(3);
+    });
+
+    it('active=true limits to arrived + in_progress without forcing today (edge)', async () => {
+      const qb = buildQb();
+      encounterRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll(1, { active: true }, admin);
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'e.status IN (:...activeStatuses)',
+        {
+          activeStatuses: [
+            EncounterStatus.ARRIVED,
+            EncounterStatus.IN_PROGRESS,
+          ],
+        },
+      );
+      const todayCalls = qb.andWhere.mock.calls.filter(
+        (c: any[]) => c[0] === 'DATE(e.arrivedTime) = :date',
+      );
+      expect(todayCalls).toHaveLength(0);
+    });
+
+    it('does not run the extra summary queries for the plain today list (edge)', async () => {
+      const qb = buildQb();
+      encounterRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const r: any = await service.findAll(1, {}, admin);
+
+      expect(qb.getRawMany).not.toHaveBeenCalled();
+      expect(r.counts).toBeUndefined();
+      expect(r.days).toBeUndefined();
     });
   });
 
@@ -157,17 +268,38 @@ describe('EncountersService', () => {
       expect(result.id).toBe(1);
     });
 
-    it('throws ForbiddenException when a DOKTER views another practitioner’s encounter (negative)', async () => {
-      encounterRepo.findOne.mockResolvedValue({ id: 1, practitionerId: 5 });
+    it('throws ForbiddenException when a DOKTER views another practitioner’s encounter of a patient that is not theirs (negative)', async () => {
+      encounterRepo.findOne.mockResolvedValue({
+        id: 1,
+        practitionerId: 5,
+        patientId: 9,
+      });
       encounterRepo.query.mockResolvedValue([]);
       await expect(service.findOne(1, 1, dokter)).rejects.toThrow(
         ForbiddenException,
       );
+      expect(clinicalAccess.assertPatient).toHaveBeenCalledWith(dokter, 9);
+    });
+
+    it('lets a DOKTER read (not edit) another doctor’s encounter of their shared patient', async () => {
+      encounterRepo.findOne.mockResolvedValue({
+        id: 1,
+        practitionerId: 5,
+        patientId: 9,
+      });
+      encounterRepo.query.mockResolvedValue([]);
+      clinicalAccess.assertPatient.mockResolvedValue(undefined);
+      const r = await service.findOne(1, 1, dokter);
+      expect((r as any).canEdit).toBe(false);
     });
   });
 
   describe('create', () => {
-    const dto = { patientId: 1, practitionerId: 2, chiefComplaint: 'Sakit gigi' } as any;
+    const dto = {
+      patientId: 1,
+      practitionerId: 2,
+      chiefComplaint: 'Sakit gigi',
+    } as any;
 
     it('creates an ARRIVED encounter without a reservation (positive)', async () => {
       const result = await service.create(1, dto, 9);
@@ -221,7 +353,7 @@ describe('EncountersService', () => {
       const result = await service.updateStatus(
         1,
         1,
-        { status: EncounterStatus.IN_PROGRESS } as any,
+        { status: EncounterStatus.IN_PROGRESS },
         admin,
       );
 
@@ -240,7 +372,7 @@ describe('EncountersService', () => {
       const result = await service.updateStatus(
         1,
         1,
-        { status: EncounterStatus.FINISHED } as any,
+        { status: EncounterStatus.FINISHED },
         admin,
       );
 
@@ -258,7 +390,7 @@ describe('EncountersService', () => {
       const result = await service.updateStatus(
         1,
         1,
-        { status: EncounterStatus.CANCELLED, reason: 'Pasien batal' } as any,
+        { status: EncounterStatus.CANCELLED, reason: 'Pasien batal' },
         admin,
       );
 
@@ -360,7 +492,7 @@ describe('EncountersService', () => {
       const result = await service.update(
         1,
         1,
-        { chiefComplaint: 'New complaint' } as any,
+        { chiefComplaint: 'New complaint' },
         admin,
       );
 
@@ -381,9 +513,9 @@ describe('EncountersService', () => {
 
     it('throws NotFoundException when encounter is missing (negative)', async () => {
       encounterRepo.findOne.mockResolvedValue(null);
-      await expect(
-        service.update(999, 1, {} as any, admin),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.update(999, 1, {} as any, admin)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws ForbiddenException when a DOKTER edits another practitioner’s encounter (negative)', async () => {
@@ -394,9 +526,9 @@ describe('EncountersService', () => {
         practitionerId: 5,
       });
       encounterRepo.query.mockResolvedValue([]);
-      await expect(
-        service.update(1, 1, {} as any, dokter),
-      ).rejects.toThrow(ForbiddenException);
+      await expect(service.update(1, 1, {} as any, dokter)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 });

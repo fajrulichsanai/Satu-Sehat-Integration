@@ -7,6 +7,7 @@ import {
   redactSyncError,
 } from './entities/satusehat-sync-log.entity';
 import { SyncOrchestratorService } from './sync-orchestrator.service';
+import { FeaturesService } from '../../features/features.service';
 
 const MAX_RETRY_ATTEMPTS = 5;
 const BASE_DELAY_MS = 60_000; // 1 minute
@@ -20,10 +21,11 @@ export class SyncQueueService {
     @InjectRepository(SatusehatSyncLog)
     private readonly syncLogRepo: Repository<SatusehatSyncLog>,
     private readonly orchestrator: SyncOrchestratorService,
+    private readonly features: FeaturesService,
   ) {}
 
-  /** Process all pending/retryable failed items */
-  async processPending(): Promise<{
+  /** Process all pending/retryable failed items (optionally for one clinic) */
+  async processPending(clinicId?: number): Promise<{
     processed: number;
     succeeded: number;
     failed: number;
@@ -40,12 +42,17 @@ export class SyncQueueService {
 
     try {
       const items = await this.syncLogRepo.find({
-        where: { status: SyncLogStatus.PENDING },
+        where: {
+          status: SyncLogStatus.PENDING,
+          ...(clinicId ? { clinicId } : {}),
+        },
         order: { createdAt: 'ASC' },
         take: 100,
       });
 
       for (const item of items) {
+        // Faskes yang belum aktif dilewati tanpa menghabiskan jatah retry
+        if (!(await this.features.isSatusehatActive(item.clinicId))) continue;
         if ((item.retryCount ?? 0) >= MAX_RETRY_ATTEMPTS) {
           await this.syncLogRepo.update(item.id, {
             status: SyncLogStatus.FAILED,

@@ -9,18 +9,26 @@ import {
 } from '@nestjs/common';
 import { BillingsService } from '../billings.service';
 import { Billing, BillingStatus } from '../entities/billing.entity';
-import { BillingItem, DiscountType } from '../../billing-item/entities/billing-item.entity';
+import {
+  BillingItem,
+  DiscountType,
+} from '../../billing-item/entities/billing-item.entity';
 import { Tarif } from '../../tarif/entities/tarif.entity';
 import { Encounter } from '../../encounters/entities/encounter.entity';
 import { GudangService } from '../../gudang/gudang.service';
 import { PatientRecallsService } from '../../recalls/patient-recalls.service';
 
-function buildQb(result: [any[], number] = [[], 0]) {
+function buildQb(result: [any[], number] = [[], 0], rawRows: any[] = []) {
   return {
     leftJoinAndSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
+    addOrderBy: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    groupBy: jest.fn().mockReturnThis(),
+    getRawMany: jest.fn().mockResolvedValue(rawRows),
     skip: jest.fn().mockReturnThis(),
     take: jest.fn().mockReturnThis(),
     getManyAndCount: jest.fn().mockResolvedValue(result),
@@ -31,10 +39,18 @@ describe('BillingsService', () => {
   let service: BillingsService;
   let billingRepo: { createQueryBuilder: jest.Mock; findOne: jest.Mock };
   let encounterRepo: { findOne: jest.Mock };
-  let gudangService: { deductForTindakan: jest.Mock; restoreForTindakan: jest.Mock };
+  let gudangService: {
+    deductForTindakan: jest.Mock;
+    restoreForTindakan: jest.Mock;
+  };
   let recallsService: { scheduleFromBillingItems: jest.Mock };
   let dataSource: { transaction: jest.Mock };
-  let manager: { findOne: jest.Mock; save: jest.Mock; delete: jest.Mock };
+  let manager: {
+    findOne: jest.Mock;
+    find: jest.Mock;
+    save: jest.Mock;
+    delete: jest.Mock;
+  };
 
   const clinicId = 1;
   const userId = 9;
@@ -42,6 +58,7 @@ describe('BillingsService', () => {
   beforeEach(async () => {
     manager = {
       findOne: jest.fn(),
+      find: jest.fn(),
       save: jest.fn((a: any, b?: any) => {
         if (b !== undefined) {
           return Array.isArray(b)
@@ -110,10 +127,20 @@ describe('BillingsService', () => {
       ],
     } as any;
 
-    const tarif = { id: 1, clinicId, name: 'Tambal gigi', diskonMaksimal: 20000, hargaJual: 100000 };
+    const tarif = {
+      id: 1,
+      clinicId,
+      name: 'Tambal gigi',
+      diskonMaksimal: 20000,
+      hargaJual: 100000,
+    };
 
     beforeEach(() => {
-      encounterRepo.findOne.mockResolvedValue({ id: 5, clinicId, patientId: 3 });
+      encounterRepo.findOne.mockResolvedValue({
+        id: 5,
+        clinicId,
+        patientId: 3,
+      });
       billingRepo.findOne.mockResolvedValue(null);
       manager.findOne.mockImplementation((entity: any) => {
         if (entity === Tarif) return Promise.resolve(tarif);
@@ -247,7 +274,10 @@ describe('BillingsService', () => {
     it('does not deduct stock for a free-text item without tarifId (edge)', async () => {
       await service.create(
         clinicId,
-        { encounterId: 5, items: [{ name: 'Jasa umum', quantity: 1, unitPrice: 20000 }] },
+        {
+          encounterId: 5,
+          items: [{ name: 'Jasa umum', quantity: 1, unitPrice: 20000 }],
+        },
         userId,
       );
       expect(gudangService.deductForTindakan).not.toHaveBeenCalled();
@@ -256,7 +286,10 @@ describe('BillingsService', () => {
     it('records a Rp 0 bill (follow-up already paid, free consult) as paid straight away (edge)', async () => {
       const result = await service.create(
         clinicId,
-        { encounterId: 5, items: [{ name: 'Kontrol PSA', quantity: 1, unitPrice: 0 }] },
+        {
+          encounterId: 5,
+          items: [{ name: 'Kontrol PSA', quantity: 1, unitPrice: 0 }],
+        },
         userId,
       );
       expect(result.grandTotal).toBe(0);
@@ -320,7 +353,7 @@ describe('BillingsService', () => {
   });
 
   describe('update', () => {
-    it('refuses to lower the bill below what was already paid (negative)', async () => {
+    it('refuses to lower the bill below what was already paid without confirmation (negative)', async () => {
       const billing = {
         id: 1,
         clinicId,
@@ -338,6 +371,72 @@ describe('BillingsService', () => {
         service.update(1, clinicId, { totalDiscount: 50000 } as any, userId),
       ).rejects.toThrow(BadRequestException);
       expect(billing.status).toBe(BillingStatus.PARTIAL);
+      expect(manager.find).not.toHaveBeenCalled();
+    });
+
+    it('returns the excess to the patient from the newest payments when confirmed, keeping a note (positive)', async () => {
+      const billing: any = {
+        id: 1,
+        clinicId,
+        status: BillingStatus.PAID,
+        subtotal: 100000,
+        totalDiscount: 0,
+        additionalFee: 0,
+        paidAmount: 100000,
+        outstandingAmount: 0,
+        notes: null,
+      };
+      const older: any = { id: 10, amount: 60000, note: null };
+      const newest: any = { id: 11, amount: 40000, note: 'Pelunasan' };
+      manager.findOne
+        .mockResolvedValueOnce(billing)
+        .mockResolvedValueOnce({ ...billing });
+      manager.find.mockResolvedValueOnce([newest, older]);
+
+      const result: any = await service.update(
+        1,
+        clinicId,
+        { totalDiscount: 50000, refundExcess: true } as any,
+        userId,
+      );
+
+      // grandTotal 50.000, sudah dibayar 100.000 → kembalikan 50.000
+      expect(newest.amount).toBe(0);
+      expect(older.amount).toBe(50000);
+      expect(newest.note).toContain('Pelunasan');
+      expect(newest.note).toContain('dikembalikan ke pasien');
+      expect(billing.paidAmount).toBe(50000);
+      expect(billing.outstandingAmount).toBe(0);
+      expect(billing.status).toBe(BillingStatus.PAID);
+      expect(result.refundedAmount).toBe(50000);
+    });
+
+    it('does not touch payments when confirmed but nothing is overpaid (edge)', async () => {
+      const billing: any = {
+        id: 1,
+        clinicId,
+        status: BillingStatus.PARTIAL,
+        subtotal: 100000,
+        totalDiscount: 0,
+        additionalFee: 0,
+        paidAmount: 30000,
+        outstandingAmount: 70000,
+        notes: null,
+      };
+      manager.findOne
+        .mockResolvedValueOnce(billing)
+        .mockResolvedValueOnce(billing);
+
+      const result: any = await service.update(
+        1,
+        clinicId,
+        { refundExcess: true } as any,
+        userId,
+      );
+
+      expect(manager.find).not.toHaveBeenCalled();
+      expect(result.refundedAmount).toBeUndefined();
+      expect(billing.paidAmount).toBe(30000);
     });
 
     it('recomputes grandTotal and marks PAID when outstanding drops to zero (positive)', async () => {
@@ -357,7 +456,12 @@ describe('BillingsService', () => {
         status: BillingStatus.PAID,
       });
 
-      const result = await service.update(1, clinicId, { additionalFee: 0 } as any, userId);
+      const result = await service.update(
+        1,
+        clinicId,
+        { additionalFee: 0 } as any,
+        userId,
+      );
 
       expect(billing.status).toBe(BillingStatus.PAID);
       expect(billing.outstandingAmount).toBe(0);
@@ -375,7 +479,9 @@ describe('BillingsService', () => {
         outstandingAmount: 0,
         notes: null,
       };
-      manager.findOne.mockResolvedValueOnce(billing).mockResolvedValueOnce(billing);
+      manager.findOne
+        .mockResolvedValueOnce(billing)
+        .mockResolvedValueOnce(billing);
 
       await service.update(1, clinicId, {} as any, userId);
 
@@ -432,6 +538,61 @@ describe('BillingsService', () => {
       expect(qb.andWhere).toHaveBeenCalledWith('b.patientId = :patientId', {
         patientId: 3,
       });
+    });
+
+    it('filters by month and returns summary + days for the whole month (positive)', async () => {
+      const qb = buildQb([[], 12]);
+      qb.getRawMany
+        .mockResolvedValueOnce([
+          { status: 'paid', count: '9', paid: '900000' },
+          { status: 'partial', count: '2', paid: '50000' },
+          { status: 'unpaid', count: '1', paid: '0' },
+        ])
+        .mockResolvedValueOnce([{ date: '2026-10-02', count: '3' }]);
+      billingRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const r: any = await service.findAll(clinicId, {
+        month: '2026-10',
+      } as any);
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining("DATE_FORMAT(b.created_at, '%Y-%m')"),
+        { month: '2026-10' },
+      );
+      expect(r.summary).toEqual({
+        count: 12,
+        totalPaid: 950000,
+        byStatus: { paid: 9, partial: 2, unpaid: 1 },
+      });
+      expect(r.days).toEqual([{ date: '2026-10-02', count: 3 }]);
+      expect(r.meta.total).toBe(12);
+    });
+
+    it('status filter narrows the list but not the summary (edge)', async () => {
+      const qb = buildQb();
+      billingRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll(clinicId, { status: BillingStatus.PAID } as any);
+
+      const statusCalls = qb.andWhere.mock.calls.filter((c: any[]) =>
+        String(c[0]).includes('b.status = :status'),
+      );
+      // hanya query daftar yang disaring status; ringkasan memakai query terpisah
+      expect(statusCalls).toHaveLength(1);
+    });
+
+    it('returns an empty summary and no days without a month (edge)', async () => {
+      const qb = buildQb();
+      billingRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const r: any = await service.findAll(clinicId, {} as any);
+
+      expect(r.summary).toEqual({
+        count: 0,
+        totalPaid: 0,
+        byStatus: { paid: 0, partial: 0, unpaid: 0 },
+      });
+      expect(r.days).toBeUndefined();
     });
   });
 });
