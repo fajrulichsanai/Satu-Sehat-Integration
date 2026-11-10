@@ -299,4 +299,59 @@ describe('ContentsService', () => {
       expect(saved.sortOrder).toBe(2);
     });
   });
+  describe('series photos from device', () => {
+    beforeEach(() => {
+      repo.findOne.mockResolvedValue({ id: 5, clinicId: 9 });
+    });
+
+    it('stores an uploaded device photo under the clinic prefix and appends it (positive)', async () => {
+      photoRepo.count.mockResolvedValue(2);
+      const row = await service.uploadSeriesPhoto(5, 9, file);
+      expect(row).toMatchObject({
+        sourceType: 'upload',
+        sourceId: null,
+        sortOrder: 2,
+      });
+      expect(row.fileUrl).toContain('contents/9/');
+    });
+
+    it('rejects a missing file (negative)', async () => {
+      await expect(service.uploadSeriesPhoto(5, 9, undefined)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('saves the per-photo frame (positive)', async () => {
+      photoRepo.findOne.mockResolvedValue({ id: 3, contentId: 5, caption: null, blurFace: false });
+      const saved = await service.updatePhoto(5, 9, 3, {
+        frame: { zoom: 2, ox: 0.1, oy: -0.1, rot: 90 },
+      });
+      expect(saved.frame).toEqual({ zoom: 2, ox: 0.1, oy: -0.1, rot: 90 });
+    });
+
+    it('serves an uploaded photo from storage, not from disk (positive)', async () => {
+      photoRepo.findOne.mockResolvedValue({
+        id: 3,
+        contentId: 5,
+        sourceType: 'upload',
+        fileUrl: '/files/contents/9/a.png',
+      });
+      jest.spyOn(storage, 'readUploaded').mockResolvedValue(Buffer.from('x'));
+      const out = await service.readContentPhotoFile(5, 9, 3);
+      expect(out.buffer).toBeDefined();
+      expect(out.contentType).toBe('image/png');
+    });
+
+    it("refuses another clinic's uploaded file (negative)", async () => {
+      photoRepo.findOne.mockResolvedValue({
+        id: 3,
+        contentId: 5,
+        sourceType: 'upload',
+        fileUrl: '/files/contents/1/a.png',
+      });
+      await expect(service.readContentPhotoFile(5, 9, 3)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
 });

@@ -366,6 +366,33 @@ export class ClinicalPhotosService {
     return this.photoRepo.find({ where: { id: In(ids) } });
   }
 
+  /**
+   * Pustaka foto untuk Konten: foto semua pasien klinik yang flag izin
+   * konten-nya aktif (diatur di rekam medis), terbaru dulu.
+   */
+  async listLibrary(clinicId: number, limit = 300) {
+    const rows = await this.photoRepo
+      .createQueryBuilder('photo')
+      .innerJoin('photo.patient', 'patient')
+      .leftJoinAndSelect('photo.template', 'template')
+      .addSelect(['patient.id', 'patient.name', 'patient.noRm'])
+      .where('patient.clinicId = :clinicId', { clinicId })
+      .andWhere('patient.photoConsentMarketing = :yes', { yes: true })
+      .orderBy('photo.takenAt', 'DESC')
+      .addOrderBy('photo.id', 'DESC')
+      .take(limit)
+      .getMany();
+    return rows.map((photo) => {
+      // Jangan bocorkan seluruh baris pasien: hanya nama dan no. RM.
+      const { patient, ...rest } = toApiUrl(photo) as PatientPhoto;
+      return {
+        ...rest,
+        patientName: patient?.name ?? '',
+        patientNoRm: patient?.noRm ?? '',
+      };
+    });
+  }
+
   async isConsented(patientId: number, clinicId: number): Promise<boolean> {
     const patient = await this.assertPatient(patientId, clinicId);
     return patient.photoConsentMarketing === true;

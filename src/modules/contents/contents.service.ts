@@ -279,6 +279,34 @@ export class ContentsService {
     };
   }
 
+  /** Pustaka foto pasien yang flag izin kontennya aktif di rekam medis. */
+  async photoLibrary(clinicId: number) {
+    return this.clinicalPhotos.listLibrary(clinicId);
+  }
+
+  /** Foto series dari perangkat: disimpan di storage konten, lalu ditambahkan ke daftar. */
+  async uploadSeriesPhoto(
+    contentId: number,
+    clinicId: number,
+    file?: Express.Multer.File,
+  ): Promise<ContentPhotoRow> {
+    await this.findOne(contentId, clinicId);
+    const { url } = await this.uploadImage(clinicId, file);
+    const count = await this.photoRepo.count({ where: { contentId } });
+    return this.photoRepo.save(
+      this.photoRepo.create({
+        contentId,
+        sourceType: ContentPhotoSource.UPLOAD,
+        sourceId: null,
+        fileUrl: url,
+        sortOrder: count,
+        caption: null,
+        blurFace: false,
+        frame: null,
+      }),
+    );
+  }
+
   async listPhotos(contentId: number, clinicId: number) {
     await this.findOne(contentId, clinicId);
     return this.photoRepo.find({
@@ -316,13 +344,18 @@ export class ContentsService {
     contentId: number,
     clinicId: number,
     photoId: number,
-    dto: { caption?: string | null; blurFace?: boolean },
+    dto: {
+      caption?: string | null;
+      blurFace?: boolean;
+      frame?: Record<string, unknown> | null;
+    },
   ): Promise<ContentPhotoRow> {
     await this.findOne(contentId, clinicId);
     const row = await this.photoRepo.findOne({ where: { id: photoId, contentId } });
     if (!row) throw new NotFoundException('Foto konten tidak ditemukan');
     if (dto.caption !== undefined) row.caption = dto.caption?.trim() || null;
     if (dto.blurFace !== undefined) row.blurFace = dto.blurFace;
+    if (dto.frame !== undefined) row.frame = dto.frame;
     return this.photoRepo.save(row);
   }
 
@@ -330,7 +363,12 @@ export class ContentsService {
     await this.findOne(contentId, clinicId);
     const row = await this.photoRepo.findOne({ where: { id: photoId, contentId } });
     if (!row) throw new NotFoundException('Foto konten tidak ditemukan');
+    const uploaded = row.sourceType === ContentPhotoSource.UPLOAD ? row.fileUrl : null;
     await this.photoRepo.remove(row);
+    if (uploaded) {
+      await this.storage.deleteUploaded(uploaded);
+      await this.storageQuota?.forget(StorageKind.CONTENT, uploaded);
+    }
   }
 
   async reorderPhotos(contentId: number, clinicId: number, orderedIds: number[]) {
@@ -353,11 +391,18 @@ export class ContentsService {
     await this.findOne(contentId, clinicId);
     const row = await this.photoRepo.findOne({ where: { id: photoId, contentId } });
     if (!row) throw new NotFoundException('Foto konten tidak ditemukan');
+    if (row.sourceType === ContentPhotoSource.UPLOAD) {
+      return {
+        buffer: (await this.readOwnFile(clinicId, row.fileUrl, keyPrefix(clinicId))).buffer,
+        contentType:
+          MIME[extname(row.fileUrl ?? '').toLowerCase()] ?? 'image/jpeg',
+      };
+    }
     const { absolutePath } =
       row.sourceType === ContentPhotoSource.PATIENT_PHOTO
-        ? await this.clinicalPhotos.getFilePathById(row.sourceId, clinicId)
-        : await this.supportingExam.getFilePathById(row.sourceId, clinicId);
-    return absolutePath;
+        ? await this.clinicalPhotos.getFilePathById(row.sourceId!, clinicId)
+        : await this.supportingExam.getFilePathById(row.sourceId!, clinicId);
+    return { absolutePath };
   }
 
   /** Only photos this clinic uploaded through /contents/images are accepted. */

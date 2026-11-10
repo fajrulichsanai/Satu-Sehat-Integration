@@ -3,8 +3,9 @@ import {
   ArrayMinSize,
   IsArray,
   IsBoolean,
-  IsEnum,
+  IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   MaxLength,
@@ -13,8 +14,8 @@ import {
 import { ContentPhotoSource } from '../entities/content-photo.entity';
 
 export class AddContentPhotoDto {
-  @ApiProperty({ enum: ContentPhotoSource })
-  @IsEnum(ContentPhotoSource)
+  @ApiProperty({ enum: [ContentPhotoSource.PATIENT_PHOTO, ContentPhotoSource.SUPPORTING_EXAM_IMAGE] })
+  @IsIn([ContentPhotoSource.PATIENT_PHOTO, ContentPhotoSource.SUPPORTING_EXAM_IMAGE])
   sourceType: ContentPhotoSource;
 
   @ApiProperty({
@@ -38,8 +39,8 @@ export class AddContentPhotoDto {
 }
 
 export class ImportPhotoDto {
-  @ApiProperty({ enum: ContentPhotoSource })
-  @IsEnum(ContentPhotoSource)
+  @ApiProperty({ enum: [ContentPhotoSource.PATIENT_PHOTO, ContentPhotoSource.SUPPORTING_EXAM_IMAGE] })
+  @IsIn([ContentPhotoSource.PATIENT_PHOTO, ContentPhotoSource.SUPPORTING_EXAM_IMAGE])
   sourceType: ContentPhotoSource;
 
   @ApiProperty({
@@ -62,6 +63,14 @@ export class UpdateContentPhotoDto {
   @IsOptional()
   @IsBoolean()
   blurFace?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Posisi foto di dalam selnya: {zoom, ox, oy, rot, flip, fit}',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsObject()
+  frame?: Record<string, unknown> | null;
 }
 
 export class ReorderContentPhotosDto {
