@@ -145,6 +145,16 @@ export class PatientsService {
     };
   }
 
+  /** Hash NIK hanya untuk istilah yang berbentuk NIK; gagal hash tidak boleh mematikan pencarian. */
+  private nikSearchHash(term: string): string | null {
+    if (!/^\d{16}$/.test(term)) return null;
+    try {
+      return hashNik(term);
+    } catch {
+      return null;
+    }
+  }
+
   private scopedPatientQuery(
     clinicId: number,
     search: string | undefined,
@@ -158,14 +168,21 @@ export class PatientsService {
 
     const term = search?.trim();
     if (term) {
-      qb.andWhere(
-        "(p.name LIKE :search ESCAPE '\\\\' OR p.noRm LIKE :search ESCAPE '\\\\' OR p.nikHash = :nikHash)",
-        // % dan _ dari input diperlakukan sebagai huruf biasa, bukan wildcard
-        {
-          search: `%${term.replace(/[\\%_]/g, '\\$&')}%`,
-          nikHash: hashNik(term),
-        },
-      );
+      // % dan _ dari input diperlakukan sebagai huruf biasa. Tanpa klausa
+      // ESCAPE: karakter escape bawaan LIKE adalah backslash, dan literal
+      // '\\' di dalam ESCAPE membuat query gagal di sebagian mode SQL.
+      const like = `%${term.replace(/[\\%_]/g, '\\$&')}%`;
+      const nikHash = this.nikSearchHash(term);
+      if (nikHash) {
+        qb.andWhere(
+          '(p.name LIKE :search OR p.noRm LIKE :search OR p.nikHash = :nikHash)',
+          { search: like, nikHash },
+        );
+      } else {
+        qb.andWhere('(p.name LIKE :search OR p.noRm LIKE :search)', {
+          search: like,
+        });
+      }
     }
     return qb;
   }

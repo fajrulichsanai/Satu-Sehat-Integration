@@ -4,12 +4,17 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, MoreThanOrEqual, Repository } from 'typeorm';
 import { Reservation } from './entities/reservation.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { Patient } from '../patients/entities/patient.entity';
+import {
+  PatientRecall,
+  PatientRecallStatus,
+} from '../recalls/entities/patient-recall.entity';
 import { ReservationSource, ReservationStatus } from '../../enums';
 import {
   CreateReservationDto,
@@ -20,6 +25,15 @@ import {
   UpdateReservationStatusDto,
 } from './dto/reservation.dto';
 import { paginate, PaginatedResult } from '../../common/dto/pagination.dto';
+
+const digits = (v?: string | null) => (v ?? '').replace(/\D/g, '');
+/** 0812…, +62812…, 62812… dianggap nomor yang sama. */
+const normPhone = (v?: string | null) => digits(v).replace(/^(62|0)/, '');
+const normName = (v?: string | null) =>
+  (v ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+/** Tanggal kalender WIB (UTC+7), format YYYY-MM-DD. */
+const todayWib = () =>
+  new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
 
 const STATUS_TRANSITIONS: Partial<
   Record<ReservationStatus, ReservationStatus[]>
@@ -48,6 +62,9 @@ export class ReservationsService {
     @InjectRepository(Patient)
     private readonly patientRepository: Repository<Patient>,
     private readonly dataSource: DataSource,
+    @Optional()
+    @InjectRepository(PatientRecall)
+    private readonly recallRepository?: Repository<PatientRecall>,
   ) {}
 
   async getBookedSlots(
@@ -71,6 +88,60 @@ export class ReservationsService {
 
     const rows = await qb.getRawMany<{ jamSlot: string }>();
     return rows.map((row) => row.jamSlot.slice(0, 5));
+  }
+
+  /**
+   * Reservasi aktif (menunggu/terkonfirmasi, hari ini atau mendatang) milik
+   * orang yang sama: pasien yang sama (patientId), atau — untuk entri manual —
+   * nomor telepon DAN nama yang sama (nomor saja tidak cukup: satu keluarga
+   * bisa berbagi nomor).
+   */
+  async findActiveForPerson(
+    clinicId: number,
+    person: { patientId?: number; phone?: string; name?: string },
+  ): Promise<Reservation[]> {
+    const phone = normPhone(person.phone);
+    const name = normName(person.name);
+    if (!person.patientId && !(phone && name)) return [];
+    const candidates = await this.reservationRepository.find({
+      where: {
+        clinicId,
+        status: In([ReservationStatus.PENDING, ReservationStatus.CONFIRMED]),
+        reservationDate: MoreThanOrEqual(todayWib()),
+      },
+      relations: { practitioner: true },
+      order: { reservationDate: 'ASC', jamSlot: 'ASC' },
+      take: 1000,
+    });
+    return candidates.filter(
+      (r) =>
+        (!!person.patientId && r.patientId === person.patientId) ||
+        (!!phone &&
+          !!name &&
+          normPhone(r.patientPhone) === phone &&
+          normName(r.patientName) === name),
+    );
+  }
+
+  /** Pasien yang baru dibuatkan reservasi tidak perlu lagi ditandai manual di Follow Up. */
+  private async markRecallsBooked(clinicId: number, patientId: number) {
+    try {
+      await this.recallRepository?.update(
+        {
+          clinicId,
+          patientId,
+          status: In([
+            PatientRecallStatus.BELUM_DIHUBUNGI,
+            PatientRecallStatus.SUDAH_DIHUBUNGI,
+          ]),
+        },
+        { status: PatientRecallStatus.SUDAH_BOOKING_ULANG },
+      );
+    } catch (error) {
+      this.logger.warn(
+        `[CREATE] Gagal menandai recall sudah booking | patientId=${patientId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   async findAll(
@@ -163,6 +234,23 @@ export class ReservationsService {
       throw new BadRequestException('Nomor telepon wajib diisi');
     }
 
+    // Cegah data dobel: pasien yang sudah punya reservasi aktif cukup diubah
+    // jadwalnya. Hanya reservasi dari dashboard yang boleh menimpa dengan
+    // allowDuplicate; reservasi dari website tidak diperiksa di sini.
+    if (source === ReservationSource.DASHBOARD && !dto.allowDuplicate) {
+      const [existing] = await this.findActiveForPerson(clinicId, {
+        patientId: dto.patientId,
+        phone: patientPhone,
+        name: dto.patientName,
+      });
+      if (existing) {
+        const jam = existing.jamSlot ? ` ${existing.jamSlot.slice(0, 5)}` : '';
+        throw new ConflictException(
+          `${dto.patientName} sudah punya reservasi pada ${existing.reservationDate}${jam}. Ubah jadwal reservasi itu, atau pilih "Tetap buat baru".`,
+        );
+      }
+    }
+
     const reservation = this.reservationRepository.create({
       clinicId,
       patientId: dto.patientId,
@@ -180,6 +268,7 @@ export class ReservationsService {
     });
 
     const saved = await this.reservationRepository.save(reservation);
+    if (saved.patientId) await this.markRecallsBooked(clinicId, saved.patientId);
     this.logger.log(
       `[CREATE] Reservasi berhasil dibuat | id=${saved.id}, token=${saved.token}, clinicId=${clinicId}`,
     );

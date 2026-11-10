@@ -5,11 +5,12 @@ import { Clinic } from '../clinics/entities/clinic.entity';
 import { Patient } from '../patients/entities/patient.entity';
 import { ReservationsController } from './reservations.controller';
 import { ReservationsService } from './reservations.service';
+import { PatientRecall } from '../recalls/entities/patient-recall.entity';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Reservation, Clinic, Patient]),
+    TypeOrmModule.forFeature([Reservation, Clinic, Patient, PatientRecall]),
     AuditLogModule,
   ],
   controllers: [ReservationsController],

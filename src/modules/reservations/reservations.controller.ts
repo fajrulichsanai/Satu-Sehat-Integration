@@ -45,6 +45,25 @@ export class ReservationsController {
     return { success: true, data: result };
   }
 
+  @Get('active')
+  @ApiOperation({
+    summary:
+      'Reservasi aktif milik orang yang sama (cek sebelum membuat reservasi baru)',
+  })
+  async findActive(
+    @ClinicId() clinicId: number,
+    @Query('patientId') patientId?: string,
+    @Query('phone') phone?: string,
+    @Query('name') name?: string,
+  ) {
+    const data = await this.reservationsService.findActiveForPerson(clinicId, {
+      patientId: patientId ? Number(patientId) || undefined : undefined,
+      phone,
+      name,
+    });
+    return { success: true, data };
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Detail reservasi' })
   async findOne(

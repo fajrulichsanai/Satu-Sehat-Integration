@@ -51,6 +51,7 @@ describe('KfaService', () => {
       { getAccessToken: jest.fn().mockResolvedValue('tok') } as any,
       { get: jest.fn().mockReturnValue('sandbox') } as any,
       catalog as any,
+      { isSatusehatActiveAnywhere: jest.fn().mockResolvedValue(true) } as any,
     );
   });
 

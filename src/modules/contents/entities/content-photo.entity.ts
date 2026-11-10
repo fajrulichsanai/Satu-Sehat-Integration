@@ -12,6 +12,8 @@ import { ClinicContent } from './clinic-content.entity';
 export enum ContentPhotoSource {
   PATIENT_PHOTO = 'patient_photo',
   SUPPORTING_EXAM_IMAGE = 'supporting_exam_image',
+  /** Diunggah langsung dari perangkat; file ada di storage konten (fileUrl). */
+  UPLOAD = 'upload',
 }
 
 /**
@@ -35,8 +37,16 @@ export class ContentPhoto {
   })
   sourceType: ContentPhotoSource;
 
-  @Column({ name: 'source_id' })
-  sourceId: number;
+  @Column({ name: 'source_id', type: 'int', nullable: true })
+  sourceId: number | null;
+
+  /** Hanya untuk sourceType 'upload': URL file di storage konten klinik. */
+  @Column({ name: 'file_url', type: 'varchar', length: 500, nullable: true })
+  fileUrl: string | null;
+
+  /** Posisi/zoom/rotasi foto di dalam selnya: {zoom, ox, oy, rot, flip, fit}. */
+  @Column({ type: 'json', nullable: true })
+  frame: Record<string, unknown> | null;
 
   @Column({ name: 'sort_order', default: 0 })
   sortOrder: number;

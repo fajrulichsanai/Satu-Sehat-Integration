@@ -103,6 +103,15 @@ export class ContentsController {
     return { success: true, data: await this.service.importPhoto(clinicId, dto) };
   }
 
+  @Get('photo-library')
+  @ApiOperation({
+    summary:
+      'Pustaka foto klinis semua pasien yang flag izin kontennya aktif (diatur di rekam medis)',
+  })
+  async photoLibrary(@ClinicId() clinicId: number) {
+    return { success: true, data: await this.service.photoLibrary(clinicId) };
+  }
+
   @Get('picker/:patientId')
   @ApiOperation({
     summary:
@@ -163,6 +172,21 @@ export class ContentsController {
     };
   }
 
+  @Post(':id/series-photos/upload')
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Tambah foto series langsung dari perangkat' })
+  @UseInterceptors(FileInterceptor('file', contentImageUploadOptions))
+  async uploadSeriesPhoto(
+    @Param('id', ParseIntPipe) id: number,
+    @ClinicId() clinicId: number,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return {
+      success: true,
+      data: await this.service.uploadSeriesPhoto(id, clinicId, file),
+    };
+  }
+
   @Patch(':id/series-photos/reorder')
   @ApiOperation({ summary: 'Urutkan ulang foto konten series' })
   async reorderSeriesPhotos(
@@ -209,8 +233,12 @@ export class ContentsController {
     @ClinicId() clinicId: number,
     @Res() res: Response,
   ) {
-    const absolutePath = await this.service.readContentPhotoFile(id, clinicId, photoId);
-    res.sendFile(absolutePath);
+    const file = await this.service.readContentPhotoFile(id, clinicId, photoId);
+    if (file.absolutePath) {
+      res.sendFile(file.absolutePath);
+      return;
+    }
+    sendImage(res, { buffer: file.buffer!, contentType: file.contentType! });
   }
 
   @Post()
