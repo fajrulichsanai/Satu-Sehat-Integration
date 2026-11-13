@@ -442,30 +442,47 @@ export class ClinicalPhotosService {
   }
 
   /**
-   * Pustaka foto untuk Konten: foto semua pasien klinik yang flag izin
-   * konten-nya aktif (diatur di rekam medis), terbaru dulu.
+   * Pasien yang punya foto klinis dan izin konten aktifnya sudah diatur di
+   * rekam medis, untuk dipilih dulu di Konten. Ringkas: satu baris per pasien
+   * (jumlah foto + tanggal terakhir), bisa dicari, maksimal 40.
    */
-  async listLibrary(clinicId: number, limit = 300) {
-    const rows = await this.photoRepo
+  async listLibraryPatients(clinicId: number, search?: string, limit = 40) {
+    const qb = this.photoRepo
       .createQueryBuilder('photo')
       .innerJoin('photo.patient', 'patient')
-      .leftJoinAndSelect('photo.template', 'template')
-      .addSelect(['patient.id', 'patient.name', 'patient.noRm'])
+      .select('patient.id', 'id')
+      .addSelect('patient.name', 'name')
+      .addSelect('patient.noRm', 'noRm')
+      .addSelect('COUNT(photo.id)', 'photoCount')
+      .addSelect('MAX(photo.takenAt)', 'lastAt')
       .where('patient.clinicId = :clinicId', { clinicId })
-      .andWhere('patient.photoConsentMarketing = :yes', { yes: true })
-      .orderBy('photo.takenAt', 'DESC')
-      .addOrderBy('photo.id', 'DESC')
-      .take(limit)
-      .getMany();
-    return rows.map((photo) => {
-      // Jangan bocorkan seluruh baris pasien: hanya nama dan no. RM.
-      const { patient, ...rest } = toApiUrl(photo) as PatientPhoto;
-      return {
-        ...rest,
-        patientName: patient?.name ?? '',
-        patientNoRm: patient?.noRm ?? '',
-      };
-    });
+      .andWhere('patient.photoConsentMarketing = :yes', { yes: true });
+    const term = search?.trim();
+    if (term) {
+      qb.andWhere('(patient.name LIKE :term OR patient.noRm LIKE :term)', {
+        term: `%${term.replace(/[\\%_]/g, '\\$&')}%`,
+      });
+    }
+    const rows = await qb
+      .groupBy('patient.id')
+      .addGroupBy('patient.name')
+      .addGroupBy('patient.noRm')
+      .orderBy('lastAt', 'DESC')
+      .limit(limit)
+      .getRawMany<{
+        id: number;
+        name: string;
+        noRm: string | null;
+        photoCount: string;
+        lastAt: Date | string | null;
+      }>();
+    return rows.map((r) => ({
+      id: Number(r.id),
+      name: r.name,
+      noRm: r.noRm ?? '',
+      photoCount: Number(r.photoCount),
+      lastAt: r.lastAt ? new Date(r.lastAt).toISOString() : null,
+    }));
   }
 
   async isConsented(patientId: number, clinicId: number): Promise<boolean> {
