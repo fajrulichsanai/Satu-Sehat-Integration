@@ -103,13 +103,30 @@ export class ContentsController {
     return { success: true, data: await this.service.importPhoto(clinicId, dto) };
   }
 
-  @Get('photo-library')
+  @Get('photo-patients')
   @ApiOperation({
     summary:
-      'Pustaka foto klinis semua pasien yang flag izin kontennya aktif (diatur di rekam medis)',
+      'Pasien yang fotonya boleh dipakai di Konten (izin diatur di rekam medis), bisa dicari',
   })
-  async photoLibrary(@ClinicId() clinicId: number) {
-    return { success: true, data: await this.service.photoLibrary(clinicId) };
+  async photoPatients(
+    @ClinicId() clinicId: number,
+    @Query('search') search?: string,
+  ) {
+    return { success: true, data: await this.service.photoPatients(clinicId, search) };
+  }
+
+  @Get('photo-library/:patientId')
+  @ApiOperation({
+    summary: 'Foto satu pasien untuk Konten (terbaru dulu, dengan tanggal)',
+  })
+  async patientPhotoLibrary(
+    @Param('patientId', ParseIntPipe) patientId: number,
+    @ClinicId() clinicId: number,
+  ) {
+    return {
+      success: true,
+      data: await this.service.patientPhotoLibrary(patientId, clinicId),
+    };
   }
 
   @Get('picker/:patientId')

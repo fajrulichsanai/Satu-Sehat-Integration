@@ -279,9 +279,40 @@ export class ContentsService {
     };
   }
 
-  /** Pustaka foto pasien yang flag izin kontennya aktif di rekam medis. */
-  async photoLibrary(clinicId: number) {
-    return this.clinicalPhotos.listLibrary(clinicId);
+  /** Pasien yang fotonya boleh dipakai di Konten (izin diatur di rekam medis). */
+  photoPatients(clinicId: number, search?: string) {
+    return this.clinicalPhotos.listLibraryPatients(clinicId, search);
+  }
+
+  /**
+   * Foto satu pasien, datar dan terbaru dulu (FE mengelompokkan per tanggal):
+   * foto klinis + gambar Pemeriksaan Penunjang. Kosong bila izin konten pasien
+   * belum aktif.
+   */
+  async patientPhotoLibrary(patientId: number, clinicId: number) {
+    if (!(await this.clinicalPhotos.isConsented(patientId, clinicId))) return [];
+    const gallery = await this.clinicalPhotos.listForPatient(patientId, clinicId);
+    const clinical = gallery.folders.flatMap((f) =>
+      f.photos.map((p) => ({
+        id: p.id,
+        sourceType: ContentPhotoSource.PATIENT_PHOTO,
+        fileUrl: p.fileUrl,
+        takenAt: new Date(p.takenAt).toISOString(),
+        label: p.template?.name ?? f.group?.name ?? 'Foto klinis',
+      })),
+    );
+    const supporting = (
+      await this.supportingExam.listByPatient(patientId, clinicId)
+    ).map((i) => ({
+      id: i.id,
+      sourceType: ContentPhotoSource.SUPPORTING_EXAM_IMAGE,
+      fileUrl: i.fileUrl,
+      takenAt: new Date(i.createdAt).toISOString(),
+      label: i.category || (i.imageType === 'xray' ? 'Rontgen' : 'Penunjang'),
+    }));
+    return [...clinical, ...supporting].sort((a, b) =>
+      b.takenAt.localeCompare(a.takenAt),
+    );
   }
 
   /** Foto series dari perangkat: disimpan di storage konten, lalu ditambahkan ke daftar. */

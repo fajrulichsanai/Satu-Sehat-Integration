@@ -26,7 +26,7 @@ describe('ContentsService', () => {
   };
   let storage: S3StorageService;
   let templates: { assertOwned: jest.Mock };
-  let clinicalPhotos: { isConsented: jest.Mock; listForPatient: jest.Mock; findByIdForClinic: jest.Mock; getFilePathById: jest.Mock };
+  let clinicalPhotos: { listLibraryPatients?: jest.Mock; isConsented: jest.Mock; listForPatient: jest.Mock; findByIdForClinic: jest.Mock; getFilePathById: jest.Mock };
   let supportingExam: { listByPatient: jest.Mock; findByIdForClinic: jest.Mock; getFilePathById: jest.Mock };
 
   const file = {
@@ -352,6 +352,39 @@ describe('ContentsService', () => {
       await expect(service.readContentPhotoFile(5, 9, 3)).rejects.toBeInstanceOf(
         NotFoundException,
       );
+    });
+  });
+  describe('pustaka foto per pasien', () => {
+    it('returns nothing when the patient has not enabled content use (negative)', async () => {
+      clinicalPhotos.isConsented.mockResolvedValue(false);
+      expect(await service.patientPhotoLibrary(3, 9)).toEqual([]);
+      expect(clinicalPhotos.listForPatient).not.toHaveBeenCalled();
+    });
+
+    it('merges clinical photos and supporting images, newest first (positive)', async () => {
+      clinicalPhotos.isConsented.mockResolvedValue(true);
+      clinicalPhotos.listForPatient.mockResolvedValue({
+        folders: [
+          {
+            group: { id: 1, name: 'Behel' },
+            photos: [
+              { id: 1, fileUrl: '/a', takenAt: '2026-11-01T00:00:00Z', template: { name: 'Rahang atas' } },
+              { id: 2, fileUrl: '/b', takenAt: '2026-11-05T00:00:00Z', template: null },
+            ],
+          },
+        ],
+      });
+      supportingExam.listByPatient.mockResolvedValue([
+        { id: 7, fileUrl: '/c', createdAt: '2026-11-03T00:00:00Z', imageType: 'xray', category: null },
+      ]);
+      const out = await service.patientPhotoLibrary(3, 9);
+      expect(out.map((p) => `${p.sourceType}:${p.id}`)).toEqual([
+        'patient_photo:2',
+        'supporting_exam_image:7',
+        'patient_photo:1',
+      ]);
+      expect(out[0].label).toBe('Behel');
+      expect(out[1].label).toBe('Rontgen');
     });
   });
 });

@@ -50,7 +50,15 @@ export class ContentPhotoFrameDto {
   flip?: boolean;
 }
 
-export const SERIES_ARRANGEMENTS = ['rows', 'columns', 'grid', 'hero'] as const;
+export const SERIES_ARRANGEMENTS = [
+  'rows',
+  'columns',
+  'grid',
+  'hero',
+  'heroBottom',
+  'heroLeft',
+  'heroRight',
+] as const;
 export const SERIES_CAPTION_STYLES = ['chip', 'bar', 'none'] as const;
 export const SERIES_CAPTION_POSITIONS = ['top', 'bottom'] as const;
 
@@ -86,6 +94,32 @@ export class SeriesStyleDto {
   @IsOptional()
   @IsBoolean()
   showNumbers?: boolean;
+
+  /** Kolom susunan Kisi: 0 = otomatis, 1–4 = tetap. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(4)
+  cols?: number;
+
+  /** Porsi foto besar untuk susunan "Besar …" (persen). */
+  @IsOptional()
+  @IsInt()
+  @Min(30)
+  @Max(80)
+  split?: number;
+
+  /** Teks atas & bawah mepet ke tepi story. */
+  @IsOptional()
+  @IsBoolean()
+  edgeText?: boolean;
+
+  /** Tinggi area foto (persen dari ruang tersedia). */
+  @IsOptional()
+  @IsInt()
+  @Min(40)
+  @Max(100)
+  areaPct?: number;
 
   /** Warna latar kustom (#rrggbb); kosong = ikut tema Terang/Navy. */
   @IsOptional()

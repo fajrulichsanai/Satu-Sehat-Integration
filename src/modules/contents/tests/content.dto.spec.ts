@@ -48,6 +48,29 @@ describe('UpdateContentDto settings', () => {
   });
 });
 
+describe('settings.series: susunan & ukuran baru', () => {
+  it('accepts the hero arrangements and the size options (positive)', async () => {
+    for (const arrangement of ['heroBottom', 'heroLeft', 'heroRight']) {
+      expect(
+        await errorsFor({
+          settings: {
+            series: { arrangement, cols: 3, split: 65, edgeText: true, areaPct: 80 },
+          },
+        }),
+      ).toBe('[]');
+    }
+  });
+
+  it('rejects out-of-range cols, split and areaPct (negative)', async () => {
+    const errors = await errorsFor({
+      settings: { series: { cols: 9, split: 10, areaPct: 5 } },
+    });
+    for (const field of ['cols', 'split', 'areaPct']) {
+      expect(errors).toContain(field);
+    }
+  });
+});
+
 describe('UpdateContentDto settings.series (gaya rangkaian)', () => {
   it('accepts a full series style (positive)', async () => {
     expect(
