@@ -44,7 +44,14 @@ export interface ContentPhotoFrame {
 /** Gaya layout "series" (semua opsional; kosong = tampilan bawaan). */
 export interface SeriesStyle {
   /** rows = baris bersusun, columns = kolom berdampingan, grid = kisi, hero = satu foto besar + sisanya kecil. */
-  arrangement?: 'rows' | 'columns' | 'grid' | 'hero';
+  arrangement?:
+    | 'rows'
+    | 'columns'
+    | 'grid'
+    | 'hero'
+    | 'heroBottom'
+    | 'heroLeft'
+    | 'heroRight';
   /** Jarak antar foto, px pada kanvas 1080 lebar. */
   gap?: number;
   /** Radius sudut foto, px. */
@@ -53,6 +60,14 @@ export interface SeriesStyle {
   captionPosition?: 'top' | 'bottom';
   /** Nomor urut (1, 2, 3…) di tiap foto. */
   showNumbers?: boolean;
+  /** Kolom Kisi: 0 = otomatis, 1–4. */
+  cols?: number;
+  /** Porsi foto besar (30–80 persen). */
+  split?: number;
+  /** Teks atas & bawah mepet tepi story. */
+  edgeText?: boolean;
+  /** Tinggi area foto, 40–100 persen. */
+  areaPct?: number;
   /** #rrggbb; kosong = ikut tema. */
   bgColor?: string;
   accentColor?: string;
