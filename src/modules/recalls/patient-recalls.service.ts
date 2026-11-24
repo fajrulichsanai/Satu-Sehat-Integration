@@ -1,12 +1,22 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, In, Repository } from 'typeorm';
+import { Tarif } from '../tarif/entities/tarif.entity';
+import { Patient } from '../patients/entities/patient.entity';
+import { recallKindForTarif } from './recall-kind';
 import {
   PatientRecall,
   PatientRecallStatus,
 } from './entities/patient-recall.entity';
 import { RecallIntervalsService } from './recall-intervals.service';
 import {
+  CreatePatientRecallDto,
   PatientRecallQueryDto,
   UpdatePatientRecallDto,
 } from './dto/patient-recall.dto';
@@ -33,6 +43,9 @@ export class PatientRecallsService {
     @InjectRepository(Reservation)
     private readonly reservationRepository: Repository<Reservation>,
     private readonly recallIntervalsService: RecallIntervalsService,
+    @Optional()
+    @InjectRepository(Patient)
+    private readonly patientRepository?: Repository<Patient>,
   ) {}
 
   /**
@@ -80,6 +93,10 @@ export class PatientRecallsService {
       qb.andWhere('r.status = :status', { status: query.status });
     }
 
+    if (query.kind) {
+      qb.andWhere('r.kind = :kind', { kind: query.kind });
+    }
+
     qb.orderBy('r.dueDate', 'ASC').addOrderBy('r.id', 'ASC');
 
     const page = query.page || 1;
@@ -103,6 +120,53 @@ export class PatientRecallsService {
       data,
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 },
     };
+  }
+
+  /**
+   * Kontrol dari jadwal kontrol di SOAP ("Kontrol 3 minggu"): satu baris
+   * Follow Up berjenis `kunjungan` (atau jenis lain yang dipilih dokter), sudah
+   * berstatus Sudah Booking Ulang karena reservasinya dibuat bersamaan.
+   * Pasien + jenis + tanggal yang sama tidak diduplikasi.
+   */
+  async create(
+    clinicId: number,
+    dto: CreatePatientRecallDto,
+    userId: number,
+  ): Promise<PatientRecall> {
+    if (this.patientRepository) {
+      const patient = await this.patientRepository.findOne({
+        where: { id: dto.patientId, clinicId },
+      });
+      if (!patient) {
+        throw new BadRequestException('Pasien tidak ditemukan di klinik ini');
+      }
+    }
+    const kind = dto.kind ?? 'kunjungan';
+    const existing = await this.patientRecallRepository.findOne({
+      where: {
+        clinicId,
+        patientId: dto.patientId,
+        kind,
+        dueDate: dto.dueDate.slice(0, 10),
+      },
+    });
+    if (existing) return existing;
+    const booked = dto.booked ?? true;
+    return this.patientRecallRepository.save(
+      this.patientRecallRepository.create({
+        clinicId,
+        patientId: dto.patientId,
+        tarifId: null,
+        billingItemId: null,
+        kind,
+        dueDate: dto.dueDate.slice(0, 10),
+        status: booked
+          ? PatientRecallStatus.SUDAH_BOOKING_ULANG
+          : PatientRecallStatus.BELUM_DIHUBUNGI,
+        notes: dto.notes ?? null,
+        createdBy: userId,
+      }),
+    );
   }
 
   async update(
@@ -157,6 +221,18 @@ export class PatientRecallsService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // Jenis kontrol (behel / saluran akar / perawatan) dari nama tindakan.
+    const kindByTarif = new Map<number, ReturnType<typeof recallKindForTarif>>();
+    try {
+      const ids = [...new Set(items.map((i) => i.tarifId).filter(Boolean))] as number[];
+      const tarifs = ids.length
+        ? await manager.find(Tarif, { where: { id: In(ids) } })
+        : [];
+      for (const t of tarifs) kindByTarif.set(t.id, recallKindForTarif(t.name, t.kategori));
+    } catch {
+      // Tanpa jenis pun jadwal recall tetap dibuat (bawaan: perawatan).
+    }
+
     for (const item of items) {
       if (!item.tarifId) continue;
       const intervalDays = intervalMap.get(item.tarifId);
@@ -170,6 +246,7 @@ export class PatientRecallsService {
         patientId,
         tarifId: item.tarifId,
         billingItemId: item.billingItemId,
+        kind: kindByTarif.get(item.tarifId) ?? 'perawatan',
         dueDate: dueDate.toISOString().slice(0, 10),
         status: PatientRecallStatus.BELUM_DIHUBUNGI,
         createdBy,

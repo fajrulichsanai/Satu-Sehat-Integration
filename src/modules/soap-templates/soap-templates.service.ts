@@ -8,7 +8,10 @@ import { In, Repository } from 'typeorm';
 import { TerminologyConcept } from '../terminology/entities/terminology-concept.entity';
 import { DENTAL_DIAGNOSES } from '../terminology/data/dental-id';
 import { SOAP_PRESETS } from './presets';
-import { SoapTemplate } from './entities/soap-template.entity';
+import {
+  SoapTemplate,
+  TemplateDiagnosis,
+} from './entities/soap-template.entity';
 import { UserRole } from '../../enums/user-role.enum';
 import {
   CreateSoapTemplateDto,
@@ -34,7 +37,7 @@ export class SoapTemplatesService {
     const icd = new Set<string>();
     const snomed = new Set<string>();
     for (const p of SOAP_PRESETS) {
-      icd.add(p.icd10);
+      if (p.icd10) icd.add(p.icd10);
       (p.extraIcd10 ?? []).forEach((c) => icd.add(c));
       if (p.snomed) snomed.add(p.snomed);
     }
@@ -62,7 +65,7 @@ export class SoapTemplatesService {
       primary,
     });
     return SOAP_PRESETS.map((p) => {
-      const nameId = nameOf(p.icd10);
+      const nameId = p.icd10 ? nameOf(p.icd10) : null;
       return {
         key: p.key,
         name: p.name,
@@ -73,12 +76,26 @@ export class SoapTemplatesService {
         treatment: p.treatment,
         plan: p.plan,
         diagnoses: [
-          dx('icd10', p.icd10, nameId, true),
+          ...(p.icd10 ? [dx('icd10', p.icd10, nameId, true)] : []),
           ...(p.snomed ? [dx('snomed', p.snomed, nameId, false)] : []),
           ...(p.extraIcd10 ?? []).map((c) => dx('icd10', c, nameOf(c), false)),
         ],
       };
     });
+  }
+
+  /** Hanya kode diagnosis yang masuk template; catatan per-pasien dibuang. */
+  private cleanDiagnoses(
+    list?: Array<TemplateDiagnosis & { note?: string | null }> | null,
+  ): TemplateDiagnosis[] | null {
+    if (!list?.length) return null;
+    return list.map((d) => ({
+      system: d.system,
+      code: d.code,
+      display: d.display,
+      nameId: d.nameId ?? null,
+      primary: !!d.primary,
+    }));
   }
 
   async findAll(clinicId: number, query: SoapTemplateQueryDto, user: any) {
@@ -125,7 +142,7 @@ export class SoapTemplatesService {
       assessment: dto.assessment,
       plan: dto.plan,
       treatment: dto.treatment ?? null,
-      diagnoses: dto.diagnoses ?? null,
+      diagnoses: this.cleanDiagnoses(dto.diagnoses),
       isShared: dto.isShared || false,
       createdBy: user.userId,
     });
@@ -153,7 +170,9 @@ export class SoapTemplatesService {
       assessment: dto.assessment ?? template.assessment,
       plan: dto.plan ?? template.plan,
       treatment: dto.treatment ?? template.treatment,
-      diagnoses: dto.diagnoses ?? template.diagnoses,
+      diagnoses: dto.diagnoses
+        ? this.cleanDiagnoses(dto.diagnoses)
+        : template.diagnoses,
       isShared: dto.isShared ?? template.isShared,
       updatedBy: user.userId,
     });

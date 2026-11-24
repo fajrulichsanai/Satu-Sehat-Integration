@@ -115,6 +115,24 @@ describe('SoapTemplatesService', () => {
     });
   });
 
+  describe('create: catatan diagnosis dari form SOAP', () => {
+    it('menerima diagnosis ber-note tapi tidak menyimpan note pasien (positive)', async () => {
+      const result = await service.create(
+        1,
+        {
+          name: 'T',
+          diagnoses: [
+            { system: 'icd10', code: 'K02.1', display: 'Caries of dentine', primary: true, note: 'gigi 36 pasien A' },
+          ],
+        } as any,
+        dokter,
+      );
+      expect(result.diagnoses).toEqual([
+        { system: 'icd10', code: 'K02.1', display: 'Caries of dentine', nameId: null, primary: true },
+      ]);
+    });
+  });
+
   describe('update', () => {
     it('lets the creator update their own personal template (positive)', async () => {
       repo.findOne.mockResolvedValue({
@@ -193,7 +211,7 @@ describe('SoapTemplatesService', () => {
 
   describe('presets', () => {
     it('semua kode template ada di daftar diagnosis gigi terkurasi', () => {
-      for (const p of SOAP_PRESETS) {
+      for (const p of SOAP_PRESETS.filter((x) => x.icd10)) {
         const curated = DENTAL_DIAGNOSES.find((d) => d.icd10 === p.icd10);
         expect(curated).toBeDefined();
         if (p.snomed) expect(curated?.snomed).toBe(p.snomed);
@@ -201,6 +219,36 @@ describe('SoapTemplatesService', () => {
           expect(DENTAL_DIAGNOSES.some((d) => d.icd10 === c)).toBe(true);
         }
       }
+    });
+
+    it('menyediakan template per tindakan yang diminta, berformat S/O/A/Tr/P (positive)', async () => {
+      const list = await service.presets();
+      const names = list.filter((p) => p.category.startsWith('Tindakan')).map((p) => p.name);
+      for (const wanted of [
+        'Scaling', 'Tambal gigi', 'Pulp capping', 'Cabut gigi', 'Odontektomi',
+        'Perawatan saluran akar (PSA)', 'Gingivektomi', 'Insersi behel', 'Kontrol behel',
+        'Tambal anak', 'Cabut anak', 'Pulpektomi',
+      ]) {
+        expect(names).toContain(wanted);
+      }
+      for (const p of list.filter((x) => x.category.startsWith('Tindakan'))) {
+        for (const k of ['subjective', 'objective', 'assessment', 'treatment', 'plan'] as const) {
+          expect((p[k] ?? '').trim().length).toBeGreaterThan(0);
+        }
+      }
+    });
+
+    it('insersi behel memuat data lengkap dari contoh dokter (positive)', async () => {
+      const behel = (await service.presets()).find((p) => p.key === 'tindakan-insersi-behel')!;
+      expect(behel.objective).toContain('Hubungan molar klas 1');
+      expect(behel.treatment).toContain('Buccal Tube : 16 26 36 46');
+      expect(behel.plan).toBe('Kontrol 21 hari.');
+      expect(behel.diagnoses[0].code).toBe('K07.4');
+    });
+
+    it('tindakan tanpa diagnosis tunggal (cabut gigi) tidak memaksa kode (edge)', async () => {
+      const cabut = (await service.presets()).find((p) => p.key === 'tindakan-cabut-gigi')!;
+      expect(cabut.diagnoses).toEqual([]);
     });
 
     it('memakai nama resmi dari terminologi, fallback ke nama Indonesia', async () => {

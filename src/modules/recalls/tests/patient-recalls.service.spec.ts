@@ -239,4 +239,38 @@ describe('PatientRecallsService', () => {
       expect(manager.save).not.toHaveBeenCalled();
     });
   });
+  describe('jenis kontrol', () => {
+    it('menurunkan jenis dari nama tindakan (positive)', () => {
+      const { recallKindForTarif } = require('../recall-kind');
+      expect(recallKindForTarif('Kontrol Behel', 'Ortodonti')).toBe('behel');
+      expect(recallKindForTarif('Pasang Behel (Kawat Gigi)', null)).toBe('behel');
+      expect(recallKindForTarif('Perawatan Saluran Akar', 'Konservasi')).toBe('saluran_akar');
+      expect(recallKindForTarif('PSA 1 paket', 'Konservasi Gigi')).toBe('saluran_akar');
+      expect(recallKindForTarif('Pulpektomi', 'Anak')).toBe('saluran_akar');
+      expect(recallKindForTarif('Pulp capping', 'Konservasi Gigi')).toBe('perawatan');
+      expect(recallKindForTarif('Tambal Gigi Komposit', 'Konservasi')).toBe('perawatan');
+    });
+
+    it('membuat recall kontrol kunjungan berstatus sudah booking ulang (positive)', async () => {
+      recallRepo.findOne = jest.fn().mockResolvedValue(null);
+      (recallRepo as any).create = jest.fn((d) => d);
+      const saved = await service.create(
+        clinicId,
+        { patientId: 3, dueDate: '2026-12-15' } as any,
+        9,
+      );
+      expect(saved).toMatchObject({
+        kind: 'kunjungan',
+        status: PatientRecallStatus.SUDAH_BOOKING_ULANG,
+        dueDate: '2026-12-15',
+      });
+    });
+
+    it('tidak menggandakan kontrol yang sama (edge)', async () => {
+      recallRepo.findOne = jest.fn().mockResolvedValue({ id: 7 });
+      const saved = await service.create(clinicId, { patientId: 3, dueDate: '2026-12-15' } as any, 9);
+      expect(saved).toEqual({ id: 7 });
+      expect(recallRepo.save).not.toHaveBeenCalled();
+    });
+  });
 });

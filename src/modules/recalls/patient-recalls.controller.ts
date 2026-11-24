@@ -5,6 +5,7 @@ import {
   Param,
   ParseIntPipe,
   Patch,
+  Post,
   Query,
   UseGuards,
   UseInterceptors,
@@ -12,6 +13,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PatientRecallsService } from './patient-recalls.service';
 import {
+  CreatePatientRecallDto,
   PatientRecallQueryDto,
   UpdatePatientRecallDto,
 } from './dto/patient-recall.dto';
@@ -42,6 +44,25 @@ export class PatientRecallsController {
   ) {
     const result = await this.patientRecallsService.findAll(clinicId, query);
     return { success: true, data: result };
+  }
+
+  @Post()
+  @Audit('PatientRecall', AuditActionType.CREATE)
+  @ApiOperation({
+    summary:
+      'Catat kontrol dari jadwal kontrol di SOAP (jenis kunjungan/behel/saluran akar/perawatan)',
+  })
+  async create(
+    @ClinicId() clinicId: number,
+    @Body() dto: CreatePatientRecallDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.patientRecallsService.create(
+      clinicId,
+      dto,
+      user.userId,
+    );
+    return { success: true, data };
   }
 
   @Patch(':id')

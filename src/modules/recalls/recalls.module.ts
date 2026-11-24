@@ -5,6 +5,7 @@ import { PatientRecall } from './entities/patient-recall.entity';
 import { Clinic } from '../clinics/entities/clinic.entity';
 import { User } from '../users/entities/user.entity';
 import { Reservation } from '../reservations/entities/reservation.entity';
+import { Patient } from '../patients/entities/patient.entity';
 import { RecallIntervalsService } from './recall-intervals.service';
 import { PatientRecallsService } from './patient-recalls.service';
 import { RecallNotificationsService } from './recall-notifications.service';
@@ -21,6 +22,7 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
       Clinic,
       User,
       Reservation,
+      Patient,
     ]),
     AuditLogModule,
   ],

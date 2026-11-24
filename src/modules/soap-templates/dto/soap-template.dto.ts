@@ -31,6 +31,17 @@ export class TemplateDiagnosisDto {
 
   @IsBoolean()
   primary: boolean;
+
+  /**
+   * Catatan per diagnosis pada SOAP pasien. Form SOAP ikut mengirimnya saat
+   * "Simpan sebagai template"; tanpa field ini server menolak (400) dan
+   * template tidak pernah tersimpan. Isinya khusus pasien, jadi tidak disimpan
+   * di template (lihat SoapTemplatesService.cleanDiagnoses).
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  note?: string | null;
 }
 
 export class CreateSoapTemplateDto {

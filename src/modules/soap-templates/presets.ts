@@ -1,3 +1,5 @@
+import { TINDAKAN_PRESETS } from './presets-tindakan';
+
 /**
  * Template SOAP bawaan untuk klinik gigi. Kode diagnosis diambil dari daftar
  * terkurasi di terminology/data/dental-id.ts (sudah dicek ke data ICD-10 WHO
@@ -18,7 +20,7 @@ export interface SoapPreset {
   plan: string;
 }
 
-export const SOAP_PRESETS: SoapPreset[] = [
+const DIAGNOSIS_PRESETS: SoapPreset[] = [
   {
     key: 'karies-dentin',
     name: 'Karies dentin — tumpatan komposit',
@@ -280,4 +282,10 @@ export const SOAP_PRESETS: SoapPreset[] = [
       'Pemeriksaan intra oral & ekstra oral, edukasi kebersihan gigi dan mulut.',
     plan: 'Kontrol rutin 6 bulan sekali.',
   },
+];
+
+/** Per tindakan lebih dulu (paling sering dipakai), lalu per diagnosis. */
+export const SOAP_PRESETS: SoapPreset[] = [
+  ...TINDAKAN_PRESETS,
+  ...DIAGNOSIS_PRESETS,
 ];

@@ -2,6 +2,7 @@ import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { BaseEntity } from '../../../common/base.entity';
 import { Patient } from '../../patients/entities/patient.entity';
 import { Tarif } from '../../tarif/entities/tarif.entity';
+import type { RecallKind } from '../recall-kind';
 
 export enum PatientRecallStatus {
   BELUM_DIHUBUNGI = 'belum_dihubungi',
@@ -29,6 +30,10 @@ export class PatientRecall extends BaseEntity {
 
   @Column({ name: 'billing_item_id', type: 'int', nullable: true })
   billingItemId: number | null;
+
+  /** Jenis kontrol (lihat recall-kind.ts): kunjungan / behel / saluran_akar / perawatan. */
+  @Column({ type: 'varchar', length: 24, default: 'perawatan' })
+  kind: RecallKind;
 
   @Column({ name: 'due_date', type: 'date' })
   dueDate: string;
