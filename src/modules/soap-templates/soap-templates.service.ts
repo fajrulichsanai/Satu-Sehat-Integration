@@ -75,6 +75,7 @@ export class SoapTemplatesService {
         assessment: p.assessment,
         treatment: p.treatment,
         plan: p.plan,
+        questions: p.questions ?? [],
         diagnoses: [
           ...(p.icd10 ? [dx('icd10', p.icd10, nameId, true)] : []),
           ...(p.snomed ? [dx('snomed', p.snomed, nameId, false)] : []),

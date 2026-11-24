@@ -238,6 +238,33 @@ describe('SoapTemplatesService', () => {
       }
     });
 
+    it('tiap token {kunci} punya pertanyaan, dan tiap pertanyaan dipakai di teks (positive)', async () => {
+      for (const p of (await service.presets()).filter((x) => x.category.startsWith('Tindakan'))) {
+        const text = [p.subjective, p.objective, p.assessment, p.treatment, p.plan].join('\n');
+        const optionText = p.questions.flatMap((qq) =>
+          qq.options.map((o) => (typeof o === 'string' ? '' : o.text)),
+        );
+        const used = new Set(
+          [...(text + '\n' + optionText.join('\n')).matchAll(/\{(\w+)\}/g)].map((m) => m[1]),
+        );
+        used.delete('gigi');
+        const keys = p.questions.map((qq) => qq.key);
+        for (const k of used) expect(`${p.key}:${keys.includes(k) ? k : 'TANPA-PERTANYAAN-' + k}`).toBe(`${p.key}:${k}`);
+        for (const k of keys) expect(`${p.key}:${used.has(k) ? k : 'TIDAK-DIPAKAI-' + k}`).toBe(`${p.key}:${k}`);
+        for (const qq of p.questions) expect(qq.options.length).toBeGreaterThan(1);
+      }
+    });
+
+    it('tambal, pulp capping, dan PSA memuat pemeriksaan klinis tersusun ke bawah (positive)', async () => {
+      for (const key of ['tindakan-tambal-gigi', 'tindakan-pulp-capping', 'tindakan-psa']) {
+        const p = (await service.presets()).find((x) => x.key === key)!;
+        const lines = p.objective.split('\n').map((l) => l.split(' :')[0]);
+        for (const label of ['Sondasi', 'Palpasi', 'Perkusi', 'Druk', 'Termal', 'Pembengkakan gingiva', 'Fistula', 'Mobility']) {
+          expect(lines).toContain(label);
+        }
+      }
+    });
+
     it('insersi behel memuat data lengkap dari contoh dokter (positive)', async () => {
       const behel = (await service.presets()).find((p) => p.key === 'tindakan-insersi-behel')!;
       expect(behel.objective).toContain('Hubungan molar klas 1');

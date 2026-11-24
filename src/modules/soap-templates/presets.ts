@@ -6,6 +6,23 @@ import { TINDAKAN_PRESETS } from './presets-tindakan';
  * & SNOMED CT). `{gigi}` diganti nomor gigi yang diisi dokter saat memakai
  * template, supaya catatan tidak perlu diketik ulang setiap kunjungan.
  */
+/** Satu pilihan jawaban; `text` (bila ada) yang masuk ke catatan, selain label tombol. */
+export type SoapQuestionOption = string | { label: string; text: string };
+
+/**
+ * Pertanyaan cepat untuk asisten: tinggal tekan jawabannya, lalu catatan
+ * S/O/A/Tr/P tersusun sendiri. Jawaban masuk ke token `{key}` di teks template
+ * (belum dijawab = "-").
+ */
+export interface SoapQuestion {
+  key: string;
+  label: string;
+  /** Bagian catatan tempat jawaban ini muncul: S, O, A, Tr, atau P. */
+  section: 'S' | 'O' | 'A' | 'Tr' | 'P';
+  options: SoapQuestionOption[];
+  multi?: boolean;
+}
+
 export interface SoapPreset {
   key: string;
   name: string;
@@ -18,6 +35,7 @@ export interface SoapPreset {
   assessment: string;
   treatment: string;
   plan: string;
+  questions?: SoapQuestion[];
 }
 
 const DIAGNOSIS_PRESETS: SoapPreset[] = [
